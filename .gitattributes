@@ -1,0 +1,14 @@
+# Egységes LF sorvég minden szövegfájlra, függetlenül a gép core.autocrlf beállításától.
+# Enélkül Windowson (autocrlf=true) a Prettier minden sorban "Delete ␍" hibát jelezne.
+* text=auto eol=lf
+
+# Bináris fájlok – ne alakítsa át a git
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.ttf binary
+*.otf binary
+*.jar binary

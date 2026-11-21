@@ -1,0 +1,360 @@
+# Roadmap – Stock & ETF Analyzer
+
+> Frissítve: 2026-11-21 (PHASE 02 vége). Minden fázis külön chatben fut, a `stock_etf_analyzer_prompts` csomag `NN_*.md` promptja alapján.
+> **Fázisszabály:** a következő fázis csak akkor indul, ha az előző befejezési feltételei teljesültek, vagy a hiányok a KNOWN_ISSUES-ban dokumentálva vannak.
+> **Verzió:** a promptok egy része SDK 57-et említ. Mindenhol **SDK 58** értendő (D-020).
+
+## Állapot
+
+| # | Fázis | Állapot | Mérföldkő |
+|---|---|---|---|
+| 01 | Követelmények és architektúra | **KÉSZ** (2026-11-21) | – |
+| 02 | Projekt setup | **KÉSZ** (2026-11-21) | **M1 Futó váz ✅** |
+| 03 | Architektúra és domain modell | NEM KEZDŐDÖTT – **következik** | |
+| 04 | Adatforrások, proxy és deviza – **két chatben: 04A + 04B** (D-028) | NEM KEZDŐDÖTT | M2 Adat a csövön |
+| 05 | Pénzügyi calculation engine | NEM KEZDŐDÖTT | |
+| 06 | Részvény fundamentális elemzés | NEM KEZDŐDÖTT | |
+| 07 | Értékelés és DCF | NEM KEZDŐDÖTT | |
+| 08 | ETF-elemzés | NEM KEZDŐDÖTT | |
+| 09 | Portfólió és kockázat | NEM KEZDŐDÖTT | |
+| 10 | Score és döntési engine | NEM KEZDŐDÖTT | M3 Elemzőmotor kész |
+| 11 | AI-magyarázó engine | NEM KEZDŐDÖTT | |
+| 12 | UI/UX és navigáció | NEM KEZDŐDÖTT | |
+| 13 | Tárolás, cache, offline | NEM KEZDŐDÖTT | **M4 MVP** |
+| 14 | Compare, watchlist, screener, alerts | NEM KEZDŐDÖTT | |
+| 15 | Integráció, QA, biztonság | NEM KEZDŐDÖTT | |
+| 16 | Release és dokumentáció | NEM KEZDŐDÖTT | **M5 v1.0 (személyes)** |
+
+## Függőségi gráf
+
+```mermaid
+flowchart LR
+  P01[01 Terv] --> P02[02 Setup] --> P03[03 Domain]
+  P03 --> P04[04 Adat + proxy + FX]
+  P03 --> P05[05 Calc engine]
+  P04 --> P06[06 Részvény]
+  P05 --> P06
+  P05 --> P07[07 DCF]
+  P06 --> P07
+  P04 --> P08[08 ETF]
+  P05 --> P08
+  P05 --> P09[09 Portfólió]
+  P04 --> P09
+  P08 --> P09
+  P06 --> P10[10 Score/Decision]
+  P07 --> P10
+  P08 --> P10
+  P09 --> P10
+  P10 --> P11[11 AI]
+  P11 --> P12[12 UI]
+  P12 --> P13[13 Tárolás/cache]
+  P13 --> P14[14 Extra eszközök]
+  P14 --> P15[15 QA/biztonság]
+  P15 --> P16[16 Release]
+```
+
+A promptcsomag szigorúan sorban halad (01 → 16). A gráf azt mutatja, mi mire épül valójában. Ebből látszik például, hogy a 05 elvben a 04-gyel párhuzamosan is mehetne. A sorrendet ettől függetlenül tartjuk.
+
+## Fázisonkénti terv
+
+Minden fázis közös lezárása (CLAUDE.md):
+- lint, typecheck és tesztek futtatása, a valós eredmény rögzítése;
+- a `PROJECT_STATE`, `ROADMAP`, `KNOWN_ISSUES` (és szükség esetén a `DECISIONS`) frissítése;
+- `docs/handoffs/phase-XX-handoff.md` és `docs/phases/phase-XX-*.md` elkészítése.
+
+---
+
+### PHASE 02 – Projekt setup
+- **Cél:** induló, ellenőrzött Expo SDK 58 + TS strict + Expo Router váz, git, minőségi eszközök, Android emulátoros futtatás.
+- **Benne:**
+  - Az SDK 58 sablon **explicit** kiválasztása (a `create-expo-app` alapból SDK 57-et adhat, D-002).
+  - Node v26.10.0 ellenőrzése.
+  - `git init` és első commit; `.gitignore` (`.env*`, kivéve `.env.example`).
+  - ESLint (Expo konfiguráció) és Prettier.
+  - `typecheck`, `lint`, `test` npm scriptek.
+  - Jest 30 + `jest-expo` + RNTL ≥14 és egy smoke teszt.
+  - Alap theme és egy kezdőképernyő.
+  - `.env.example` titok nélkül.
+  - `ANDROID_HOME` és PATH (`platform-tools`) beállítási útmutató Windowsra.
+  - README.
+  - Az ARCHITECTURE 5. mappaszerkezet üres vázának igazítása a sablonhoz.
+- **Nincs benne:** domainmodellek, proxy-végpontok, szolgáltatók, tárolás, pénzügyi képernyők.
+- **Függ:** PHASE 01.
+- **Befejezési feltétel:**
+  - Az app elindul az Android emulátoron, vagy a környezeti akadály pontosan dokumentált.
+  - A `npm run typecheck`, `npm run lint` és `npm test` lefut, a kimenet rögzítve.
+  - A `npx expo install --check` és a `npx expo-doctor@latest` lefutott, vagy indokolt, miért nem.
+  - Az első commit létezik.
+  - A tényleges React/RN verziók a DECISIONS D-001-ben.
+- **Eredmény (2026-11-21): KÉSZ.** Minden feltétel teljesült:
+  - Emulátoron fut: Expo Go 58.0.5, `Medium_Phone_API_37.0`, világos és sötét mód.
+  - typecheck ✅, lint ✅, format ✅, teszt 15/15 ✅.
+  - `expo install --check` ✅; `expo-doctor` 20/20 ✅.
+  - Első commit ✅; D-001 frissítve.
+  - Új döntések: D-029…D-034. Részletek: `docs/handoffs/phase-02-handoff.md`.
+  - Tabos főnavigáció helyett egyszerű Stack készült (D-034, a tabok a PHASE 12-ben).
+  - A sablon nem használt függőségei megmaradtak (KI-06).
+
+### PHASE 03 – Architektúra és domain modell
+- **Cél:** szigorúan típusos domain, hibakezelés és rétegszabályok működő példával.
+- **Benne:**
+  - `Instrument` (diszkriminált unió: `stock` | `etf`), `Quote`, `PriceSeries`, `FinancialStatement`, `FinancialMetric`, `FxRate`, `Portfolio`, `Position`, `Transaction`, `AnalysisResult`, `DataProvenance`, `Metric<T>`, `Result`/`AppError`.
+  - Zod bevezetése (D-014) és a `src/contracts` váza.
+  - Portok (`MarketDataGateway`, `FxGateway`, `AiGateway`, `*Repository`, `Clock`, `Logger`).
+  - Composition root.
+  - ESLint rétegszabályok, demonstrált tiltással.
+  - Egy példa use case in-memory repository-val, teszttel.
+  - **A PHASE 02-ből örökölt kapcsolódási pontok:**
+    - a rétegszabályok az `eslint.config.js`-be kerülnek (a `no-floating-promises` és a típusinformációs lint már működik);
+    - az `src/config/env.ts` kézi validációja zodra cserélhető;
+    - az `about.tsx` most közvetlenül importálja a `publicEnvResult`-ot; a composition root után ez is Contexten át érkezhet.
+- **Nincs benne:** valós API, képletek, proxy-végpontok, képernyők.
+- **Függ:** 02.
+- **Befejezési feltétel:**
+  - A typecheck és a tesztek zöldek (valós kimenettel).
+  - Képernyőben nincs hálózati hívás.
+  - Az ARCHITECTURE és a DATA_DICTIONARY a tényleges kódhoz igazítva.
+
+### PHASE 04 – Adatforrások, proxy és deviza (két chatben, D-028)
+- **Cél:** valós, validált, normalizált adat a proxyn keresztül, a három célpiacra (US, Európa, globális – D-023), FX-szel, élő API-tól független tesztekkel.
+- **Előfeltétel:**
+  - DP-01…DP-03 megválaszolva (2026-11-21).
+  - A tulajdonos az FMP és EODHD kulcsát **a PHASE 04B elején, a `.env.local` fájlba** írja, nem a chatbe.
+  - A SEC User-Agent kapcsolattartó címet is ő adja meg.
+- **Közös (mindkét részre):** szolgáltatói DTO sémák, normalizálók, contract DTO-k; hibatérképezés (timeout, 429, 402, hibás ticker, hibás JSON, offline); „hiányzó ≠ 0” tesztek.
+- **Nincs benne:** a végleges cache policy (13), pénzügyi mutatók (05), képernyők (12), magyarázat (11).
+- **Függ:** 03.
+
+#### 04A – Proxy váz és ingyenes alapforrások
+- **Benne:**
+  - Proxy váz (API routes, `web.output`, `/api/v1/health`).
+  - D-004 spike: lokális futás, opcionális EAS Hosting próbatelepítés, a rate-limit/KV képesség felmérése (U-03).
+  - `MarketDataProvider` port.
+  - `sec-edgar` adapter (companyfacts, ticker → CIK), legalább 10 US cég fixture-jével.
+  - `ecb-fx` adapter (Frankfurter v2 ECB provider).
+  - `openfigi` adapter (ISIN → listingek).
+  - `mock` adapter.
+  - `FxService` (natív vs kijelzési pénznem).
+  - Kliensoldali `ProxyMarketDataGateway` és mock gateway.
+  - `/securities/{isin}/listings`.
+- **Befejezési feltétel:**
+  - Az ingyenes adapterek validáltak és teszteltek.
+  - A proxy lokálisan fut.
+  - A spike eredménye a D-004-ben.
+  - Átadás: `docs/handoffs/phase-04a-handoff.md`.
+
+#### 04B – FMP, EODHD, routing és kvóta
+- **Benne:**
+  - `fmp` és `eodhd` adapter.
+  - A csomagszint felderítése (U-13: EODHD `/api/user` 0 hívás; FMP dashboard és próbahívás).
+  - Képességmátrix `FMP_PLAN`/`EODHD_PLAN`-ből.
+  - `ProviderRouter` a DATA_SOURCES 5.2–5.3 szerint.
+  - Kvóta-költségvetés (EODHD hívásköltség-tábla) és `/providers/status`.
+  - `UNAVAILABLE (PLAN_LIMIT | NOT_COVERED | QUOTA_EXHAUSTED)` státuszok.
+  - Fixture: legalább 3 UCITS ETF (többlistinges, GBX) és 3 nem US részvény.
+  - A DATA_SOURCES véglegesítése (ToS, attribúció, igazolt keretek).
+- **Befejezési feltétel:**
+  - Minden külső válasz validált; teszt nem hív élő API-t.
+  - Kulcs csak szerver env-ben (a repóban `grep`-pel ellenőrizve).
+  - A routing és a fallback tesztelt (beleértve a 402/429 esetet).
+  - Fizetős csomagra váltás csak env-módosítást igényel (teszttel demonstrálva).
+  - Átadás: `docs/handoffs/phase-04-handoff.md`.
+
+### PHASE 05 – Pénzügyi calculation engine
+- **Cél:** tiszta, dokumentált, tesztelt képletkönyvtár.
+- **Benne:** a 05-ös prompt teljes képletlistája a DATA_DICTIONARY 5. definíciói szerint. Edge case-ek: 0-val osztás, nullás bázis, negatív EPS/FCF/equity, `NaN`/`Infinity`, százalék vs tört. N/M státuszok. A közös DCF-konvenciók előkészítése.
+- **Nincs benne:** a teljes DCF (07), score (10), UI-formázás.
+- **Függ:** 03 (domain típusok).
+- **Befejezési feltétel:**
+  - Minden képletre van normál és hibás bemenetes teszt.
+  - A modul nem importál RN-t, UI-t vagy hálózatot.
+  - A DATA_DICTIONARY definíciói véglegesek.
+  - Lefedettség ≥ 90% (mért érték rögzítve).
+
+### PHASE 06 – Részvény fundamentális elemzés
+- **Cél:** `analyzeStock` use case: alapadatok, kimutatások, mutatók, trendek, provenance.
+- **Benne:**
+  - Éves (és ha igazolt, negyedéves/TTM) normalizált kimutatásmodell.
+  - 1/3/5/10 éves trend és CAGR csak összehasonlítható adattal.
+  - Időszak-, split- és restatement-szabályok (D-021).
+  - Kvalitatív témák adatmodellje `Insufficient Data` állapottal, score nélkül.
+- **Nincs benne:** pontozás (10), teljes UI (12).
+- **Függ:** 04, 05.
+- **Befejezési feltétel:**
+  - Tesztek: hiányos történet, negatív EPS, hiányzó mező, eltérő pénzügyi év.
+  - Nincs fiktív pótlás.
+  - Az elavultság és a hiány tesztelt.
+
+### PHASE 07 – Értékelés és DCF
+- **Cél:** külön valuation/DCF modul forgatókönyvekkel és érzékenységi táblával.
+- **Benne:**
+  - Szorzók (Forward P/E csak igazolt forrással).
+  - DCF a D-022 szerint, `r > g` validációval.
+  - Bear/Base/Bull.
+  - Érzékenységi tábla ugyanazzal az engine-nel.
+  - MOS-definíció.
+  - Konfigurálható értékelési küszöbök.
+  - Magyarázható output.
+- **Nincs benne:** UI, score.
+- **Függ:** 05, 06.
+- **Befejezési feltétel:**
+  - Normál, boundary és invalid tesztek.
+  - Nincs DCF-számítás UI-komponensben.
+  - Minden feltevés az outputban látszik.
+
+### PHASE 08 – ETF-elemzés
+- **Cél:** ETF-specifikus modell és use case, a részvénylogikától elválasztva.
+- **Benne:**
+  - ETF-mezők (DATA_DICTIONARY 6.).
+  - Hozam, total vs price return jelölés.
+  - Volatilitás, max DD, (beta/Sharpe/Sortino megfelelő adattal).
+  - TER költség; tracking csak indexadattal.
+  - Hedged/unhedged és pénznem-kitettség.
+  - Holdings-alapú mutatók csak igazolt forrással; a SEC N-PORT vizsgálata. Az EODHD/FMP ETF-adatai a képességmátrix szerint (free-ben részleges, fizetősben bővebb).
+  - UCITS-sajátosságok: több listing (D-025), GBX, acc/dist, domicil. A free EODHD 1 éves története miatt a hosszabb mutatók `INSUFFICIENT_DATA`.
+  - ETF-score feature-modell (súlyozás nélkül).
+- **Nincs benne:** a végleges ETF-score (10), overlap UI (14).
+- **Függ:** 04, 05.
+- **Befejezési feltétel:**
+  - Tesztek: részleges holdings, hiányzó TER, eltérő időszak, dist/acc, hedged.
+  - A lefedettségi korlátok láthatók.
+
+### PHASE 09 – Portfólió és kockázat
+- **Cél:** tranzakcióalapú portfólió, többdevizás értékelés, kitettség és koncentráció.
+- **Benne:**
+  - D-012 (származtatott pozíció, átlagár).
+  - P/L két nézetben (DATA_DICTIONARY 7.).
+  - Allokáció típus, pénznem és (ha van metaadat) ország/szektor szerint.
+  - Koncentrációs mutatók.
+  - Historikus elemzés csak elég idősorral.
+  - Tranzakció-validáció.
+  - ETF overlap adatmodell.
+  - **In-memory repository** (a tartós tárolás a 13-ban jön).
+- **Nincs benne:** tartós tárolás, képernyő, overlap UI.
+- **Függ:** 04 (FX), 05, 08.
+- **Befejezési feltétel:**
+  - Minden összesítés visszavezethető tranzakciókra.
+  - Tesztek: vegyes deviza, súlyszámítás, hiányzó ár/FX.
+
+### PHASE 10 – Score és döntési engine
+- **Cél:** konfigurálható, determinisztikus, visszakövethető pontozás és döntés.
+- **Benne:**
+  - Külön részvény- és ETF-score.
+  - Súlyok konfigurációban, automatikus összegellenőrzéssel.
+  - Kategóriánkénti indoklás.
+  - Hiányzó adat kezelése dokumentált stratégiával (nem 0).
+  - Többdimenziós döntés.
+  - `AnalysisConfidence`.
+  - Thesis risks és invalidálók.
+  - Regressziós tesztek.
+- **Nincs benne:** AI, UI.
+- **Függ:** 06, 07, 08, 09.
+- **Befejezési feltétel:**
+  - Ugyanarra a bemenetre ugyanaz a kimenet (teszttel bizonyítva).
+  - Hiányzó adat nem ad csendes pontot.
+  - A DECISIONS frissítve a súlyokkal.
+
+### PHASE 11 – AI-magyarázó engine
+- **Cél:** ingyenes, szabályalapú magyarázat alapértelmezésként (D-026), valamint validált, strukturált, opcionális LLM-magyarázat a proxyn keresztül. Az app LLM nélkül is teljes.
+- **Benne:**
+  - **`template` provider** (`src/explanation`): determinisztikus magyar összefoglaló, offline, `calculated` jelöléssel. Ez az alapértelmezés.
+  - `AiProvider` (szerver) és `AiGateway` (kliens), mock provider.
+  - Ingyenes LLM-lehetőségek vizsgálata (U-16).
+  - Lokális LLM és felhős API összevetése.
+  - `POST /api/v1/ai/explain`.
+  - `AiInputDto` és kimeneti JSON séma, zod-validáció.
+  - Részvény-, ETF- és portfólió-sablon.
+  - `basedOn` hivatkozások.
+  - Prompt injection elleni védelem.
+  - Költségkorlát és kill switch; cache input-hash alapján.
+  - Refusal-kezelés.
+  - SDK-futás ellenőrzése a választott hoszton.
+- **Nincs benne:** UI (12); az AI nem módosíthat score-t vagy döntést.
+- **Függ:** 10, 04 (proxy).
+- **Befejezési feltétel:**
+  - Tesztek: hibás JSON, hiányzó mező, timeout, rate limit, refusal.
+  - AI-hiba esetén az app használható.
+  - Kulcs csak szerveren.
+
+### PHASE 12 – UI/UX és navigáció
+- **Cél:** a fő képernyők a meglévő use case-ekre építve.
+- **Benne:**
+  - Dashboard, Search, Stock, ETF, Portfolio, Watchlist (váz), Compare (váz), Settings.
+  - Közös formatterek (pénz, %, nagy szám, N/A/N/M, dátum, `hu-HU`).
+  - Loading/empty/stale/partial/error/retry állapotok.
+  - Provenance-nézet.
+  - Grafikonkönyvtár kiválasztása kompatibilitás-ellenőrzéssel.
+  - Akadálymentesség.
+  - Jogi nyilatkozat.
+- **Nincs benne:** tartós tárolás (13), screener/alerts (14).
+- **Függ:** 11 (és minden korábbi use case).
+- **Befejezési feltétel:**
+  - A ticker keresés → elemzés megnyitása folyamat működik.
+  - A Stock, ETF és Portfolio képernyő külön logikát használ.
+  - A navigációs smoke tesztek lefutnak.
+
+### PHASE 13 – Tárolás, cache, offline → **MVP**
+- **Cél:** tartós portfólió, watchlist és beállítások; adattípusonkénti cache; őszinte offline mód.
+- **Benne:**
+  - D-013 megvalósítása: SQLite repository-k, a kv-store a beállításokhoz.
+  - Migrációs séma.
+  - Cache TTL-ek (ARCHITECTURE 11.).
+  - Offline viselkedés (ARCHITECTURE 12.).
+  - Kézi frissítés vs invalidálás vs háttérfrissítés.
+  - Adatmegőrzési, törlési és exportálási terv.
+- **Nincs benne:** felhős szinkron (O-02), SQLCipher (O-05, csak ha dev build-döntés születik).
+- **Függ:** 12.
+- **Befejezési feltétel:**
+  - Offline nem jelenik meg régi adat frissként.
+  - A portfólió mentése és visszaolvasása tesztelt.
+  - Nincs titok nem biztonságos helyen.
+  - **Az MVP (REQUIREMENTS 3. M-01…M-15) végigkattintható.**
+
+### PHASE 14 – Compare, watchlist, screener, alerts
+- **Cél:** a v1.0 kiegészítő eszközei, csak elérhető adaton.
+- **Benne:**
+  - Összehasonlítás csak összehasonlítható mutatókkal.
+  - Tartós watchlist.
+  - Screener a lokális univerzumon (watchlist és portfólió).
+  - Riasztási alap: lokális értesítés, a platformkorlátok dokumentálásával.
+  - ETF overlap kompatibilis snapshotokkal.
+- **Nincs benne:** szerveroldali push (O-03), kivéve külön döntés esetén.
+- **Függ:** 13.
+- **Befejezési feltétel:**
+  - Nincs dokumentálatlan push-képesség.
+  - A screener-találatok visszavezethetők.
+
+### PHASE 15 – Integráció, QA, biztonság
+- **Cél:** teljes ellenőrzés, valós eredményekkel.
+- **Benne:**
+  - Teljes lint/typecheck/teszt.
+  - E2E smoke (Maestro, Android).
+  - A hibaforgatókönyvek átnézése.
+  - Biztonsági review: kulcsok, `.env`, függőségek (`npm audit`), naplózás, prompt injection, a proxy visszaélés elleni védelme.
+  - Teljesítmény.
+  - Képlet-dokumentáció vs implementáció ellenőrzőlista.
+  - CI-terv vagy konfiguráció.
+- **Kimenet:** `docs/QA_REPORT.md`, `docs/SECURITY.md`.
+- **Függ:** 14.
+- **Befejezési feltétel:** nincs hamis PASS; minden kihagyott teszt BLOCKED/NOT RUN indokkal.
+
+### PHASE 16 – Release és dokumentáció → **v1.0 (személyes)**
+- **Cél:** telepíthető build és teljes dokumentáció, őszinte státusszal.
+- **Benne:**
+  - README, USER_GUIDE, DEVELOPER_GUIDE, RELEASE_CHECKLIST.
+  - EAS Build konfiguráció (Android `preview` APK).
+  - A proxy telepítése (`eas deploy`, vagy a D-004 szerinti tartalék hoszt).
+  - iOS-lépések külön (Apple fiók kell).
+  - A known limitations véglegesítése.
+- **Nincs benne:** store-kiadás (D-008: csak saját használat). A cél a saját telefonra telepíthető build.
+- **Függ:** 15.
+- **Befejezési feltétel:**
+  - Egy kezdő a dokumentációból telepít és használ.
+  - A release-státusz őszinte (kész / részleges / blokkolt / terv).
+
+## A promptcsomaghoz képest rögzített kiegészítések
+
+1. **A backend/proxy-nak nincs saját fázisa a promptcsomagban.** Hozzárendelés: 04 (adat-proxy váz és spike), 11 (AI-végpont), 13 (cache-összehangolás), 15 (biztonsági review), 16 (éles telepítés).
+2. **Késői integrációs kockázat** (a UI csak a 12-ben jön, R-11). Mitigáció: a 04-től use case-szintű integrációs tesztek. Opcionálisan, a fázishatárokat nem sértve, a 06/07-ben egy csak fejlesztési módban látható „diagnosztika” képernyő, amely nyersen kiírja egy elemzés eredményét.
+3. **SDK-verzió:** a 12/13/14/16 promptok SDK 57-es hivatkozásai SDK 58-ként értendők.
+4. **A PHASE 04 két chatben fut** (04A, 04B – D-028). Mindkettő a `04_ADATFORRASOK_ES_DEVIZA.md` prompttal indul; a második chat elejére oda kell írni: „PHASE 04B rész, a 04A kész, lásd `docs/handoffs/phase-04a-handoff.md`”.

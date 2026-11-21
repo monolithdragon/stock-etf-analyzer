@@ -1,0 +1,250 @@
+# Adatszótár – Stock & ETF Analyzer
+
+> Állapot: **kiinduló definíciók** (PHASE 01, 2026-11-21).
+> - A képletdefiníciókat a **PHASE 05** véglegesíti, a DCF-et a **PHASE 07**, az ETF-mutatókat a **PHASE 08**, a portfóliót a **PHASE 09**.
+> - Definíció csak dokumentált indokkal változtatható (DECISIONS.md-be bejegyzés kell).
+> - Az XBRL tag-nevek **jelöltek**: a PHASE 04/06 valós fixture-ökön igazolja őket `[NEM IGAZOLT]`.
+
+## 1. Általános konvenciók
+
+| Téma | Konvenció | Döntés |
+|---|---|---|
+| Szám | JS `number` (float64). Kerekítés csak a megjelenítésnél. A tesztekben tűréssel hasonlítunk. | D-009 |
+| Százalék | Belül **tizedes tört**: `0.15` = 15%. A `%` jel és a ×100 csak a formatterben. | D-009 |
+| Pénzösszeg | `Money = { amount: number, currency: CurrencyCode }`, fő egységben (USD-ben, nem centben). Különböző pénznemek **soha** nem adhatók össze konverzió nélkül. | D-009, D-017 |
+| Egység | Alapegység: darab, pénznem-egység. A szolgáltatói „ezerben/millióban” adatot a normalizáló átváltja. | – |
+| Pénznem | ISO 4217 (`USD`, `EUR`, `HUF`, `GBP`, `CHF`, `JPY` …). A GBX/GBp (penny) jegyzést külön kell kezelni: `GBP = GBX / 100`. | D-018 |
+| Dátum | Napi adat: `YYYY-MM-DD` a tőzsde helyi kereskedési napja. Időbélyeg: ISO 8601 UTC (`2026-11-21T15:04:05Z`). | D-018 |
+| Időszak | `{ fiscalYear, fiscalPeriod: 'FY'\|'Q1'\|'Q2'\|'Q3'\|'Q4', start, end, durationDays }`. A periódust a **start/end dátumokból** határozzuk meg (4.3). | D-021 |
+| Előjel | Kiáramlások (CapEx, osztalékfizetés, adósságtörlesztés) **pozitív nagyságként** tárolva, a képlet vonja le őket. | – |
+| Szorzó | Mértékegység nélküli szám, `x` megjelöléssel (pl. P/E `18.4x`). | – |
+| Évesítés | Napi adatnál 252 kereskedési nap/év `[FELTÉTELEZÉS – PHASE 08 véglegesíti]`. | – |
+
+## 2. Állapotok és provenance
+
+### 2.1 `MetricStatus` – miért nincs (vagy van) érték
+
+| Státusz | UI-jelölés | Jelentés | Példa |
+|---|---|---|---|
+| `OK` | érték | Érvényes, kiszámolt vagy jelentett érték | Net margin = 0.21 |
+| `MISSING` | „Hiányzó adat” | A szükséges bemenet nem érkezett meg | A forrás nem adott CapEx-et |
+| `NOT_APPLICABLE` | **N/A** | A mutató erre az instrumentumra nem értelmezett | P/E egy ETF-re |
+| `NOT_MEANINGFUL` | **N/M** | Matematikailag számolható, de félrevezető | P/E negatív EPS mellett |
+| `INSUFFICIENT_DATA` | „Kevés adat” | Nincs elég időszak vagy minta | 5 éves CAGR 3 év adattal |
+| `INVALID_INPUT` | „Érvénytelen bemenet” | A bemenet validációja elbukott | DCF: diszkontráta ≤ terminális növekedés |
+| `UNAVAILABLE` | „Nem elérhető” | A forrás vagy az aktuális adatcsomag ezt nem szolgáltatja. Ok-kód: `PLAN_LIMIT` (csak fizetős csomagban), `NOT_COVERED` (a piac/instrumentum nincs lefedve), `QUOTA_EXHAUSTED` (a mai keret elfogyott) | Nem US fundamentum free EODHD-vel → `PLAN_LIMIT` |
+| `ERROR` | „Hiba” | Technikai hiba (hálózat, tároló) | timeout |
+
+Szabály: a `0` csak `OK` státusszal létezhet. A `null`/`undefined` soha nem alakul `0`-vá.
+
+### 2.2 `Freshness` – mennyire friss
+`FRESH` (TTL-en belül), `STALE` (TTL lejárt, de még megjeleníthető jelöléssel), `EXPIRED` (nem használható számításhoz jelölés nélkül), `UNKNOWN` (nincs időbélyeg). A TTL-ek: ARCHITECTURE 11.
+
+### 2.3 `ProvenanceKind` – honnan jön az érték
+
+| Kind | Jelentés | UI-címke |
+|---|---|---|
+| `reported` | A forrás által jelentett érték (pl. 10-K-ban szereplő) | „Jelentett” |
+| `calculated` | A saját motorunk számolta jelentett értékekből | „Számított” |
+| `estimated` | Feltevésen alapuló becslés (DCF, alapértelmezett adókulcs, származtatott hiány) | „Becslés” |
+| `ai_interpretation` | LLM által írt értelmezés | „AI-értelmezés” |
+| `user_input` | A felhasználó adta meg (pl. kézi TER, DCF feltevés) | „Felhasználói adat” |
+| `mock` | Teszt-/demóadat | „DEMO ADAT” (mindig feltűnően) |
+
+### 2.4 `DataProvenance` mezők
+`sourceId` (pl. `sec-edgar`), `sourceName`, `kind`, `fetchedAt` (UTC), `asOf` (az adat tényleges időpontja), `period?`, `currency?`, `unit?`, `freshness`, `reference?` (pl. SEC accession number, XBRL tag, filing dátum), `inputs?` (calculated-nél a felhasznált metrikák azonosítói).
+
+### 2.5 `Metric<T>` (terv, a PHASE 03 implementálja)
+```ts
+type Metric<T> =
+  | { status: 'OK'; value: T; provenance: DataProvenance }
+  | { status: Exclude<MetricStatus, 'OK'>; reason: string; provenance?: DataProvenance };
+```
+
+## 3. Azonosítók: Security és Listing (D-025)
+
+Egy értékpapír (pl. egy UCITS ETF, egy ISIN) több tőzsdén és több devizában forog. Ezért két szintet különböztetünk meg:
+- **Security**: maga az értékpapír. Ehhez tartozik a fundamentum és az ETF-metaadat.
+- **Listing**: egy konkrét tőzsdei jegyzés. Ehhez tartozik az ár, az ártörténet és a pozíció.
+
+### 3.1 `Security`
+
+| Mező | Típus | Leírás |
+|---|---|---|
+| `securityId` | string | ISIN, ha van; egyébként forrásspecifikus azonosító, jelölve (`sourceId:code`) |
+| `isin` | string? | ISO 6166 |
+| `kind` | `'stock' \| 'etf'` | Diszkriminátor |
+| `name`, `country` | string | `country` = székhely (részvény) vagy domicil (ETF) |
+| `cik` | string? | SEC Central Index Key (10 jegyű, vezető nullákkal), csak SEC-filerekre |
+| `figi` | string? | OpenFIGI (share class szintű) |
+| `reportingCurrency` | CurrencyCode? | Részvénynél a pénzügyi kimutatás pénzneme |
+| `sector`, `industry` | string? | A forrás besorolása (forrásonként eltérhet) |
+
+### 3.2 `Listing`
+
+| Mező | Típus | Leírás |
+|---|---|---|
+| `listingId` | string | `{symbol}@{MIC}` (pl. `AAPL@XNAS`, `VWCE@XETR`) |
+| `securityId` | string | Hivatkozás a Security-re |
+| `symbol` | string | Tőzsdei ticker (a szolgáltatói ticker-formátum, pl. `VWCE.XETRA`, csak az adapterben él) |
+| `mic` | string | ISO 10383 tőzsdekód |
+| `exchangeName` | string | |
+| `tradingCurrency` | CurrencyCode | A jegyzés pénzneme (≠ a beszámoló pénzneme!). GBX → GBP konverzió explicit |
+| `isPrimary` | bool? | Elsődleges listing, ha a forrás megadja |
+| `figi` | string? | Listing szintű FIGI, ha elérhető |
+
+## 4. Fundamentális mezők (jelentett, `reported`)
+
+### 4.1 Eredménykimutatás (időszaki, „duration”)
+
+| Mező | Definíció | Jelölt US-GAAP XBRL tag(ek) `[NEM IGAZOLT]` |
+|---|---|---|
+| `revenue` | Árbevétel | `Revenues`, `RevenueFromContractWithCustomerExcludingAssessedTax`, régebbi: `SalesRevenueNet` |
+| `costOfRevenue` | Közvetlen költség (COGS) | `CostOfRevenue`, `CostOfGoodsAndServicesSold` |
+| `grossProfit` | Bruttó eredmény (ha jelentett) | `GrossProfit` |
+| `operatingIncome` | Üzemi eredmény (EBIT-közelítés) | `OperatingIncomeLoss` |
+| `pretaxIncome` | Adózás előtti eredmény | `IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest` (és változatai) |
+| `incomeTaxExpense` | Társasági adó | `IncomeTaxExpenseBenefit` |
+| `netIncome` | Az anyavállalat részvényeseinek jutó nettó eredmény | `NetIncomeLoss` |
+| `epsBasic`, `epsDiluted` | Alap és hígított EPS (jelentett, preferált) | `EarningsPerShareBasic`, `EarningsPerShareDiluted` |
+| `weightedSharesDiluted` | Hígított súlyozott átlagos részvényszám | `WeightedAverageNumberOfDilutedSharesOutstanding` |
+| `depreciationAmortization` | Értékcsökkenés és amortizáció (CF-ből) | `DepreciationDepletionAndAmortization`, `DepreciationAndAmortization` |
+| `interestExpense` | Kamatráfordítás | `InterestExpense` |
+
+### 4.2 Mérleg (időpontra, „instant”) és cash flow
+
+| Mező | Definíció | Jelölt tag(ek) `[NEM IGAZOLT]` |
+|---|---|---|
+| `cashAndEquivalents` | Pénz és pénzeszköz-egyenérték | `CashAndCashEquivalentsAtCarryingValue` |
+| `shortTermInvestments` | Rövid távú befektetések (külön, NEM része a `cash`-nek alapból) | `ShortTermInvestments`, `MarketableSecuritiesCurrent` |
+| `totalDebt` | Rövid lejáratú hitelek + hosszú lejáratú adósság rövid része + hosszú lejáratú adósság. **Operatív lízing kötelezettség nélkül** az MVP-ben `[FELTÉTELEZÉS – PHASE 05]` | `ShortTermBorrowings`, `LongTermDebtCurrent`, `LongTermDebtNoncurrent`, `LongTermDebt` (dupla számolás veszélye!) |
+| `totalAssets` | Összes eszköz | `Assets` |
+| `totalLiabilities` | Összes kötelezettség | `Liabilities` |
+| `shareholdersEquity` | Az anyavállalat saját tőkéje | `StockholdersEquity` |
+| `sharesOutstanding` | Kint lévő részvények **egy adott napon** (címlap), `asOf` dátummal | `dei:EntityCommonStockSharesOutstanding` |
+| `operatingCashFlow` | Működési cash flow | `NetCashProvidedByUsedInOperatingActivities` |
+| `capitalExpenditure` | Tárgyi eszköz beszerzés (pozitív nagyság) | `PaymentsToAcquirePropertyPlantAndEquipment` |
+| `dividendsPaid` | Fizetett osztalék (pozitív nagyság) | `PaymentsOfDividends`, `PaymentsOfDividendsCommonStock` |
+| `debtRepayment` | Adósságtörlesztés (pozitív nagyság) | `RepaymentsOfLongTermDebt` (és változatai) |
+
+### 4.3 Időszak-, restatement- és split-szabályok (D-021)
+
+1. **Az időszakot a fact `start`/`end` dátumaiból határozzuk meg**, nem a filing `fy`/`fp` mezőjéből. Egy 10-K az előző évek összehasonlító adatait is tartalmazza a saját `fy` értékével. `[FELTÉTELEZÉS – fixture-rel igazolandó]`
+2. Időszaki adat (`duration`): FY ≈ 350–380 nap, negyedév ≈ 85–95 nap. Időpontra szóló adat (`instant`): mérlegtétel.
+3. **Restatement:** ha egy időszakra több filingből több érték van, a **legkésőbb beadott** filing értéke számít. A provenance-ben szerepel a filing dátuma és az accession number.
+4. **Q4 származtatás:** a 10-K nem ad külön Q4-et. Időszaki tételnél `Q4 = FY − (Q1+Q2+Q3)`, ha mind a négy azonos konvenció szerinti. Ez `calculated`, és csak időszaki tételre érvényes; mérlegtételre nem.
+5. **TTM** (utolsó 12 hónap): az utolsó 4 egymást követő negyedév összege (időszaki tételnél). Ha nincs meg mind a négy: `INSUFFICIENT_DATA`. Mérlegtételnél a legutolsó instant érték.
+6. **Részvényfelosztás:** részvényenkénti adat (EPS, DPS) és részvényszám csak **azonos split-bázison** hasonlítható össze. Forrás: a legutolsó filing (amely visszamenőleg korrigál), vagy a split-események alapján korrigálunk. Ha nem biztosítható: `NOT_MEANINGFUL` + magyarázat.
+7. **Eltérő pénzügyi év vége:** a `fiscalYear` a FY záródátumának éve. Cégek közti összehasonlításnál jelezni kell az eltérő záródátumot.
+8. **Beszámoló ≠ jegyzési pénznem** (pl. ADR): árfolyam alapú szorzónál (P/E, P/S, EV/…) a beszámolói értéket FX-szel a jegyzési pénznemre váltjuk, az FX dátumát és forrását rögzítjük. FX hiányában `MISSING`.
+
+## 5. Számított mutatók (`calculated`) – kiinduló definíciók (a PHASE 05 véglegesíti)
+
+Jelölés: `Δ` = előző időszakhoz képest. „avg” = az időszak eleji és végi érték átlaga. Ha csak a záró érték van meg, azt használjuk, és a provenance-ben jelezzük.
+
+### 5.1 Jövedelmezőség és növekedés
+
+| Mutató | Képlet | Egység | Érvénytelen / speciális eset |
+|---|---|---|---|
+| Gross Profit | `revenue − costOfRevenue` (ha nincs jelentett `grossProfit`) | pénz | hiányzó bemenet → `MISSING` |
+| Gross Margin | `grossProfit / revenue` | tört | `revenue ≤ 0` → `NOT_MEANINGFUL` |
+| Operating Margin | `operatingIncome / revenue` | tört | ua. |
+| Net Margin | `netIncome / revenue` | tört | ua. |
+| EPS | jelentett `epsDiluted` preferált; saját: `netIncome / weightedSharesDiluted` | pénz/részvény | részvényszám ≤ 0 → `INVALID_INPUT` |
+| Növekedés (revenue, NI, EPS) | `(X_t − X_{t−1}) / X_{t−1}` | tört | `X_{t−1} ≤ 0` → `NOT_MEANINGFUL` (nincs abszolútérték-trükk) |
+| CAGR | `(X_end / X_start)^(1/évek) − 1` | tört | `X_start ≤ 0` vagy `X_end ≤ 0` → `NOT_MEANINGFUL`; kevés év → `INSUFFICIENT_DATA` |
+| ROE | `netIncome / avg(shareholdersEquity)` | tört | equity ≤ 0 → `NOT_MEANINGFUL` |
+| ROA | `netIncome / avg(totalAssets)` | tört | assets ≤ 0 → `INVALID_INPUT` |
+| NOPAT | `operatingIncome × (1 − effectiveTaxRate)` | pénz | adókulcs: lásd lent |
+| Effective tax rate | `incomeTaxExpense / pretaxIncome` | tört | `pretaxIncome ≤ 0` vagy az eredmény a [0, 1] tartományon kívül esik → a PHASE 05 dönt: N/M vagy konfigurált alapkulcs `estimated` jelöléssel |
+| Invested Capital | `shareholdersEquity + totalDebt − cashAndEquivalents` | pénz | ≤ 0 → ROIC `NOT_MEANINGFUL` |
+| ROIC | `NOPAT / avg(investedCapital)` | tört | ua. |
+| DOL | `%Δ operatingIncome / %Δ revenue` | x | `%Δ revenue = 0` vagy bázis ≤ 0 → `NOT_MEANINGFUL` |
+
+### 5.2 Mérleg és cash flow
+
+| Mutató | Képlet | Érvénytelen / speciális eset |
+|---|---|---|
+| Net Debt | `totalDebt − cashAndEquivalents` (negatív = nettó készpénz) | – |
+| Net Cash | `cashAndEquivalents − totalDebt` | – |
+| Debt/Equity | `totalDebt / shareholdersEquity` | equity ≤ 0 → `NOT_MEANINGFUL` |
+| FCF | `operatingCashFlow − capitalExpenditure` | bármelyik hiányzik → `MISSING` |
+| FCF Margin | `FCF / revenue` | `revenue ≤ 0` → N/M |
+| FCF Conversion | `FCF / netIncome` | `netIncome ≤ 0` → N/M |
+| FCF after Dividend | `FCF − dividendsPaid` | hiányzó osztalék ≠ 0: `MISSING`, kivéve ha a forrás explicit 0-t jelent |
+| FCF after Dividend & Debt Repayment | `FCF − dividendsPaid − debtRepayment` | ua. |
+| EBITDA (számított) | `operatingIncome + depreciationAmortization` | `calculated`; eltérhet a szolgáltató EBITDA-jától |
+
+### 5.3 Piaci és értékelési mutatók
+
+| Mutató | Képlet | Érvénytelen / speciális eset |
+|---|---|---|
+| Market Cap | `price × sharesOutstanding` | a `sharesOutstanding` dátuma és az ár dátuma eltérhet → jelezni |
+| Enterprise Value | `marketCap + totalDebt − cashAndEquivalents` | – |
+| P/E | `price / epsDiluted` (TTM preferált, egyébként utolsó FY; a címke jelzi, melyik) | EPS ≤ 0 → **N/M** |
+| P/FCF | `marketCap / FCF` | FCF ≤ 0 → N/M |
+| P/S | `marketCap / revenue` | revenue ≤ 0 → N/M |
+| P/B | `marketCap / shareholdersEquity` | equity ≤ 0 → N/M |
+| EV/EBITDA | `EV / EBITDA` | EBITDA ≤ 0 → N/M |
+| PEG | `P/E / (EPS növekedés százalékpontban)`; pl. P/E 20, növekedés 10% → 2.0. Az MVP-ben a növekedés a történeti EPS CAGR (`calculated`), a címke jelzi | növekedés ≤ 0 vagy P/E nem `OK` → N/M |
+| Dividend Yield | `TTM részvényenkénti osztalék / price` | nincs osztalékadat → `MISSING` (nem 0!) |
+| FCF Yield | `FCF / marketCap` | – |
+| Margin of Safety | `(intrinsicValue − price) / intrinsicValue` | `intrinsicValue ≤ 0` → nem számítható (`INVALID_INPUT`) |
+| Real Return | `(1 + nominal) / (1 + inflation) − 1` | `inflation ≤ −1` → `INVALID_INPUT` |
+
+### 5.4 DCF (kiinduló terv – a PHASE 07 véglegesíti, D-022)
+
+- Bemenetek: `baseFcf`, `growthRates[]` (explicit évekre), `discountRate`, `terminalGrowth`, `totalDebt`, `cash`, `sharesOutstanding`, `price`, `years` (javasolt alapeset: 5; 3 támogatott; max. 10).
+- `PV_t = FCF_t / (1 + r)^t`
+- `TV = FCF_n × (1 + g) / (r − g)` csak ha `r > g`, egyébként `INVALID_INPUT` emberi magyarázattal.
+- `PV_TV = TV / (1 + r)^n`
+- `EV_dcf = Σ PV_t + PV_TV`; `Equity = EV_dcf − totalDebt + cash`; `IV/share = Equity / sharesOutstanding`
+- **Ismert egyszerűsítés:** az FCF (`OCF − CapEx`) US GAAP szerint már levonja a kamatot, tehát nem tiszta FCFF. Ezért ha az eredményt WACC-cal diszkontáljuk és EV-ként kezeljük, az torzíthat. A UI-ban jelölni kell; a PHASE 07 dönthet FCFF-közelítésről.
+- `baseFcf ≤ 0` → az alapértelmezett DCF nem futtatható (`INVALID_INPUT`), csak felhasználói felülírással, `user_input` jelöléssel.
+- Az érzékenységi tábla minden cellája ugyanazt az engine-függvényt hívja.
+
+### 5.5 Hozam, kockázat, ETF, portfólió (kiinduló)
+
+| Mutató | Képlet | Megjegyzés |
+|---|---|---|
+| Egyszerű hozam | `P_t / P_{t−1} − 1` | split-korrigált árral; total returnhöz osztalék kell |
+| Total return | árfolyamhozam + újrabefektetett osztalék | ha csak árfolyamhozam van: a címke „csak árfolyamhozam” |
+| Drawdown | `DD_t = P_t / max(P_0..P_t) − 1` (≤ 0) | Max DD = min(DD_t) |
+| Szükséges recovery | `1 / (1 + DD) − 1` | pl. −50% → +100% |
+| Évesített volatilitás | `stdev(napi egyszerű hozam, minta) × √252` | konvenció: PHASE 08 |
+| Sharpe | `(évesített hozam − rf) / évesített volatilitás` | az `rf` felhasználói beállítás (`user_input`) |
+| Sortino | `(évesített hozam − cél) / downside deviation` | |
+| TER költség | `befektetett összeg × TER` évente | hosszú távú hatás: FV `(1+r−TER)` vs `(1+r)` |
+| Tracking difference | `ETF total return − index total return` azonos időszakra | indexadat kell |
+| Tracking error | `stdev(ETF hozam − index hozam) évesítve` | ua. |
+| Rendszeres befizetés FV | időszak végén: `PMT × ((1+i)^n − 1) / i`; időszak elején: `× (1+i)` | havi `i = (1+r_éves)^(1/12) − 1` (effektív) `[FELTÉTELEZÉS – PHASE 05]` |
+| Portfóliósúly | `pozícióérték (kijelzési pénznemben) / összérték` | hiányzó árú pozíció külön, nem 0 súllyal |
+| Súlyozott hozam | `Σ w_i × r_i` | |
+
+## 6. ETF-mezők
+
+`issuer`, `isin`, `domicile`, `ter` (tört, pl. 0.0007), `aum` (Money + asOf), `inceptionDate`, `replication` (`physical_full` \| `physical_sampling` \| `synthetic`), `benchmark`, `distribution` (`accumulating` \| `distributing`), `ucits` (bool?), `currencyHedged` (bool?), `tradingCurrency`, `holdings[]` (`{ name, isin?, weight, country?, sector? }` + `holdingsAsOf`), `holdingsCount`, `topNWeight`. Minden mező `Metric<T>`, mert a forrás gyakran hiányos. Kézi bevitel esetén `user_input`.
+
+## 7. Portfólió-mezők
+
+| Entitás | Mezők |
+|---|---|
+| `Portfolio` | `id`, `name`, `baseCurrency` (kijelzési), `createdAt` |
+| `Transaction` | `id`, `portfolioId`, `listingId` (D-025: a konkrét tőzsdei jegyzés), `type` (`BUY` \| `SELL` \| `DIVIDEND` \| `FEE` \| `SPLIT`), `tradeDate`, `quantity` (>0), `price` (Money), `fees` (Money), `fxRateToBase?` (+ dátum, forrás), `note?` |
+| `Position` (származtatott) | `listingId`, `quantity`, `averageCost` (Money, instrumentum pénznemben), `costBasis`, `marketValue` (Metric), `unrealizedPL`, `realizedPL`, `weight` |
+
+- **P/L két nézetben:** (a) instrumentum pénznemében, FX-hatás nélkül; (b) kijelzési pénznemben = jelenlegi érték mai FX-szel − bekerülés tranzakciós napi FX-szel (FX-hatással). Mindkettő megjeleníthető, és jelölve van.
+- **Könyvelési módszer:** átlagár (MVP, D-012). FIFO később. Adózási célra nem alkalmas (ezt jelezni kell).
+
+## 8. FX-mezők
+
+`FxRate = { base, quote, rate, asOf (dátum), source ('ecb'), fetchedAt, kind: 'reported' }`. Keresztárfolyam EUR-on át számolva: `HUF/USD = (EUR/USD) / (EUR/HUF)` → `calculated`. Hétvégén/ünnepnapon az utolsó elérhető ECB nap rátája érvényes, az `asOf` jelzi.
+
+## 9. Elemzési és AI-mezők (kiinduló)
+
+| Entitás | Mezők |
+|---|---|
+| `ScoreBreakdown` | `category`, `score` (Metric), `weight`, `appliedMetrics[]`, `rule`, `missingInputs[]`, `dataQuality`, `freshness` |
+| `Decision` | `label` (konfigurálható: Strong Buy … Strong Sell / Watch / Insufficient Data), `drivers[]`, `thesisRisks[]`, `invalidationConditions[]`, `confidence` (AnalysisConfidence = adatteljesség, NEM valószínűség) |
+| `AiInputDto` | csak számított metrikák (érték + státusz + provenance kivonat), feltevések, score, döntés, időbélyegek. **Nincs** benne szabad szöveg a felhasználótól; a szolgáltatói szöveg hosszkorlátos |
+| `AiAnalysis` | `summary`, `positives[]`, `negatives[]`, `keyRisks[]`, `valuationExplanation`, `dcfAssumptionsNote`, `dataGaps[]`, `reviewTriggers[]`, `thesisInvalidators[]`, `claims[]` (`{ text, basedOn: metricId[] }`), `provider` (`template` \| `anthropic` \| `local` …), `model?`, `generatedAt`, `inputHash`, `kind`: `calculated` a szabályalapú `template` providernél, `ai_interpretation` LLM-nél (D-026) |
