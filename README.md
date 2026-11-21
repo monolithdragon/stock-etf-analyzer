@@ -96,7 +96,7 @@ Hasznos billentyűk a futó `npm start` / `npm run android` terminálban: `r` = 
 - Az `EXPO_PUBLIC_*` változók bekerülnek az appba, ezért **titkot soha nem tartalmazhatnak**.
 - API-kulcsot **soha ne illessz be chatbe**, és ne commitold. A PHASE 02-höz egyetlen kulcs sem kell.
 
-## Mappaszerkezet (jelenlegi)
+## Mappaszerkezet (jelenlegi, PHASE 03)
 
 ```
 stock-etf-analyzer/
@@ -105,21 +105,19 @@ stock-etf-analyzer/
 ├─ app.json                   Expo konfiguráció (név, ikon, Router plugin)
 ├─ package.json               függőségek és npm scriptek
 ├─ tsconfig.json              TypeScript (strict, @/ alias → src/)
-├─ eslint.config.js           ESLint + Prettier szabályok
+├─ eslint.config.js           ESLint + Prettier + rétegszabályok (ki mit importálhat)
+├─ jest.config.js             tesztbeállítás
 ├─ .env.example               környezeti változók mintája (titok nélkül)
 ├─ assets/                    ikonok, splash kép
 ├─ docs/                      tervek, döntések, fázisútmutatók, handoffok
 └─ src/
    ├─ app/                    Expo Router route-ok (minden fájl egy képernyő!)
-   │  ├─ _layout.tsx          gyökér layout: téma + Stack navigáció
-   │  ├─ index.tsx            Kezdőlap  ( / )
-   │  ├─ about.tsx            A projektről  ( /about )
-   │  └─ +not-found.tsx       ismeretlen útvonal
-   ├─ config/env.ts           nyilvános env beolvasása és validálása
-   ├─ presentation/
-   │  ├─ components/          közös UI elemek (Screen, Card, AppText, …)
-   │  ├─ theme/               színek (világos/sötét), térközök, betűk
-   │  └─ strings/hu.ts        magyar UI-szövegek
+   ├─ domain/                 üzleti fogalmak és szabályok (tiszta TypeScript)
+   ├─ contracts/              a szerverrel közös adatszerződés (zod sémák)
+   ├─ application/            use case-ek (műveletek) és portok (interfészek)
+   ├─ infrastructure/         portok megvalósítása (most: demóadat, memória)
+   ├─ config/                 env beolvasás + composition root (összekötés)
+   ├─ presentation/           UI-komponensek, téma, szövegek, DI-hook
    └─ __tests__/              navigációs smoke tesztek
 ```
 

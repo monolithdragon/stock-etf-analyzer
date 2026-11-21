@@ -1,6 +1,6 @@
 # Roadmap – Stock & ETF Analyzer
 
-> Frissítve: 2026-11-21 (PHASE 02 vége). Minden fázis külön chatben fut, a `stock_etf_analyzer_prompts` csomag `NN_*.md` promptja alapján.
+> Frissítve: 2026-11-21 (PHASE 03 vége). Minden fázis külön chatben fut, a `stock_etf_analyzer_prompts` csomag `NN_*.md` promptja alapján.
 > **Fázisszabály:** a következő fázis csak akkor indul, ha az előző befejezési feltételei teljesültek, vagy a hiányok a KNOWN_ISSUES-ban dokumentálva vannak.
 > **Verzió:** a promptok egy része SDK 57-et említ. Mindenhol **SDK 58** értendő (D-020).
 
@@ -10,8 +10,8 @@
 |---|---|---|---|
 | 01 | Követelmények és architektúra | **KÉSZ** (2026-11-21) | – |
 | 02 | Projekt setup | **KÉSZ** (2026-11-21) | **M1 Futó váz ✅** |
-| 03 | Architektúra és domain modell | NEM KEZDŐDÖTT – **következik** | |
-| 04 | Adatforrások, proxy és deviza – **két chatben: 04A + 04B** (D-028) | NEM KEZDŐDÖTT | M2 Adat a csövön |
+| 03 | Architektúra és domain modell | **KÉSZ** (2026-11-21) | |
+| 04 | Adatforrások, proxy és deviza – **két chatben: 04A + 04B** (D-028) | NEM KEZDŐDÖTT – **04A következik** | M2 Adat a csövön |
 | 05 | Pénzügyi calculation engine | NEM KEZDŐDÖTT | |
 | 06 | Részvény fundamentális elemzés | NEM KEZDŐDÖTT | |
 | 07 | Értékelés és DCF | NEM KEZDŐDÖTT | |
@@ -114,6 +114,23 @@ Minden fázis közös lezárása (CLAUDE.md):
   - A typecheck és a tesztek zöldek (valós kimenettel).
   - Képernyőben nincs hálózati hívás.
   - Az ARCHITECTURE és a DATA_DICTIONARY a tényleges kódhoz igazítva.
+- **Eredmény (2026-11-21): KÉSZ.**
+  - Domain: minden kért modell (+ `PriceSeries`, `Listing`, `Metric<T>`), validált konstruktorokkal.
+  - `Result`/`AppError` (10 hibafajta).
+  - zod 4.6.7 + `src/contracts` váz.
+  - 4 port, 2 use case, composition root, `AppServicesProvider`.
+  - ESLint rétegszabályok, 8 szándékos hibával igazolva.
+  - `npm run check` exit 0; tesztek **98/98**; `expo export` (Android) OK.
+  - Új döntések: D-035…D-041.
+  - **Eltérés a tervtől:** `FxGateway`, `AiGateway`, `Logger` port nem készült (nincs még használója, D-040); az `env.ts` nem került át zodra (D-039).
+  - **Lelet:** a PHASE 02 route-tesztjei kisbetűs `c:\` munkakönyvtárból pirosak voltak (KI-11, javítva: D-041).
+  - Részletek: `docs/handoffs/phase-03-handoff.md`.
+- **A PHASE 04A kapcsolódási pontjai (PHASE 03-ból):**
+  - `MarketDataGateway` port (`src/application/ports`). A kliensoldali `ProxyMarketDataGateway` ezt valósítja meg, és a `src/config/container.ts`-ben váltja a `notImplementedMarketDataGateway`-t.
+  - `parseApiResponse(json, schema)` + `quoteDtoSchema` + `quoteFromDto` (`src/contracts`) a proxyválasz validálásához; a proxy ugyanezt a sémát használja kimenetként.
+  - Hibák: a hálózati, timeout és 429 hibák az `AppErrors.network/timeout/rateLimited` konstruktorokkal képezhetők le.
+  - ESLint: a `src/app/api/**` és a `src/server` számára új zóna kell (D-038 következmények). A `no-restricted-globals` már kihagyja a `src/app/api/**`-t.
+  - Az `FxGateway` portot a 04A vezeti be, az első használójával együtt.
 
 ### PHASE 04 – Adatforrások, proxy és deviza (két chatben, D-028)
 - **Cél:** valós, validált, normalizált adat a proxyn keresztül, a három célpiacra (US, Európa, globális – D-023), FX-szel, élő API-tól független tesztekkel.

@@ -1,13 +1,13 @@
 # Projektállapot – Stock & ETF Analyzer
 
-> Utolsó frissítés: **2026-11-21**, PHASE 02 vége.
+> Utolsó frissítés: **2026-11-21**, PHASE 03 vége.
 
 ## Cél röviden
 Mobilalkalmazás (Expo SDK 58, React Native, TypeScript) részvények, ETF-ek és saját portfólió átlátható, forrásolt, reprodukálható elemzésére. Az AI csak magyaráz. Részletek: [REQUIREMENTS.md](REQUIREMENTS.md).
 
 ## Aktuális fázis
-- **Lezárt fázis:** PHASE 02 – Expo SDK 58 projekt és fejlesztői környezet (**KÉSZ**). Átadás: [handoffs/phase-02-handoff.md](handoffs/phase-02-handoff.md).
-- **Következő fázis:** PHASE 03 – Architektúra és domain modell (prompt: `03_…` a promptcsomagban).
+- **Lezárt fázis:** PHASE 03 – Architektúra, domain modellek és alkalmazási rétegek (**KÉSZ**). Átadás: [handoffs/phase-03-handoff.md](handoffs/phase-03-handoff.md).
+- **Következő fázis:** PHASE 04A – Proxy váz és ingyenes alapforrások (prompt: `04_ADATFORRASOK_ES_DEVIZA.md`, első chat; D-028).
 
 ## Készültség
 
@@ -18,39 +18,44 @@ Mobilalkalmazás (Expo SDK 58, React Native, TypeScript) részvények, ETF-ek é
 | Navigáció | Stack: Kezdőlap (`/`), A projektről (`/about`), „nem található”. A tabok a PHASE 12-ben jönnek (D-034). |
 | Theme / UI-alap | Világos/sötét paletta, térköz- és betűtokenek, 5 közös komponens, magyar szövegek egy helyen |
 | Env-konfiguráció | `.env.example` (titok nélkül), `src/config/env.ts` validált nyilvános env; `.env*` gitignore-olva |
+| Domain modell | **Kész** (PHASE 03): `Instrument` (Stock \| Etf), `Listing`, `Quote`, `PriceSeries`, `FinancialStatement` (3 változat), `FinancialMetric`, `FxRate`, `Portfolio`, `Transaction` (5 típus), `Position` (típus), `AnalysisResult`, `DataProvenance`, `Metric<T>`, `Result`/`AppError`; validált konstruktorok |
+| Rétegek | **Kész**: `src/domain`, `src/contracts` (zod 4.6.7), `src/application` (4 port, 2 use case), `src/infrastructure` (mock, memóriabeli tároló, rendszeróra), `src/config/container.ts` (composition root), `AppServicesProvider` |
+| Rétegszabályok | **Kikényszerítve** ESLinttel (`import/no-restricted-paths`, `no-restricted-imports`, `no-restricted-globals` → nincs `fetch` a képernyőkben); szándékos hibákkal igazolva |
 | Lint / formázás / typecheck | **Zöld** (2026-11-21): `npm run check` exit 0 |
-| Tesztek | **15/15 zöld** (3 suite): env-parser, theme, navigációs smoke tesztek |
-| Expo ellenőrzések | `npx expo install --check`: up to date; `npx expo-doctor@latest`: 20/20 |
-| Git | Inicializálva (`main`), első commit kész |
-| Domain, számítás, adat, proxy, tárolás | **Nincs** – PHASE 03-tól |
+| Tesztek | **98/98 zöld** (9 suite): domain, contracts, use case-ek, composition root, DI-hook, env, theme, navigáció |
+| Expo ellenőrzések | `npx expo install --check`: up to date (PHASE 03); `npx expo export --platform android`: bundle OK (PHASE 03); `npx expo-doctor@latest`: 20/20 (PHASE 03) |
+| Git | `main`; a PHASE 03 változásai commitra várnak (a tulajdonos dönt a commitról) |
+| Számítás, valós adat, proxy, tárolás | **Nincs** – PHASE 04A (adat/proxy), 05 (képletek), 13 (SQLite) |
 | Adatforrás-kulcsok | Nincsenek; a PHASE 04B-ig nem is kellenek |
 
 Fázisonkénti állapot: [ROADMAP.md](ROADMAP.md).
 
-## A projektmappa tartalma (2026-11-21)
+## A projektmappa tartalma (2026-11-21, PHASE 03 vége)
 ```
 stock-etf-analyzer/
 ├─ CLAUDE.md                 állandó projektutasítások
 ├─ README.md                 telepítés, indítás, parancsok (kezdőbarát)
 ├─ app.json, package.json, package-lock.json, tsconfig.json
-├─ eslint.config.js, .prettierrc.json, .prettierignore, .gitattributes, .gitignore
-├─ .env.example              env-minta, titok nélkül
-├─ .vscode/                  ajánlott bővítmények, mentéskori ESLint-javítás
-├─ assets/                   ikonok, splash
+├─ eslint.config.js          ESLint + Prettier + RÉTEGSZABÁLYOK (PHASE 03)
+├─ jest.config.js            Jest (jest-expo), kanonikus útvonallal (D-041)
+├─ .prettierrc.json, .prettierignore, .gitattributes, .gitignore, .env.example
+├─ .vscode/, assets/
 ├─ src/
-│  ├─ app/                   _layout.tsx, index.tsx, about.tsx, +not-found.tsx
-│  ├─ config/                env.ts (+ teszt)
-│  ├─ presentation/
-│  │  ├─ components/         Screen, Card, AppText, InfoRow, PrimaryButton
-│  │  ├─ theme/              colors, tokens, use-theme, navigation-theme (+ teszt)
-│  │  └─ strings/hu.ts
+│  ├─ app/                   _layout.tsx (AppServicesProvider), index, about, +not-found
+│  ├─ domain/                tiszta TS: shared/, instrument/, market/, fundamentals/, fx/, portfolio/, analysis/
+│  ├─ contracts/             zod sémák, quote DTO, API-boríték
+│  ├─ application/           ports/, use-cases/ (get-listing-quote, record-transaction)
+│  ├─ infrastructure/        system/, mock/, api-client/ (live helyőrző)
+│  ├─ config/                env.ts, container.ts (composition root)
+│  ├─ presentation/          components/, theme/, strings/, di/
 │  └─ __tests__/routes.test.tsx
 └─ docs/
    ├─ PROJECT_STATE.md  REQUIREMENTS.md  ARCHITECTURE.md  DECISIONS.md  ROADMAP.md
    ├─ DATA_SOURCES.md  DATA_DICTIONARY.md  KNOWN_ISSUES.md
-   ├─ phases/phase-01-requirements-architecture.md, phase-02-project-setup.md
-   └─ handoffs/phase-01-handoff.md, phase-02-handoff.md
+   ├─ phases/phase-01…, phase-02…, phase-03-architecture-domain-model.md
+   └─ handoffs/phase-01…, phase-02…, phase-03-handoff.md
 ```
+Rétegek és adatút: [ARCHITECTURE.md](ARCHITECTURE.md) 3., 4.4, 5.
 
 ## Fejlesztői környezet (2026-11-21-én ellenőrizve)
 
@@ -87,6 +92,14 @@ stock-etf-analyzer/
   - D-032 tesztkonvenció;
   - D-033 env-minta;
   - D-034 Stack-navigáció, tabok a PHASE 12-ben.
+- **PHASE 03:**
+  - D-035 domain-konvenciók (diszkriminált uniók, branded típusok, smart constructorok, `null` vs `Metric`; Security = `Instrument`);
+  - D-036 `Result`/`AppError`;
+  - D-037 negyedév 80–100 nap;
+  - D-038 rétegszabályok ESLinttel;
+  - D-039 zod 4.6.7, validációs munkamegosztás;
+  - D-040 csak használt portok, függvény-factory DI;
+  - D-041 `jest.config.js` kanonikus útvonallal (Windows).
 
 Teljes lista: [DECISIONS.md](DECISIONS.md).
 
@@ -105,4 +118,4 @@ Teljes lista: [DECISIONS.md](DECISIONS.md).
 - U-13: a meglévő FMP és EODHD kulcs csomagszintje. A PHASE 04B ellenőrzi.
 - KI-04 (opcionális): beállítod-e az `ANDROID_HOME`-ot és javítod-e a `Path` típusát (fázisútmutató 13.2)? A fejlesztést nem blokkolja.
 
-Egyik sem blokkolja a PHASE 03-at. Részletek: [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
+Egyik sem blokkolja a PHASE 04A-t. A PHASE 04A-hoz kulcs nem kell, csak a SEC User-Agent kapcsolattartó (a tulajdonos írja a `.env.local`-ba). Részletek: [KNOWN_ISSUES.md](KNOWN_ISSUES.md).

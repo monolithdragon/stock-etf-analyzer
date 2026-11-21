@@ -1,10 +1,21 @@
 # Ismert problémák, kockázatok, ismeretlenek – Stock & ETF Analyzer
 
-> Frissítve: 2026-11-21 (PHASE 02 vége). Valószínűség (V) és hatás (H) skálája: **A** = Alacsony, **K** = Közepes, **M** = Magas.
+> Frissítve: 2026-11-21 (PHASE 03 vége). Valószínűség (V) és hatás (H) skálája: **A** = Alacsony, **K** = Közepes, **M** = Magas.
 
 ## Blokkolók
 
-**Nincs blokkoló a PHASE 03 indításához.** (A PHASE 02-t sem blokkolta semmi.)
+**Nincs blokkoló a PHASE 04A indításához.** (A PHASE 03-at sem blokkolta semmi.)
+
+## PHASE 03 – ismert problémák és leletek (2026-11-21)
+
+| ID | Probléma / lelet | Hatás | Állapot / teendő | Felelős fázis |
+|---|---|---|---|---|
+| KI-11 | **A PHASE 02 route-tesztjei kisbetűs meghajtójú munkakönyvtárból (`c:\…`, pl. VS Code terminál, Git Bash) pirosak voltak** (5/15: „Invalid hook call”). Ok: a Jest a modulokat `c:\` és `C:\` kulccsal kétszer töltötte be, így két React-példány keletkezett. PowerShellből (`C:\…`) zöldek voltak, ezért a PHASE 02 „15/15” eredménye csak onnan igaz. | K: hamis piros teszt a VS Code-ban | **Megoldva:** `jest.config.js` kanonikus `rootDir`-rel (D-041). Igazolva: kisbetűs útvonalról 98/98 zöld. | – |
+| KI-12 | A PHASE 03-ban az appot **nem** indítottuk el emulátoron. Ellenőrizve: typecheck, lint, tesztek (a route-tesztek a valódi `_layout`-ot renderelik a Providerrel), `npx expo export --platform android` (Hermes bundle sikeres). Látható UI-változás nem történt. | A | **Nyitott.** Következő emulátoros futtatáskor (legkésőbb PHASE 04A) érdemes megnézni: `npm run android`. | 04A |
+| KI-13 | A portfólió-tároló memóriában él (`InMemoryPortfolioRepository`): az app újraindításakor az adatok elvesznek. | A most (nincs portfólió-UI) | **Tudatos (D-040).** SQLite: PHASE 13. | 13 |
+| KI-14 | `live` adatmódban az árfolyam-lekérés `UPSTREAM / NOT_IMPLEMENTED` hibát ad. | A | **Tudatos:** őszinte hiba csendes demóadat helyett. A PHASE 04A proxy kliense váltja. | 04A |
+| KI-15 | A lokális ID-generátor `Math.random`-ot és időbélyeget használ (nem kriptográfiai UUID). Egy eszközön belül egyedi, eszközök között nem garantáltan. | A | **Nyitott.** Tartós tárolásnál felülvizsgálandó (pl. `expo-crypto` `randomUUID`). | 13 |
+| KI-16 | Az ARCHITECTURE 7. tervében szereplő `Logger` port és az ARCHITECTURE 10. naplózás még nincs megvalósítva; az `FxGateway` és az `AiGateway` sem. | A | **Tudatos (D-040):** a portok az első használójukkal együtt kerülnek be (04A: FxGateway, Logger; 11: AiGateway). | 04A, 11 |
 
 ## PHASE 02 – ismert problémák és leletek (2026-11-21)
 
@@ -64,7 +75,7 @@ A DP-01…DP-04 döntési pontokra 2026-11-21-én megjött a válasz. A DP-05 tu
 | R-23 | Az FMP free lefedettsége és feltételei hivatalos forrásból nem igazoltak (két hivatalos URL is 403). | K | K | A PHASE 04B a saját kulccsal próbahívásokkal és a fiók-dashboarddal igazolja | 04B |
 | R-24 | API-kulcs szivárgása (chatbe illesztés, véletlen commit). **PHASE 02:** `.gitignore` → `.env*` + `!.env.example`, `git check-ignore` ellenőrizve. | K | M | Kulcs csak `.env.local`-ba (gitignore), soha chatbe; a PHASE 02 `.gitignore`-ja; secret-scan a PHASE 15-ben | 02 ✅, 04, 15 |
 | R-25 | A PHASE 04 túl nagy egy chathez. | M | K | D-028: 04A + 04B | 04 |
-| R-26 | Ugyanaz az ETF több tőzsdén és devizában forog, ami rossz listing választásához és téves P/L-hez vezethet. | K | K | D-025 Security/Listing; a pozíció listinghez kötött; a keresés listinget kínál | 03, 09 |
+| R-26 | Ugyanaz az ETF több tőzsdén és devizában forog, ami rossz listing választásához és téves P/L-hez vezethet. **PHASE 03:** az `Instrument`/`Listing` modell és a listinghez kötött `Transaction` elkészült. | K | K | D-025 Security/Listing; a pozíció listinghez kötött; a keresés listinget kínál | 03 ✅, 09 |
 | R-27 | Az ECB kb. 30 devizát közöl. Globális listingeknél lehet olyan deviza, ami nincs benne. | K | K | `MISSING` státusz; opcionálisan a Frankfurter más központi banki forrása, külön provenance-szel | 04A |
 
 ## Ismeretlenek (ellenőrizendő)
@@ -98,3 +109,5 @@ A DP-01…DP-04 döntési pontokra 2026-11-21-én megjött a válasz. A DP-05 tu
 | PI-04 | A 02-es prompt a `docs/phase-01-handoff.md`-t kéri. | A valós hely: `docs/handoffs/phase-01-handoff.md` (a CLAUDE.md konvenciója) | Útvonal javítása a 02-es promptban |
 | PI-05 | Egyik prompt sem rendeli fázishoz a backend/proxy építését. | ROADMAP „kiegészítések” 1. pont | – |
 | PI-06 | A 02-es prompt (aktuális változat) a `docs/handoffd/phase-01-handoff.md`-t kéri (elírás: „handoffd”). | A valós hely: `docs/handoffs/phase-01-handoff.md` | Elírás javítása a 02-es promptban |
+| PI-07 | A 03-as prompt a `docs/phases/phase-02-handoff.md`-t kéri, és „Equity Analyst” néven hivatkozik a projektre. | A valós hely: `docs/handoffs/phase-02-handoff.md`; a név: Stock & ETF Analyzer (PI-02) | Útvonal javítása a 03-as promptban |
+| PI-08 | A 03-as prompt `Instrument`, `Stock`, `Etf` modelleket kér, a D-025 `Security`/`Listing` fogalmakat használ. | `Instrument = Stock \| Etf` a Security típusneve, a `Listing` külön (D-035) | – |

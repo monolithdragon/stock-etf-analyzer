@@ -1,6 +1,6 @@
 # Architektúra – Stock & ETF Analyzer
 
-> Állapot: **TERV** (PHASE 01, 2026-11-21). Még nincs kód. A PHASE 03 a tényleges kódhoz igazítja ezt a dokumentumot.
+> Állapot: **részben megvalósítva** (PHASE 03, 2026-11-21). A 3., 4.4, 5. és 7. fejezet a **tényleges kódot** írja le; a proxy (6.), a cache (11.) és az offline működés (12.) még terv.
 > Kapcsolódó dokumentumok: [DECISIONS.md](DECISIONS.md), [DATA_SOURCES.md](DATA_SOURCES.md), [DATA_DICTIONARY.md](DATA_DICTIONARY.md), [REQUIREMENTS.md](REQUIREMENTS.md).
 
 ## 1. Alapelvek
@@ -73,7 +73,21 @@ flowchart LR
 | Presentation | `src/presentation`, `src/app` (nem `api`) | `application` (hookokon át), `domain` típusok | `infrastructure`, `server`, közvetlen `fetch` |
 | Config | `src/config` | mindent (összekötés) | – |
 
-**Kikényszerítés:** ESLint `no-restricted-imports` szabályok rétegenként (a PHASE 03 állítja be, extra plugin nélkül, ha elég). A PHASE 03 egy szándékosan hibás importtal mutatja meg, hogy a szabály működik.
+**Megjegyzések a táblázathoz (PHASE 03, D-038):**
+- Az `src/app` route-jai importálhatják a `src/config`-ot. A gyökér layout itt hozza létre a szolgáltatásokat (ez a composition root belépési pontja), az `about.tsx` pedig innen olvassa a nyilvános env-et. A `src/presentation` viszont **nem** importálhat `config`-ot: adatot csak a `useAppServices()` hookon át kap.
+- A `presentation` és az `src/app` a `contracts`-ot sem importálja: a DTO-k a UI elől rejtve maradnak.
+- A tesztfájlokra is ugyanezek a szabályok vonatkoznak. Ezért az application tesztjei kézzel írt fake portokat használnak. A valódi adapterekkel összekötött tesztet a `src/config/container.test.ts` tartalmazza.
+
+**Kikényszerítés (megvalósítva, `eslint.config.js`):**
+
+| Szabály | Mit tilt | Hol |
+|---|---|---|
+| `import/no-restricted-paths` (zónák) | rétegek közti tiltott importirány (a fenti táblázat) | minden `src/**/*.ts(x)` |
+| `no-restricted-imports` – regex | **bármilyen** külső csomag (React, Expo, zod…) | `src/domain` |
+| `no-restricted-imports` – csoportok | `react*`, `react-native*`, `expo*`, `@expo/*` | `src/contracts`, `src/application` |
+| `no-restricted-globals` | `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource` | `domain`, `contracts`, `application`, `presentation`, `src/app` (kivéve a jövőbeli `src/app/api/**`) |
+
+A szabályok működését szándékosan hibás importokkal igazoltuk: 8 várt hiba jelent meg, a próbafájlokat utána töröltük. A kimenet a [phase-03 útmutató](phases/phase-03-architecture-domain-model.md) 7. lépésében olvasható. Új csomag nem kellett: az `eslint-plugin-import` és a TypeScript import-resolver az `eslint-config-expo`-ból jön.
 
 **Kritikus szabály:** kliensoldali kód (`src/app` nem-`api` fájljai, `src/presentation`, `src/infrastructure`) **soha** nem importál `src/server`-ből. Az Expo dokumentáció szerint a kliens kódba importált titok bekerülhet a bundle-be. A titkokat csak a `+api.ts` fájlok és az általuk importált szerverkód olvashatja (DATA_SOURCES 9.).
 
@@ -154,19 +168,78 @@ flowchart LR
 | 7 | Explanation | **alap: kliens** (szabályalapú `template` provider, `calculated`); **opcionális: proxy + LLM** (`ai_interpretation`) | `AiInputDto` → `AiAnalysis` | `AI_TIMEOUT`, `AI_RATE_LIMITED`, `AI_INVALID_OUTPUT`, `AI_REFUSED`, `AI_DISABLED` (LLM esetén) | 11 |
 | 8 | UI | kliens | view-model → képernyő | loading / empty / partial / stale / error / retry | 12 |
 
+### 4.4 Adatút a tényleges kódban (PHASE 03)
+
+A PHASE 03-ban egy teljes, tesztelt szelet működik, valós API nélkül. A „live” mód helyén egy őszinte helyőrző áll, amely `NOT_IMPLEMENTED` hibát ad.
+
+```mermaid
+flowchart TD
+  UI["Képernyő (src/app, src/presentation)<br/>useAppServices()"] -->|"getListingQuote('DEMO@XNAS')"| UC["Use case (src/application/use-cases)<br/>1. parseListingId → VALIDATION?<br/>2. gateway hívás<br/>3. frissesség a saját Clock szerint"]
+  UC -->|"MarketDataGateway port"| GW{"src/config/container.ts<br/>dataMode?"}
+  GW -->|mock| MOCK["createMockMarketDataGateway<br/>(src/infrastructure/mock)<br/>kind: 'mock', DEMO tickerek"]
+  GW -->|live| NI["notImplementedMarketDataGateway<br/>UPSTREAM / NOT_IMPLEMENTED<br/>(PHASE 04A: proxy kliens)"]
+  MOCK -->|"createQuote() – domain validáció"| UC
+  UC -->|"Result: Quote vagy AppError"| UI
+  PROXY["(PHASE 04A) proxy JSON"] -.->|"parseApiResponse + quoteDtoSchema<br/>(src/contracts, zod)"| MAP["quoteFromDto → createQuote<br/>(domain invariánsok)"]
+  MAP -.-> UC
+```
+
+A tranzakció rögzítésének útja: `recordTransaction(command)` → `parsePortfolioId` → `PortfolioRepository.getPortfolio` (ha nincs: `NOT_FOUND`) → `createTransaction` (domain; a „ma” a `Clock`-ból jön) → `addTransaction` (ha hibázik: `STORAGE`) → `ok(transaction)`.
+
 ### 4.3 Miért így?
 - A **normalizálás a szerveren** történik. Szolgáltatócsere vagy formátumváltozás esetén elég a proxyt újratelepíteni, nem kell új mobilverzió (store review nélkül javítható).
 - A **számítás a kliensen** fut, így offline is működik, determinisztikus, és nem terheli a szervert.
 - A **contract verziózott** (`/api/v1`). Régi appverziók tovább működnek, ha a proxy változik.
 
-## 5. Tervezett projektstruktúra
+## 5. Projektstruktúra
 
-> A PHASE 02 a hivatalos SDK 58 sablonhoz igazítja. Ha a sablon nem `src/app`-ot használ, a sablon konvenciója nyer, és ezt a DECISIONS.md-ben kell rögzíteni.
->
-> **PHASE 02 eredménye (2026-11-21):** az SDK 58 `default` sablon `src/app`-ot használ, így a terv változatlan (D-029).
-> - Ténylegesen létező mappák: `src/app`, `src/config`, `src/presentation/{components,theme,strings}`, `src/__tests__` (navigációs tesztek; tesztfájl nem lehet az `src/app` alatt, D-032).
-> - A többi mappát a saját fázisa hozza létre.
-> - A `(tabs)/` csoport a PHASE 12-ben készül; addig gyökér-`Stack` van (D-034).
+### 5.1 Ténylegesen létező kód (PHASE 03 vége, 2026-11-21)
+
+```
+src/
+├─ app/                           Expo Router route-ok (VÉKONY). _layout.tsx: AppServicesProvider + téma + Stack
+├─ domain/                        TISZTA TypeScript – semmilyen külső csomag
+│  ├─ index.ts                    nyilvános felület (`@/domain`)
+│  ├─ shared/                     brand, result, errors (AppError), validation, currency, dates, ids,
+│  │                              money, period, provenance (+ assessFreshness), metric (Metric<T>)
+│  ├─ instrument/instrument.ts    Instrument = Stock | Etf, Listing + konstruktorok
+│  ├─ market/quote.ts             Quote, PriceSeries
+│  ├─ fundamentals/               financial-statement.ts (Income | Balance | CashFlow), financial-metric.ts
+│  ├─ fx/fx-rate.ts               FxRate
+│  ├─ portfolio/portfolio.ts      Portfolio, Transaction (BUY|SELL|DIVIDEND|FEE|SPLIT), Position (csak típus)
+│  ├─ analysis/analysis-result.ts AnalysisResult, adatteljesség (COMPLETE|PARTIAL|INSUFFICIENT)
+│  └─ shared/shared.test.ts, entities.test.ts
+├─ contracts/                     zod: közös sémák (provenance, Metric), quote DTO, API-boríték + hibakód-leképezés
+├─ application/
+│  ├─ index.ts                    AppServices interfész (a UI ezt kapja)
+│  ├─ ports/index.ts              Clock, IdGenerator, MarketDataGateway, PortfolioRepository
+│  └─ use-cases/                  get-listing-quote.ts, record-transaction.ts (+ tesztek fake portokkal)
+├─ infrastructure/
+│  ├─ system/system-clock.ts      rendszeróra, lokális ID-generátor
+│  ├─ mock/                       InMemoryPortfolioRepository, mock árfolyam-gateway (DEMO tickerek)
+│  └─ api-client/                 notImplementedMarketDataGateway (live helyőrző, a PHASE 04A cseréli)
+├─ config/                        env.ts (nyilvános env), container.ts (composition root) (+ tesztek)
+├─ presentation/
+│  ├─ components/ theme/ strings/ (PHASE 02)
+│  └─ di/app-services-context.tsx AppServicesProvider + useAppServices() (+ teszt)
+└─ __tests__/routes.test.tsx      navigációs smoke tesztek
+```
+
+| Mappa | Feladat | Egy mondatban |
+|---|---|---|
+| `src/domain` | üzleti fogalmak és szabályok | „Mi az a tranzakció, és mikor érvényes?” |
+| `src/contracts` | a hálózati szerződés sémái | „Milyen alakú JSON jöhet a proxytól, és hogyan lesz belőle domain?” |
+| `src/application` | use case-ek és portok | „Milyen lépésekből áll egy felhasználói művelet, és mire van hozzá szükség?” |
+| `src/infrastructure` | portok konkrét megvalósítása | „Honnan jön ténylegesen az adat (mock, később proxy, SQLite)?” |
+| `src/config` | összekötés (composition root) és env | „Melyik megvalósítás kerül melyik port mögé?” |
+| `src/presentation` | UI-komponensek, téma, szövegek, DI-hook | „Hogyan néz ki, és honnan kapja a szolgáltatásokat?” |
+| `src/app` | route-ok (képernyők) | „Melyik URL melyik képernyő?” |
+
+**Még nem létező mappák** (a saját fázisuk hozza létre): `calculations/` (05), `scoring/` (10), `explanation/` (11), `server/` és `app/api/` (04A), `infrastructure/storage/` (13), `presentation/{hooks,formatters,view-models}` (12).
+
+### 5.2 Tervezett teljes struktúra (PHASE 01 terv)
+
+> A `(tabs)/` csoport a PHASE 12-ben készül; addig gyökér-`Stack` van (D-034). A sablon konvenciója (`src/app`) egyezett a tervvel (D-029).
 
 ```
 stock-etf-analyzer/
@@ -296,9 +369,26 @@ Hibakódok: `VALIDATION_FAILED`, `NOT_FOUND`, `UNSUPPORTED_MARKET`, `RATE_LIMITE
 
 ## 7. Hibakezelés, konfiguráció, DI
 
-- **Result minta:** az üzleti logika nem dob kivételt várt hibára, hanem `Result<T, AppError>`-t ad vissza. Az `AppError` diszkriminált unió: `ValidationError`, `NetworkError`, `TimeoutError`, `RateLimitError{retryAfterSec}`, `NotFoundError`, `UpstreamError`, `MissingDataError`, `CalculationInvalidError`, `StorageError`, `AiError`. (PHASE 03)
+- **Result minta (megvalósítva, `src/domain/shared/result.ts`):** az üzleti logika várt hibára nem dob kivételt, hanem `Result<T, AppError>`-t ad vissza: `{ ok: true, value }` vagy `{ ok: false, error }`. Kivételt csak programozási hiba (bug) esetén dobunk, pl. ha hiányzik az `AppServicesProvider`.
+- **AppError (megvalósítva, `src/domain/shared/errors.ts`):** diszkriminált unió a `kind` mező szerint (D-036):
+
+| `kind` | Mikor | Extra mezők | Újrapróbálható (`isRetryable`) |
+|---|---|---|---|
+| `VALIDATION` | érvénytelen bemenet / sérül egy domain invariáns | `issues[] { path, message }` | nem |
+| `NETWORK` | nincs kapcsolat | – | igen |
+| `TIMEOUT` | időtúllépés | `timeoutMs` | igen |
+| `RATE_LIMITED` | szolgáltatói/proxy keret | `retryAfterSec` | igen |
+| `NOT_FOUND` | nem létező erőforrás | `resource`, `id` | nem |
+| `UPSTREAM` | szolgáltató/proxy hiba | `failure`: `HTTP_ERROR` \| `INVALID_RESPONSE` \| `CONTRACT_MISMATCH` \| `NOT_IMPLEMENTED`; `sourceId` | csak `HTTP_ERROR` |
+| `MISSING_DATA` | a művelethez szükséges adat hiányzik | `missing[]` | nem |
+| `CALCULATION_INVALID` | a számítás nem végezhető el (pl. eltérő pénznemek összeadása) | – | nem |
+| `STORAGE` | tárolási hiba | – | nem |
+| `AI` | magyarázó szolgáltatás hibája | `failure`: `AI_DISABLED` … | csak timeout / rate limit esetén |
+
+- **Hiba vs. hiányzó érték:** az `AppError` azt jelzi, hogy a *művelet* hiúsult meg. A `Metric<T>` nem-OK státusza azt jelzi, hogy egy *érték* hiányzik vagy nem értelmezhető, de az elemzés ettől folytatódhat.
+- **Validáció két szinten, duplikáció nélkül (D-039):** a zod (`src/contracts`) a bizalmi határon a szerkezetet ellenőrzi. Az üzleti invariánsokat a domain `parse…`/`create…` függvényei ellenőrzik, és a zod sémák ezeket hívják (`fromDomainParser`). Minden domain konstruktor az **összes** hibás mezőt egyszerre adja vissza (`validateFields`).
 - **Metrikaszintű hiány ≠ hiba:** egy hiányzó mező nem bukja el az egész elemzést. A metrika `MISSING` státuszt kap, és az elemzés részleges lesz.
-- **DI:** kézi composition root (`src/config/container.ts`), React Contexten át adja a use case-eket. DI-könyvtár nem kell.
+- **DI (megvalósítva):** kézi composition root (`src/config/container.ts` → `createAppServices(env, overrides)`). A use case-ek függvény-factoryk (pl. `createGetListingQuote(deps)`), és React Contexten át jutnak el a UI-hoz (`AppServicesProvider`, `useAppServices`). DI-könyvtár nem kell (D-040).
 - **Óra (Clock) port:** a frissesség és a cache TTL tesztelhetősége miatt az időt injektáljuk.
 
 ## 8. Tesztelési stratégia
@@ -400,7 +490,7 @@ Minden rekord tartalmazza: `fetchedAt`, `asOf`, `source`, `period`, `freshness`,
 | Min. platform | iOS 16.4+, Android 7+, compileSdk 37, targetSdk 36, Xcode 26.4+ | `[IGAZOLT]` | v58 referenciaoldal |
 | Nyelv | TypeScript strict. RN 0.87 óta a Strict TypeScript API az alapértelmezett, a `react-native/Libraries/*` deep import típushiba | `[IGAZOLT]` | SDK 58 upgrade guide |
 | Navigáció | Expo Router (SDK 58: átdolgozott navigációs mag, `web.output` alapértelmezés `"server"`, API route-ok) | `[IGAZOLT]` | SDK 58 changelog, API routes docs |
-| Validáció | zod (tiszta JS) | `[NEM IGAZOLT]` verzió-kompatibilitás, PHASE 03 | D-014 |
+| Validáció | zod **4.6.7** (tiszta JS; `npx expo install zod` → `dependencies`, `^4.6.7`) | `[IGAZOLT]` PHASE 03: typecheck, Jest és Android Hermes bundle (`expo export`) sikeres | D-014, D-039 |
 | Szerver-állapot a UI-ban | TanStack Query (tiszta JS) – jelölt | `[NEM IGAZOLT]`, PHASE 12 dönt | csak ha ténylegesen egyszerűsít |
 | Tárolás | `expo-sqlite` (~58.0.18, Expo Go-ban elérhető, `expo-sqlite/kv-store` AsyncStorage-helyettesítő) | `[IGAZOLT]` | SDK 58 sqlite docs |
 | Titoktár | `expo-secure-store` (~58.0.3) – csak valódi titokra | `[IGAZOLT]` | SDK 58 securestore docs |

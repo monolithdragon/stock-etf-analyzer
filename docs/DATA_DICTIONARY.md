@@ -1,6 +1,6 @@
 # Adatszótár – Stock & ETF Analyzer
 
-> Állapot: **kiinduló definíciók** (PHASE 01, 2026-11-21).
+> Állapot: **kiinduló definíciók** (PHASE 01) + **domain típusok a kódban** (PHASE 03, 2026-11-21). A mezők és a kód közti leképezés: [10. fejezet](#10-kód-leképezés-phase-03).
 > - A képletdefiníciókat a **PHASE 05** véglegesíti, a DCF-et a **PHASE 07**, az ETF-mutatókat a **PHASE 08**, a portfóliót a **PHASE 09**.
 > - Definíció csak dokumentált indokkal változtatható (DECISIONS.md-be bejegyzés kell).
 > - Az XBRL tag-nevek **jelöltek**: a PHASE 04/06 valós fixture-ökön igazolja őket `[NEM IGAZOLT]`.
@@ -15,7 +15,9 @@
 | Egység | Alapegység: darab, pénznem-egység. A szolgáltatói „ezerben/millióban” adatot a normalizáló átváltja. | – |
 | Pénznem | ISO 4217 (`USD`, `EUR`, `HUF`, `GBP`, `CHF`, `JPY` …). A GBX/GBp (penny) jegyzést külön kell kezelni: `GBP = GBX / 100`. | D-018 |
 | Dátum | Napi adat: `YYYY-MM-DD` a tőzsde helyi kereskedési napja. Időbélyeg: ISO 8601 UTC (`2026-11-21T15:04:05Z`). | D-018 |
-| Időszak | `{ fiscalYear, fiscalPeriod: 'FY'\|'Q1'\|'Q2'\|'Q3'\|'Q4', start, end, durationDays }`. A periódust a **start/end dátumokból** határozzuk meg (4.3). | D-021 |
+| Időszak | `{ fiscalYear, fiscalPeriod: 'FY'\|'Q1'\|'Q2'\|'Q3'\|'Q4', start, end, durationDays }`. A periódust a **start/end dátumokból** határozzuk meg (4.3). A `durationDays` mindkét végpontot beleszámolja (2025-01-01..2025-12-31 = 365). | D-021 |
+| Hiányzó metaadat | Egyszerű metaadatnál (pl. `sector`, `cik`) explicit `null`, nem üres string és nem opcionális mező. Forrásfüggő, gyakran hiányos adatnál (ETF-mezők, kimutatás-tételek) `Metric<T>` nem-OK státusszal. | D-035 |
+| Azonosító-típusok | „Márkázott” (branded) típusok: `Isin`, `Mic`, `TickerSymbol`, `ListingId`, `SecurityId`, `Cik`, `PortfolioId`, `TransactionId`, `CurrencyCode`, `IsoDate`, `IsoTimestamp`. Csak a validáló `parse…` függvénnyel állíthatók elő. | D-035 |
 | Előjel | Kiáramlások (CapEx, osztalékfizetés, adósságtörlesztés) **pozitív nagyságként** tárolva, a képlet vonja le őket. | – |
 | Szorzó | Mértékegység nélküli szám, `x` megjelöléssel (pl. P/E `18.4x`). | – |
 | Évesítés | Napi adatnál 252 kereskedési nap/év `[FELTÉTELEZÉS – PHASE 08 véglegesíti]`. | – |
@@ -37,8 +39,12 @@
 
 Szabály: a `0` csak `OK` státusszal létezhet. A `null`/`undefined` soha nem alakul `0`-vá.
 
+Kód (PHASE 03): az `UNAVAILABLE` státusz külön, kötelező `unavailableReason` mezőben hordozza az ok-kódot (`PLAN_LIMIT` | `NOT_COVERED` | `QUOTA_EXHAUSTED`), a szöveges `reason` mellett. Nem véges szám (NaN, ±Infinity) soha nem lehet `OK`: a `metricOk()` ilyenkor `INVALID_INPUT` státuszt ad.
+
 ### 2.2 `Freshness` – mennyire friss
 `FRESH` (TTL-en belül), `STALE` (TTL lejárt, de még megjeleníthető jelöléssel), `EXPIRED` (nem használható számításhoz jelölés nélkül), `UNKNOWN` (nincs időbélyeg). A TTL-ek: ARCHITECTURE 11.
+
+Kód (PHASE 03): `assessFreshness(reference, now, { freshForMs, expiresAfterMs })`. Az életkor az `asOf`-tól számít, a saját (injektált) óránk szerint; a forrás által állított frissességet felülírjuk. **Jövőbeli** időpont → `UNKNOWN` (óraeltérés vagy hibás adat gyanúja). Árfolyamra a kiinduló szabály: 15 perc `FRESH`, 3 nap után `EXPIRED` (`QUOTE_FRESHNESS_POLICY`, `[FELTÉTELEZÉS – PHASE 13]`).
 
 ### 2.3 `ProvenanceKind` – honnan jön az érték
 
@@ -52,14 +58,16 @@ Szabály: a `0` csak `OK` státusszal létezhet. A `null`/`undefined` soha nem a
 | `mock` | Teszt-/demóadat | „DEMO ADAT” (mindig feltűnően) |
 
 ### 2.4 `DataProvenance` mezők
-`sourceId` (pl. `sec-edgar`), `sourceName`, `kind`, `fetchedAt` (UTC), `asOf` (az adat tényleges időpontja), `period?`, `currency?`, `unit?`, `freshness`, `reference?` (pl. SEC accession number, XBRL tag, filing dátum), `inputs?` (calculated-nél a felhasznált metrikák azonosítói).
+`sourceId` (pl. `sec-edgar`), `sourceName`, `kind`, `fetchedAt` (UTC), `asOf` (az adat tényleges időpontja: `IsoDate | IsoTimestamp | null`; `null`, ha a forrás nem közölte), `period?`, `currency?`, `unit?` (`money` | `money_per_share` | `shares` | `ratio` | `multiple` | `count`), `freshness`, `reference?` (pl. SEC accession number, XBRL tag, filing dátum), `inputs?` (calculated-nél a felhasznált metrikák azonosítói).
 
-### 2.5 `Metric<T>` (terv, a PHASE 03 implementálja)
+### 2.5 `Metric<T>` (megvalósítva: `src/domain/shared/metric.ts`)
 ```ts
 type Metric<T> =
   | { status: 'OK'; value: T; provenance: DataProvenance }
-  | { status: Exclude<MetricStatus, 'OK'>; reason: string; provenance?: DataProvenance };
+  | { status: 'UNAVAILABLE'; unavailableReason: UnavailableReason; reason: string; provenance?: DataProvenance }
+  | { status: Exclude<MetricStatus, 'OK' | 'UNAVAILABLE'>; reason: string; provenance?: DataProvenance };
 ```
+Konstruktorok: `metricOk`, `metricMissing`, `metricNotApplicable`, `metricNotMeaningful`, `metricInsufficientData`, `metricInvalidInput`, `metricUnavailable`, `metricError`; segédek: `isMetricOk`, `mapMetric`.
 
 ## 3. Azonosítók: Security és Listing (D-025)
 
@@ -67,7 +75,9 @@ Egy értékpapír (pl. egy UCITS ETF, egy ISIN) több tőzsdén és több deviz�
 - **Security**: maga az értékpapír. Ehhez tartozik a fundamentum és az ETF-metaadat.
 - **Listing**: egy konkrét tőzsdei jegyzés. Ehhez tartozik az ár, az ártörténet és a pozíció.
 
-### 3.1 `Security`
+> **Elnevezés a kódban (D-035):** a „Security” fogalom típusneve `Instrument` (`Instrument = Stock | Etf`, diszkriminátor: `kind`). Az azonosító mezője továbbra is `securityId`. A `Listing` neve változatlan.
+
+### 3.1 `Security` (kódban: `Instrument`)
 
 | Mező | Típus | Leírás |
 |---|---|---|
@@ -130,7 +140,7 @@ Egy értékpapír (pl. egy UCITS ETF, egy ISIN) több tőzsdén és több deviz�
 ### 4.3 Időszak-, restatement- és split-szabályok (D-021)
 
 1. **Az időszakot a fact `start`/`end` dátumaiból határozzuk meg**, nem a filing `fy`/`fp` mezőjéből. Egy 10-K az előző évek összehasonlító adatait is tartalmazza a saját `fy` értékével. `[FELTÉTELEZÉS – fixture-rel igazolandó]`
-2. Időszaki adat (`duration`): FY ≈ 350–380 nap, negyedév ≈ 85–95 nap. Időpontra szóló adat (`instant`): mérlegtétel.
+2. Időszaki adat (`duration`): FY ≈ 350–380 nap, negyedév ≈ **80–100** nap. (A PHASE 01-es 85–95 nap kizárta volna a 14 hetes, 98 napos negyedévet, ami 53 hetes üzleti évben előfordul, ezért módosítottuk: D-037.) Időpontra szóló adat (`instant`): mérlegtétel; a kódban a mérleg tételei a `period.end` napra vonatkoznak.
 3. **Restatement:** ha egy időszakra több filingből több érték van, a **legkésőbb beadott** filing értéke számít. A provenance-ben szerepel a filing dátuma és az accession number.
 4. **Q4 származtatás:** a 10-K nem ad külön Q4-et. Időszaki tételnél `Q4 = FY − (Q1+Q2+Q3)`, ha mind a négy azonos konvenció szerinti. Ez `calculated`, és csak időszaki tételre érvényes; mérlegtételre nem.
 5. **TTM** (utolsó 12 hónap): az utolsó 4 egymást követő negyedév összege (időszaki tételnél). Ha nincs meg mind a négy: `INSUFFICIENT_DATA`. Mérlegtételnél a legutolsó instant érték.
@@ -230,7 +240,7 @@ Jelölés: `Δ` = előző időszakhoz képest. „avg” = az időszak eleji és
 | Entitás | Mezők |
 |---|---|
 | `Portfolio` | `id`, `name`, `baseCurrency` (kijelzési), `createdAt` |
-| `Transaction` | `id`, `portfolioId`, `listingId` (D-025: a konkrét tőzsdei jegyzés), `type` (`BUY` \| `SELL` \| `DIVIDEND` \| `FEE` \| `SPLIT`), `tradeDate`, `quantity` (>0), `price` (Money), `fees` (Money), `fxRateToBase?` (+ dátum, forrás), `note?` |
+| `Transaction` | Diszkriminált unió a `type` szerint (PHASE 03). Közös: `id`, `portfolioId`, `listingId` (D-025: a konkrét tőzsdei jegyzés), `tradeDate` (nem lehet jövőbeli a felhasználó helyi napja szerint), `note` (≤ 500 karakter vagy `null`), `fxRateToBase` (`FxRate` dátummal és forrással, vagy `null`). **`BUY` / `SELL`:** `quantity` (> 0, tört megengedett), `price` (Money, > 0), `fees` (Money, ≥ 0; pénzneme eltérhet az árétól). **`DIVIDEND` / `FEE`:** `amount` (Money, > 0). **`SPLIT`:** `ratioFrom`, `ratioTo` (> 0, nem egyenlők; pl. 1 → 4). Az „eladás ≤ birtokolt mennyiség” szabály pozíciót igényel → PHASE 09. |
 | `Position` (származtatott) | `listingId`, `quantity`, `averageCost` (Money, instrumentum pénznemben), `costBasis`, `marketValue` (Metric), `unrealizedPL`, `realizedPL`, `weight` |
 
 - **P/L két nézetben:** (a) instrumentum pénznemében, FX-hatás nélkül; (b) kijelzési pénznemben = jelenlegi érték mai FX-szel − bekerülés tranzakciós napi FX-szel (FX-hatással). Mindkettő megjeleníthető, és jelölve van.
@@ -247,4 +257,40 @@ Jelölés: `Δ` = előző időszakhoz képest. „avg” = az időszak eleji és
 | `ScoreBreakdown` | `category`, `score` (Metric), `weight`, `appliedMetrics[]`, `rule`, `missingInputs[]`, `dataQuality`, `freshness` |
 | `Decision` | `label` (konfigurálható: Strong Buy … Strong Sell / Watch / Insufficient Data), `drivers[]`, `thesisRisks[]`, `invalidationConditions[]`, `confidence` (AnalysisConfidence = adatteljesség, NEM valószínűség) |
 | `AiInputDto` | csak számított metrikák (érték + státusz + provenance kivonat), feltevések, score, döntés, időbélyegek. **Nincs** benne szabad szöveg a felhasználótól; a szolgáltatói szöveg hosszkorlátos |
+| `AnalysisResult` (PHASE 03 váz) | `subject` (`stock`/`etf`: `securityId` + `listingId`; `portfolio`: `portfolioId`), `generatedAt`, `metrics[]` (`FinancialMetric`), `completeness` (`COMPLETE` \| `PARTIAL` \| `INSUFFICIENT` – adatteljesség, NEM valószínűség; a `NOT_APPLICABLE` nem hiány), `dataGaps[]` (`metricId`, `status`, `reason`). A score és a döntés a PHASE 10-ben, a magyarázat a PHASE 11-ben kerül mellé. |
+| `FinancialMetric` (PHASE 03) | `id` (a 5. fejezet mutatói, `FINANCIAL_METRIC_IDS`), `unit`, `value` (`Metric<number>`), `formula` (olvasható képlet), `period` (vagy `null` piaci mutatónál), `inputs[]`. **Szabály:** `OK` értékű mutató provenance-e nem lehet `ai_interpretation`. |
 | `AiAnalysis` | `summary`, `positives[]`, `negatives[]`, `keyRisks[]`, `valuationExplanation`, `dcfAssumptionsNote`, `dataGaps[]`, `reviewTriggers[]`, `thesisInvalidators[]`, `claims[]` (`{ text, basedOn: metricId[] }`), `provider` (`template` \| `anthropic` \| `local` …), `model?`, `generatedAt`, `inputHash`, `kind`: `calculated` a szabályalapú `template` providernél, `ai_interpretation` LLM-nél (D-026) |
+
+## 10. Kód-leképezés (PHASE 03)
+
+Minden domain típus az `@/domain` modulból importálható. Ahol konstruktor van, ott az **egyetlen** érvényes létrehozási mód a konstruktor: `Result`-ot ad, és az összes hibás mezőt egyszerre jelzi.
+
+| Fogalom (ez a dokumentum) | Típus | Konstruktor / segéd | Fájl |
+|---|---|---|---|
+| `Metric<T>`, `MetricStatus` (2.1, 2.5) | `Metric<T>` | `metricOk`, `metricMissing`, … | `src/domain/shared/metric.ts` |
+| `Freshness`, `ProvenanceKind`, `DataProvenance` (2.2–2.4) | `DataProvenance` | `assessFreshness` | `src/domain/shared/provenance.ts` |
+| Pénznem, pénzösszeg (1.) | `CurrencyCode`, `Money` | `parseCurrencyCode`, `createMoney`, `addMoney` | `currency.ts`, `money.ts` |
+| Dátum, időbélyeg (1.) | `IsoDate`, `IsoTimestamp` | `parseIsoDate`, `parseIsoTimestamp`, `toLocalIsoDate` | `dates.ts` |
+| Időszak (1., 4.3) | `FiscalPeriod` | `createFiscalPeriod` | `period.ts` |
+| Azonosítók (3.) | `Isin`, `Mic`, `TickerSymbol`, `ListingId`, `SecurityId`, `Cik`, `PortfolioId`, `TransactionId` | `parseIsin` (ellenőrző jeggyel), `parseListingId`, `createListingId`, … | `ids.ts` |
+| Hibák | `AppError`, `Result<T, E>` | `AppErrors.*`, `ok`, `err`, `isRetryable` | `errors.ts`, `result.ts` |
+| Security (3.1) | `Instrument = Stock \| Etf` | `createStock`, `createEtf` | `src/domain/instrument/instrument.ts` |
+| Listing (3.2) | `Listing` | `createListing` | ugyanott |
+| Ár | `Quote`, `PriceSeries` | `createQuote`, `createPriceSeries` | `src/domain/market/quote.ts` |
+| Kimutatások (4.1–4.2) | `FinancialStatement = IncomeStatement \| BalanceSheet \| CashFlowStatement` | `createFinancialStatement` (a meg nem adott tétel → `MISSING`) | `src/domain/fundamentals/financial-statement.ts` |
+| Számított mutató (5.) | `FinancialMetric`, `FinancialMetricId` | `createFinancialMetric` | `src/domain/fundamentals/financial-metric.ts` |
+| FX (8.) | `FxRate` (1 `base` = `rate` `quote`) | `createFxRate` | `src/domain/fx/fx-rate.ts` |
+| Portfólió (7.) | `Portfolio`, `Transaction`, `Position` (csak típus) | `createPortfolio`, `createTransaction` | `src/domain/portfolio/portfolio.ts` |
+| Elemzés (9.) | `AnalysisResult`, `AnalysisSubject` | `createAnalysisResult`, `summarizeCompleteness` | `src/domain/analysis/analysis-result.ts` |
+| Contract (hálózat) | `QuoteDto`, `metricSchema`, `dataProvenanceSchema` | `parseApiResponse`, `quoteFromDto`, `apiErrorToAppError` | `src/contracts/*` |
+
+**Validációs józansági határok.** Ezek nem üzleti definíciók; a hibás bemenet kiszűrésére szolgálnak.
+
+| Mező | Határ | Ok |
+|---|---|---|
+| ETF `ter` (`OK` érték) | 0 … 0.10 | Kiszűri a „százalék vs. tört” hibát (pl. 7 a 0.07 helyett). |
+| `Quote.price`, `PricePoint.close`, `FxRate.rate` | > 0 | A 0 vagy negatív ár érvénytelen adat, nem „hiányzó”. |
+| `fiscalYear` | 1900 … 2200, egész | Elírás elleni védelem. |
+| Portfólió neve | 1 … 80 karakter | UI-korlát. |
+| Tranzakció megjegyzése | ≤ 500 karakter | Méretkorlát (tárolás, megjelenítés). |
+| Pénznemkód | 3 nagybetű (csak formátum) | Teljes ISO-lista nincs; a `GBX` jegyzési kód is átmegy (1. fejezet). |

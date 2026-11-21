@@ -147,7 +147,7 @@
 - **Következmények:** Nincs app-szintű DB-titkosítás (SQLCipher Expo Go-ban nem elérhető). Ez ismert korlát (O-05).
 
 ### D-014 – Futásidejű validáció: zod, közös sémák
-- **Dátum:** 2026-11-21 · **Státusz:** Javasolt (a PHASE 03 ellenőrzi a verziót és a kompatibilitást)
+- **Dátum:** 2026-11-21 · **Státusz:** Elfogadva – véglegesítve a PHASE 03-ban: **D-039** (zod 4.6.7)
 - **Döntés:** zod sémák a `src/contracts`-ban, amelyeket a szerver és a kliens is használ. A szolgáltatói DTO sémák a `src/server/providers/*`-ben vannak. A típusokat a sémákból származtatjuk (`z.infer`).
 
 ### D-015 – Tesztkeret
@@ -272,7 +272,7 @@ A tulajdonos válaszai:
   - A contract tesztek szolgáltatónként kellenek.
 
 ### D-025 – Security és Listing szétválasztása
-- **Dátum:** 2026-11-21 · **Státusz:** Javasolt (a PHASE 03 implementálja)
+- **Dátum:** 2026-11-21 · **Státusz:** Elfogadva – megvalósítva a PHASE 03-ban (`Instrument` + `Listing`, D-035)
 - **Kontextus:** Egy UCITS ETF ugyanazzal az ISIN-nel több tőzsdén, több devizában forog (pl. Xetra EUR, LSE USD vagy GBX). Ugyanez igaz sok globális részvényre.
 - **Döntés:**
   - **`Security`** (értékpapír): ISIN, név, típus (`stock` | `etf`); ehhez tartozik a fundamentum és az ETF-metaadat.
@@ -381,3 +381,95 @@ A tulajdonos válaszai:
 - **Döntés:** gyökér `Stack` három route-tal: `index` (Kezdőlap), `about` (A projektről), `+not-found`. A sablon `NativeTabs` megoldása és az ARCHITECTURE 5. `(tabs)/` csoportja a PHASE 12-ben készül, amikor a képernyők tartalma ismert.
 - **Indok:** a PHASE 02 csak működő alapnavigációt kér. Üres tabok előre gyártása hamis készültséget mutatna.
 - **Lelet:** a `<Link asChild>` a gyerek `style`-ját tömbbe egyesíti, ezért függvény formájú `Pressable` `style`-t nem használunk link-gyerekben (`PrimaryButton`, regressziós teszt).
+
+---
+
+## PHASE 03 – Architektúra és domain modell (2026-11-21)
+
+### D-035 – Domain modellezési konvenciók
+- **Dátum:** 2026-11-21 · **Státusz:** Elfogadva (megvalósítja: D-010, D-011, D-025)
+- **Döntés:**
+  - **Diszkriminált unió** ott, ahol a változatok mezői eltérnek: `Instrument = Stock | Etf` (`kind`), `FinancialStatement` (`statementType`), `Transaction` (`type`: BUY/SELL, DIVIDEND/FEE, SPLIT), `Metric<T>` (`status`), `AppError` (`kind`), `AnalysisSubject` (`kind`).
+  - **Közös típus** ott, ahol az alak egyforma: `Money`, `DataProvenance`, `FiscalPeriod`, `Quote`, `FxRate`, `Listing`, `Portfolio`.
+  - A D-025 „Security” fogalmának típusneve a kódban **`Instrument`** (a ROADMAP és a fázisprompt nevezéktana), a mezőneve `securityId` marad.
+  - **Branded típusok** az azonosítókra és formátumokra (`Isin`, `ListingId`, `CurrencyCode`, `IsoDate`…). Csak validáló `parse…` függvénnyel állíthatók elő, így ellenőrizetlen string nem csúszhat át.
+  - **Smart constructor** (`create…`), amely `Result`-ot ad, ott, ahol invariáns van. A származtatott típusnak (`Position`) nincs konstruktora; a számítást a saját fázisa végzi (09).
+  - Hiányzó egyszerű metaadat: explicit `null`. Forrásfüggő adat: `Metric<T>`.
+  - A kimutatás minden sortétele kötelező kulcs. A meg nem adott tétel a konstruktorban `MISSING` lesz, így sosem keverhető a jelentett 0-val.
+  - Minden mező `readonly`.
+- **Alternatívák:**
+  - zod-séma a domainben – elvetve, mert a domain ne függjön külső csomagtól;
+  - osztályok – elvetve, mert a sima objektum + függvény egyszerűbb, szerializálható és tesztelhető.
+- **Következmények:** a domain tiszta TS. Néhány körülhatárolt, kommentezett `as` cast van (márkázott típusok, a `validateFields` kimenete, a kimutatás-konstruktor kimenete).
+
+### D-036 – Result és AppError séma
+- **Dátum:** 2026-11-21 · **Státusz:** Elfogadva
+- **Döntés:**
+  - `Result<T, E = AppError> = { ok: true, value } | { ok: false, error }`; segédek: `ok`, `err`, `mapResult`, `andThen`.
+  - `AppError` `kind` értékei:
+    - `VALIDATION` (mezőlistával);
+    - `NETWORK`, `TIMEOUT`, `RATE_LIMITED` (`retryAfterSec`);
+    - `NOT_FOUND`;
+    - `UPSTREAM` (`HTTP_ERROR` | `INVALID_RESPONSE` | `CONTRACT_MISMATCH` | `NOT_IMPLEMENTED`);
+    - `MISSING_DATA` (`missing[]`), `CALCULATION_INVALID`, `STORAGE`, `AI`.
+  - Az `isRetryable()` mondja meg, mi átmeneti hiba.
+  - Az ARCHITECTURE 6.3 proxy-hibakódjait az `apiErrorToAppError` képezi le (pl. `UNSUPPORTED_MARKET` → `MISSING_DATA`, `INTERNAL` → `UPSTREAM/HTTP_ERROR`).
+  - Kivételt csak programozási hiba esetén dobunk.
+- **Alternatíva:** kivételosztályok, `try/catch`. Elvetve, mert a hibaág kezelése típusszinten nem kényszeríthető ki.
+- **Következmények:** az ARCHITECTURE 7. tervében szereplő `UpstreamError` és rokonai egyetlen `UPSTREAM` kind alá kerültek, `failure` alkóddal.
+
+### D-037 – Negyedéves időszak hossza: 80–100 nap (módosítja: DATA_DICTIONARY 4.3/2)
+- **Dátum:** 2026-11-21 · **Státusz:** Elfogadva
+- **Kontextus:** a PHASE 01-es 85–95 napos sáv kizárta volna a 14 hetes (98 napos) negyedévet, amely 53 hetes üzleti évben előfordul (pl. 2022-09-25…2022-12-31).
+- **Döntés:** negyedév: 80–100 nap; év: 350–380 nap, mindkét végpontot beleszámolva. Konstans: `PERIOD_DURATION_DAYS`.
+- **Felülvizsgálat:** a PHASE 04A/06-ban, valós SEC fixture-ökön.
+
+### D-038 – Rétegszabályok kikényszerítése ESLinttel
+- **Dátum:** 2026-11-21 · **Státusz:** Elfogadva
+- **Döntés:**
+  - `import/no-restricted-paths` zónák az ARCHITECTURE 3. táblázata szerint (`basePath`: a kanonikus projektgyökér).
+  - `no-restricted-imports`:
+    - a domainben regex tiltja az összes külső csomagot;
+    - a contracts és az application rétegben a React/RN/Expo csomagok tiltottak.
+  - `no-restricted-globals`: a `fetch` / `XMLHttpRequest` / `WebSocket` / `EventSource` tiltott a domain, contracts, application, presentation és `src/app` rétegben. Kivétel lesz a jövőbeli `src/app/api/**`.
+  - Az `src/app` importálhat `src/config`-ot (composition root belépés), a `src/presentation` nem.
+  - A tesztekre is ugyanezek a szabályok vonatkoznak.
+  - Új csomag nem kellett.
+- **Igazolás:** 4 ideiglenes, szándékosan hibás fájl 8 várt hibát adott (phase-03 útmutató, 7. lépés).
+- **Következmények:** a PHASE 04A-ban a `src/app/api/**` és a `src/server` saját zónát kap (a `src/server` nem importálhat kliensoldali kódot, és a kliens sem a szervert).
+
+### D-039 – zod 4 és a validáció munkamegosztása (véglegesíti: D-014)
+- **Dátum:** 2026-11-21 · **Státusz:** Elfogadva
+- **Döntés:**
+  - zod **4.6.7** (`npx expo install zod` → `dependencies`; tiszta JS). Az `expo export` Android (Hermes) bundle sikeres.
+  - A zod **csak** a `src/contracts`-ban van (és a PHASE 04A-tól a `src/server`-ben).
+  - Munkamegosztás, hogy egy szabály egy helyen legyen:
+    - a zod a szerkezetet ellenőrzi (ismeretlen JSON → típusos DTO);
+    - az üzleti invariánsokat a domain ellenőrzi: a sémák a domain parsereit hívják (`fromDomainParser`), a mapperek a domain konstruktorait (`quoteFromDto` → `createQuote`).
+  - A séma kimenetének illeszkedését a domain típushoz fordítási idejű ellenőrzés garantálja (`contracts.test.ts`; negatív próbával igazolva).
+  - A contract-hibát a kliens `UPSTREAM/CONTRACT_MISMATCH`-ként, mezőútvonallal jelzi.
+- **Nem változott:** az `src/config/env.ts` kézi validációja marad. Tesztelt és működik; a zodra cserélés csak átírás volna, érdemi haszon nélkül.
+
+### D-040 – Portok és use case-ek: csak ami használatban van; függvény-factory DI
+- **Dátum:** 2026-11-21 · **Státusz:** Elfogadva
+- **Döntés:**
+  - Portok: `Clock`, `IdGenerator`, `MarketDataGateway` (`getQuote`), `PortfolioRepository`.
+  - A ROADMAP-ben felsorolt `FxGateway` (04A), `AiGateway` (11) és `Logger` akkor kerül be, amikor egy use case használja. A fázisprompt kifejezetten kéri, hogy ne legyen fölösleges interface.
+  - Use case = `createX(deps) => (input) => Promise<Result<…>>`. Kevesebb kód, mint egy osztály, és a tesztben a függőség egyszerűen cserélhető.
+  - A use case-ek az `AppServices` interfészen (`src/application/index.ts`) át jutnak a UI-hoz (`AppServicesProvider` / `useAppServices`).
+  - A composition root (`createAppServices(env, overrides)`) a felülírt órát az adapterekhez is továbbadja.
+  - `live` módban a PHASE 04A-ig az árfolyam-gateway őszinte `UPSTREAM/NOT_IMPLEMENTED` hibát ad, nem csendes demóadatot.
+  - A mock gateway kitalált `DEMO*` tickereket használ, `kind: 'mock'` jelöléssel. Így valós árfolyamot nem találunk ki.
+- **Következmények:** a portfólió-tároló mindkét módban memóriában él az SQLite-ig (PHASE 13), ezért az adatok újraindításkor elvesznek (KI-13).
+
+### D-041 – Jest-konfiguráció külön fájlban, kanonikus útvonallal (Windows)
+- **Dátum:** 2026-11-21 · **Státusz:** Elfogadva (módosítja: D-032 konfigurációs helyét)
+- **Kontextus:**
+  - Ha a munkakönyvtár kisbetűs meghajtóval (`c:\…`) érkezik, ahogy a VS Code-ban vagy Git Bash-ben, a Jest ugyanazt a modult két kulccsal (`c:\` és `C:\`) kétszer tölti be.
+  - Ilyenkor két React-példány keletkezik, és a route-tesztek „Invalid hook call” hibával buknak (KI-11).
+  - PowerShellből (`C:\…`) a tesztek zöldek voltak, ezért ez a PHASE 02-ben nem derült ki.
+- **Döntés:**
+  - A `package.json` `jest` kulcsa helyett `jest.config.js` készült.
+  - Ez a projektgyökér valódi (`fs.realpathSync.native`) útvonalát használja `rootDir`-ként, és csak kis/nagybetű-eltérés esetén `chdir`-el rá.
+  - Ugyanez a kanonikus útvonal az ESLint zónák `basePath`-ja.
+- **Következmények:** a tesztek bármelyik terminálból zöldek. Más OS-en a `realpathSync.native` változatlan útvonalat ad.

@@ -1,10 +1,78 @@
 // ESLint flat config – https://docs.expo.dev/guides/using-eslint/
 // Alap: eslint-config-expo (React, React Native, TypeScript, import szabályok).
 // Prettier: a formázási eltérés ESLint-hibaként jelenik meg (eslint-plugin-prettier).
-// A rétegszabályokat (no-restricted-imports) a PHASE 03 adja hozzá (ARCHITECTURE 3.).
+// Rétegszabályok (ARCHITECTURE 3., D-038): import/no-restricted-paths + no-restricted-imports
+// + no-restricted-globals. Új csomag nem kellett (az eslint-plugin-import az expo configból jön).
+const fs = require('node:fs');
+
 const { defineConfig } = require('eslint/config');
 const expoConfig = require('eslint-config-expo/flat');
 const eslintPluginPrettierRecommended = require('eslint-plugin-prettier/recommended');
+
+// Windows: a kanonikus útvonal (C:\ vs c:\) kell, különben a zónák útvonal-összevetése elcsúszhat.
+const projectRoot = fs.realpathSync.native(__dirname);
+
+// --- Rétegszabályok -------------------------------------------------------------------------
+
+/** UI- és platformcsomagok, amelyeket a tiszta rétegek nem importálhatnak. */
+const UI_AND_PLATFORM_PACKAGES = [
+  {
+    group: ['react', 'react/*', 'react-dom', 'react-dom/*'],
+    message: 'UI-függőség ebben a rétegben tilos (ARCHITECTURE 3.).',
+  },
+  {
+    group: ['react-native', 'react-native/*', 'react-native-*'],
+    message: 'Platform-függőség ebben a rétegben tilos.',
+  },
+  {
+    group: ['expo', 'expo/*', 'expo-*', '@expo/*'],
+    message: 'Expo-függőség ebben a rétegben tilos.',
+  },
+];
+
+/** Közvetlen hálózati hívás tiltása: adat csak use case-en / gateway-en át érkezhet. */
+const NETWORK_GLOBALS = ['fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource'].map((name) => ({
+  name,
+  message: `Közvetlen hálózati hívás (${name}) itt tilos. Use case-en és gateway-en (src/infrastructure) át kérj adatot (ARCHITECTURE 3.).`,
+}));
+
+const layerZones = [
+  {
+    target: './src/domain',
+    from: './src',
+    except: ['./domain'],
+    message: 'A domain csak önmagát importálhatja (tiszta TypeScript).',
+  },
+  {
+    target: './src/contracts',
+    from: './src',
+    except: ['./contracts', './domain'],
+    message: 'A contracts csak a domaint importálhatja.',
+  },
+  {
+    target: './src/application',
+    from: './src',
+    except: ['./application', './domain', './contracts', './calculations', './scoring'],
+    message:
+      'Az application nem függhet konkrét adaptertől, UI-tól vagy szervertől – portot használj.',
+  },
+  {
+    target: './src/infrastructure',
+    from: ['./src/app', './src/presentation', './src/server', './src/config'],
+    message: 'Az infrastructure nem importálhat UI-t, szervert vagy a composition rootot.',
+  },
+  {
+    target: './src/presentation',
+    from: ['./src/infrastructure', './src/server', './src/config', './src/contracts'],
+    message: 'A presentation csak use case-eken át (useAppServices) ér el adatot.',
+  },
+  {
+    // Megjegyzés: a PHASE 04A-ban a src/app/api/**/+api.ts proxy-route-ok kivételt kapnak (src/server).
+    target: './src/app',
+    from: ['./src/infrastructure', './src/server', './src/contracts'],
+    message: 'A route-ok (képernyők) nem érhetik el közvetlenül az adaptereket vagy a szervert.',
+  },
+];
 
 module.exports = defineConfig([
   expoConfig,
@@ -34,6 +102,42 @@ module.exports = defineConfig([
           alphabetize: { order: 'asc', caseInsensitive: true },
         },
       ],
+      // Rétegek közti importirány (ARCHITECTURE 3. táblázat).
+      'import/no-restricted-paths': ['error', { basePath: projectRoot, zones: layerZones }],
     },
+  },
+  {
+    // Domain: semmilyen külső csomag (csak relatív és `@/domain` import).
+    files: ['src/domain/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '^(?!\\.{1,2}/|@/domain(?:/|$))',
+              message:
+                'A domain nem importálhat külső csomagot (React, Expo, zod…) – tiszta TypeScript.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['src/contracts/**/*.{ts,tsx}', 'src/application/**/*.{ts,tsx}'],
+    rules: { 'no-restricted-imports': ['error', { patterns: UI_AND_PLATFORM_PACKAGES }] },
+  },
+  {
+    // Hálózati hívás csak az infrastructure (proxy kliens) és a jövőbeli src/server rétegben lehet.
+    files: [
+      'src/domain/**/*.{ts,tsx}',
+      'src/contracts/**/*.{ts,tsx}',
+      'src/application/**/*.{ts,tsx}',
+      'src/presentation/**/*.{ts,tsx}',
+      'src/app/**/*.{ts,tsx}',
+    ],
+    ignores: ['src/app/api/**'],
+    rules: { 'no-restricted-globals': ['error', ...NETWORK_GLOBALS] },
   },
 ]);
