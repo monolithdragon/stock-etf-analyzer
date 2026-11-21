@@ -9,35 +9,75 @@
 import { z } from 'zod';
 
 import {
+  FISCAL_PERIOD_TYPES,
   FRESHNESS_VALUES,
   MEASUREMENT_UNITS,
   METRIC_STATUSES,
   PROVENANCE_KINDS,
   UNAVAILABLE_REASONS,
+  createFiscalPeriod,
+  parseCik,
   parseCurrencyCode,
+  parseIsin,
   parseIsoDate,
   parseIsoTimestamp,
   parseListingId,
+  parseSecurityId,
+  type AppError,
   type Result,
 } from '@/domain';
 
-/** Egy domain `parse…` függvényből zod sémát készít (a hibaüzenet a domainé). */
-export function fromDomainParser<T>(parse: (input: string) => Result<T>) {
-  return z.string().transform((value, ctx): T => {
-    const parsed = parse(value);
-    if (parsed.ok) return parsed.value;
-    ctx.addIssue({ code: 'custom', message: parsed.error.message });
+/** A domain hibájából zod-hibaüzenet(ek), mezőútvonallal. */
+function domainIssueMessages(error: AppError): readonly string[] {
+  if (error.kind !== 'VALIDATION' || error.issues.length === 0) return [error.message];
+  return error.issues.map((i) => (i.path === '' ? i.message : `${i.path}: ${i.message}`));
+}
+
+/**
+ * Egy szerkezeti sémát a domain konstruktorával/parserével zár le: a zod csak az alakot nézi,
+ * az üzleti szabályt a domain ellenőrzi (D-039). A kimenet típusa a domain típusa.
+ */
+export function withDomain<S extends z.ZodType, T>(
+  schema: S,
+  create: (value: z.output<S>) => Result<T>,
+) {
+  return schema.transform((value, ctx): T => {
+    const created = create(value);
+    if (created.ok) return created.value;
+    for (const message of domainIssueMessages(created.error)) {
+      ctx.addIssue({ code: 'custom', message });
+    }
     return z.NEVER;
   });
+}
+
+/** Egy domain `parse…` függvényből zod sémát készít (a hibaüzenet a domainé). */
+export function fromDomainParser<T>(parse: (input: string) => Result<T>) {
+  return withDomain(z.string(), parse);
 }
 
 export const currencyCodeSchema = fromDomainParser(parseCurrencyCode);
 export const isoDateSchema = fromDomainParser(parseIsoDate);
 export const isoTimestampSchema = fromDomainParser(parseIsoTimestamp);
 export const listingIdSchema = fromDomainParser(parseListingId);
+export const isinSchema = fromDomainParser(parseIsin);
+export const securityIdSchema = fromDomainParser(parseSecurityId);
+export const cikSchema = fromDomainParser(parseCik);
+
+/** Pénzügyi időszak; a `durationDays`-t a domain újraszámolja, nem a hálózatnak hisz. */
+export const fiscalPeriodSchema = withDomain(
+  z.object({
+    fiscalYear: z.number(),
+    fiscalPeriod: z.enum(FISCAL_PERIOD_TYPES),
+    start: z.string(),
+    end: z.string(),
+    durationDays: z.number().optional(),
+  }),
+  createFiscalPeriod,
+);
 
 /**
- * Provenance a szerződésben. A `period` mezőt a PHASE 04A adja hozzá a kimutatás-végpontokkal.
+ * Provenance a szerződésben.
  * Méretkorlátok: a szolgáltatói szöveg megbízhatatlan adat (ARCHITECTURE 9.).
  */
 export const dataProvenanceSchema = z.object({
@@ -47,6 +87,7 @@ export const dataProvenanceSchema = z.object({
   fetchedAt: isoTimestampSchema,
   asOf: z.union([isoDateSchema, isoTimestampSchema]).nullable(),
   freshness: z.enum(FRESHNESS_VALUES),
+  period: fiscalPeriodSchema.optional(),
   currency: currencyCodeSchema.optional(),
   unit: z.enum(MEASUREMENT_UNITS).optional(),
   reference: z.string().max(500).optional(),

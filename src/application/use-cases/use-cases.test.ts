@@ -142,6 +142,13 @@ describe('getListingQuote', () => {
         gateway.calls += 1;
         return result;
       },
+      // Ebben a blokkban csak a getQuote számít; a többi képesség nem hívható.
+      getSecurityListings: async () => {
+        throw new Error('nem várt hívás');
+      },
+      getFinancialStatements: async () => {
+        throw new Error('nem várt hívás');
+      },
     };
     return gateway;
   };

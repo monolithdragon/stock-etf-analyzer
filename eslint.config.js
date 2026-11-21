@@ -67,10 +67,45 @@ const layerZones = [
     message: 'A presentation csak use case-eken át (useAppServices) ér el adatot.',
   },
   {
-    // Megjegyzés: a PHASE 04A-ban a src/app/api/**/+api.ts proxy-route-ok kivételt kapnak (src/server).
+    // A src/app/api/**/+api.ts proxy-route-ok külön blokkban kivételt kapnak (lent).
     target: './src/app',
     from: ['./src/infrastructure', './src/server', './src/contracts'],
     message: 'A route-ok (képernyők) nem érhetik el közvetlenül az adaptereket vagy a szervert.',
+  },
+  {
+    // PHASE 04A: a kliens composition rootja sem húzhat be szerverkódot (titkok a bundle-ben!).
+    target: './src/config',
+    from: './src/server',
+    message:
+      'A kliens (src/config) soha nem importálhat src/server-t – a titkok a bundle-be kerülnének.',
+  },
+  {
+    // PHASE 04A: a szerver csak a domaint és a közös szerződést látja.
+    target: './src/server',
+    from: [
+      './src/app',
+      './src/presentation',
+      './src/infrastructure',
+      './src/config',
+      './src/application',
+    ],
+    message: 'A src/server csak a domaint és a contracts-ot importálhatja (ARCHITECTURE 3.).',
+  },
+];
+
+/** A proxy-route-ok (src/app/api/**) zónái: a szervert elérhetik, a kliensoldali rétegeket nem. */
+const apiRouteZones = [
+  ...layerZones.filter((zone) => zone.target !== './src/app'),
+  {
+    target: './src/app/api',
+    from: [
+      './src/infrastructure',
+      './src/presentation',
+      './src/config',
+      './src/application',
+      './src/contracts',
+    ],
+    message: 'A +api.ts route vékony: csak a src/server handlereit hívhatja.',
   },
 ];
 
@@ -125,8 +160,19 @@ module.exports = defineConfig([
     },
   },
   {
-    files: ['src/contracts/**/*.{ts,tsx}', 'src/application/**/*.{ts,tsx}'],
+    files: [
+      'src/contracts/**/*.{ts,tsx}',
+      'src/application/**/*.{ts,tsx}',
+      'src/server/**/*.{ts,tsx}',
+    ],
     rules: { 'no-restricted-imports': ['error', { patterns: UI_AND_PLATFORM_PACKAGES }] },
+  },
+  {
+    // A proxy-route-ok saját zónakészletet kapnak (felülírja a fenti általános beállítást).
+    files: ['src/app/api/**/*.{ts,tsx}'],
+    rules: {
+      'import/no-restricted-paths': ['error', { basePath: projectRoot, zones: apiRouteZones }],
+    },
   },
   {
     // Hálózati hívás csak az infrastructure (proxy kliens) és a jövőbeli src/server rétegben lehet.

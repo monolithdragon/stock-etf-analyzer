@@ -1,6 +1,6 @@
 # Adatforrások – Stock & ETF Analyzer
 
-> Ellenőrzés dátuma: **2026-11-21** (PHASE 01, a döntési pontok megválaszolása után frissítve). Az ingyenes keretek és feltételek gyakran változnak, a PHASE 04 integráció előtt újra ellenőrizze őket.
+> Ellenőrzés dátuma: **2026-11-21** (PHASE 01; a SEC, az ECB/Frankfurter és az OpenFIGI a **PHASE 04A-ban élő próbahívásokkal újraellenőrizve**, lásd 10. fejezet). Az ingyenes keretek és feltételek gyakran változnak; az FMP és az EODHD adatait a PHASE 04B ellenőrzi.
 > Kapcsolódó döntések: D-023 (lefedettség), D-024 (adapterek, routing), D-025 (Security/Listing), D-027 (fizetős bővítés nyitva), D-008 (csak saját használat).
 
 ## 1. Jelölések
@@ -98,10 +98,10 @@ További tények:
 
 | # | Adapter | Szerep | Kulcs | Rész |
 |---|---|---|---|---|
-| 1 | `sec-edgar` | US **jelentett** fundamentumok, ticker → CIK | nem (User-Agent kell) | 04A |
-| 2 | `ecb-fx` (Frankfurter v2 ECB provider) | FX | nem | 04A |
-| 3 | `openfigi` | ISIN ↔ ticker/tőzsde; egy ETF összes listingje | opcionális | 04A |
-| 4 | `mock` | determinisztikus teszt- és demóadat (`kind: mock`) | – | 04A |
+| 1 | `sec-edgar` | US **jelentett** fundamentumok, ticker → CIK | nem (User-Agent kell) | 04A ✅ kész |
+| 2 | `ecb-fx` (Frankfurter v2 ECB provider) | FX | nem | 04A ✅ kész |
+| 3 | `openfigi` | ISIN ↔ ticker/tőzsde; egy ETF összes listingje | opcionális | 04A ✅ kész |
+| 4 | `mock` | determinisztikus teszt- és demóadat (`kind: mock`) | – | 04A ✅ kész |
 | 5 | `fmp` | US ár, profil, kiegészítő fundamentum, ETF info (csomagfüggő) | **igen** (megvan) | 04B |
 | 6 | `eodhd` | globális EOD ár, split, osztalék, keresés, tőzsdelista; fundamentum/ETF csak megfelelő csomaggal | **igen** (megvan) | 04B |
 | – | `ProviderRouter` + kvóta-költségvetés | képesség × piac szerinti választás és fallback | – | 04B |
@@ -171,12 +171,12 @@ További tények:
 
 ## 8. PHASE 04 ellenőrzési lista
 
-**04A**
-- [ ] SEC `company_tickers.json` (ticker → CIK) elérhetősége és formátuma `[NEM IGAZOLT]`.
-- [ ] SEC companyfacts: 10+ valós US cég fixture-je (R-05).
-- [ ] Frankfurter v2 ECB provider válaszformátum; a célpiacok devizái közül melyik nincs az ECB listán.
-- [ ] OpenFIGI: ISIN → összes listing (pl. egy UCITS ETF Xetra/LSE/Euronext listingjei).
-- [ ] D-004 spike: API routes lokálisan; EAS Hosting rate-limit/KV képesség (U-03).
+**04A** (2026-11-21, részletek: 10. fejezet)
+- [x] SEC `company_tickers.json` (ticker → CIK) elérhetősége és formátuma – `[IGAZOLT]` (10 399 sor; User-Agent nélkül HTTP 403).
+- [x] SEC companyfacts: **12** valós US cég fixture-je (R-05) – AAPL, MSFT, NVDA, AMZN, GOOGL, JPM, KO, XOM, JNJ, WMT, BRK-B, TSM.
+- [x] Frankfurter v2 ECB provider válaszformátum – `[IGAZOLT]`. A hat kijelzési deviza (HUF, EUR, USD, GBP, CHF, JPY) mind szerepel; ami nincs az ECB-listán (pl. AED), üres választ kap → `missing`.
+- [x] OpenFIGI: ISIN → listingek – `[IGAZOLT]` (VWCE: 179 sor, ebből 11 igazolt tőzsdei jegyzés). **Pénznemet és MIC-et nem ad** (D-042).
+- [x] D-004 spike: API route-ok lokálisan működnek; EAS Hosting: nincs KV/rate-limit primitív (U-03). EAS-próbatelepítés nem készült (D-004).
 
 **04B**
 - [ ] A meglévő EODHD kulcs csomagja `/api/user`-rel (0 hívás) (U-13).
@@ -191,3 +191,61 @@ További tények:
 - Az Expo Router API route-ok szerveren futnak és minden env változót olvashatnak. A kliens kódba importált titok viszont a bundle-be kerülhet.
 - `expo-sqlite`: SQLCipher Expo Go-ban nem elérhető, és prebuild kell hozzá. SQLCipher nélküli binárisban a `PRAGMA key` csendben nem csinál semmit.
 - `expo-secure-store`: Androidon az adat eltávolításkor elvész. Nem lehet kritikus adat egyetlen forrása.
+- **(PHASE 04A)** SDK 58-ban az API route-ok a `web.output: "server"` beállítással működnek; a dinamikus szegmens (`[id]`) a handler 2. argumentuma. A `npx expo start` a route-okat is kiszolgálja (alapból a 8081-es porton). Forrás: https://docs.expo.dev/router/web/api-routes/
+- **(PHASE 04A)** EAS Hosting: Cloudflare Workers alapú; nincs tartós KV-, cache- vagy rate-limit primitív; „Secrets cannot be deployed with Expo Hosting” – csak „plain text” és „sensitive” változó. Források: https://docs.expo.dev/eas/hosting/introduction/, https://docs.expo.dev/eas/hosting/reference/worker-runtime/, https://docs.expo.dev/eas/hosting/reference/caching/, https://docs.expo.dev/eas/environment-variables/usage/
+
+## 10. PHASE 04A – élő próbahívásokkal igazolt tények (2026-11-21)
+
+Minden alábbi tény saját próbahívásból származik. A válaszok a `src/server/providers/*/__fixtures__/` mappában rögzítve vannak (valós, de megvágott teszt-fixture-ök, D-047).
+
+### 10.1 SEC EDGAR – `sec-edgar` adapter (MEGVALÓSÍTVA)
+
+| Tény | Érték |
+|---|---|
+| Ticker → CIK | `GET https://www.sec.gov/files/company_tickers.json` → `{ "0": { "cik_str": 320193, "ticker": "AAPL", "title": "Apple Inc." }, … }`, 10 399 sor |
+| Tények | `GET https://data.sec.gov/api/xbrl/companyfacts/CIK##########.json` → `{ cik, entityName, facts: { "us-gaap" \| "ifrs-full" \| "dei": { Tag: { label, units: { USD: [ { start?, end, val, accn, fy, fp, form, filed, frame? } ] } } } } }` |
+| User-Agent | Kötelező. Kapcsolattartó nélkül **HTTP 403** („Request Rate Threshold Exceeded” oldal). A proxy a `SEC_USER_AGENT` env-ből küldi. |
+| Rate limit | ≤ 10 kérés/mp (fair access) → a proxy 110 ms-os ütemezővel tartja be (példányonként, KI-23). |
+| Méret | companyfacts: több MB / cég (AAPL nyersen kb. 6 MB). A proxy csak a használt tageket validálja szigorúan (D-043). |
+| Lefedettség | csak SEC-filerek; 20-F/40-F (külföldi) filer: csak éves adat, IFRS-tagekkel, gyakran a saját pénznemében (TSM: TWD). |
+| Formátum-meglepetések | `cik` néha **string** (XOM új CIK-je: `"2115436"`); a `fy` az összehasonlító adatnál a BEADÓ filing éve (pl. 2023-as AAPL-adat `fy: 2026`); a 10-Q 6/9 hónapos YTD tényeket is ad; a ticker → CIK leképezés változhat (XOM: új holding-CIK, még 10-K nélkül). |
+| Licenc | US szövetségi kormányzati adat, `[FELTÉTELEZÉS – jogilag nem ellenőrizve]` közkincs. |
+
+### 10.2 ECB referencia-árfolyam (Frankfurter v2) – `ecb-fx` adapter (MEGVALÓSÍTVA)
+
+| Tény | Érték |
+|---|---|
+| Végpont | `GET https://api.frankfurter.dev/v2/providers/ecb/rates?base=EUR&quotes=USD,HUF&date=YYYY-MM-DD` |
+| Válasz | `[{ "date": "2026-11-20", "base": "EUR", "quote": "USD", "rate": 1.099 }, …]`; paraméter nélkül `EUR → EUR = 1.0` sort is tartalmaz |
+| Hétvége / ünnep | a `date=2026-11-15` (vasárnap) válasza a 2026-11-13-i (pénteki) ráta |
+| Nem közölt deviza | pl. `quotes=AED` → `[]` (HTTP 200) |
+| Hibák | ismeretlen deviza / hibás dátum → **HTTP 422** `{ "status": 422, "message": "invalid currency: XXX" }`; ismeretlen provider → 404 |
+| Kulcs, kvóta | nincs; `cache-control: public, max-age≈40 000` a válaszban |
+| ECB devizalista | a provider metaadata szerint (történetiekkel együtt) 45 kód, köztük HUF, USD, GBP, CHF, JPY |
+| Feltétel | ECB: „csak tájékoztató célra” (D-017); terms: https://www.ecb.europa.eu/services/using-our-site/disclaimer/html/index.en.html |
+
+### 10.3 OpenFIGI – `openfigi` adapter (MEGVALÓSÍTVA)
+
+| Tény | Érték |
+|---|---|
+| Végpont | `POST https://api.openfigi.com/v3/mapping`, törzs: `[{ "idType": "ID_ISIN", "idValue": "IE00BK5BQT80" }]` |
+| Válasz | jobonként `{ data: [{ figi, name, ticker, exchCode, compositeFIGI, securityType, marketSector, shareClassFIGI, … }] }` \| `{ warning: "No identifier found." }` \| `{ error: "Invalid idValue format." }` |
+| Limit (kulcs nélkül) | válaszfejléc: `ratelimit-limit: 25`, `ratelimit-policy: 25;w=60` (25 kérés/perc) |
+| Hibás törzs | HTTP 400 „Bad request.” |
+| **Amit NEM ad** | jegyzési pénznem, MIC, dátum |
+| UCITS ETF (VWCE) | 179 sor: Xetra, LSE, Euronext Amsterdam, Borsa Italiana, SIX, német regionális tőzsdék + sok MTF/OTC helyszín és szintetikus ticker (pl. `VWRAEUR`) |
+| US részvény (AAPL) | ISIN-kérésre **csak a kompozit `US` sor** jön; konkrét tőzsde csak ticker + `exchCode`/`micCode` kéréssel (KI-21) |
+
+**`exchCode` → MIC igazolás** (`micCode` kérésszűrővel; a tábla a kódban: `src/server/providers/openfigi/exchange-codes.ts`):
+
+| exchCode | MIC (üzemeltetői) | Bizonyíték |
+|---|---|---|
+| LN | XLON | micCode=XLON → LN |
+| GT | XETR | micCode=XETR → GT (**nem** GY) |
+| GF / GS / GD / GM / GH | XFRA / XSTU / XDUS / XMUN / XHAM | micCode=… → ugyanaz |
+| NA | XAMS | micCode=XAMS → NA (VWCE, IWDA) |
+| SE | XSWX | micCode=XSWX → SE |
+| IM | XMIL | micCode=MTAA → IM (MTAA = XMIL szegmens) |
+| UN / UP | XNYS / ARCX | micCode=XNYS / ARCX → UN / UP |
+| UW / UQ | XNAS | micCode=XNGS → UW (AAPL), XNMS → UQ (QQQ); szegmens → XNAS |
+| nem igazolt | – | pl. XPAR (FP) és ETFP: a próba-ISIN-re nem jött sor → nincs a táblában |

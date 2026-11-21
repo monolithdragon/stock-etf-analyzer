@@ -7,6 +7,9 @@ import { AppServicesProvider, useAppServices } from './app-services-context';
 
 const fakeServices: AppServices = {
   getListingQuote: jest.fn(),
+  getSecurityListings: jest.fn(),
+  getFinancialStatements: jest.fn(),
+  convertMoney: jest.fn(),
   recordTransaction: jest.fn(),
 };
 

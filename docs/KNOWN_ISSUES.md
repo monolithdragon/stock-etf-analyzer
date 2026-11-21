@@ -1,21 +1,39 @@
 # Ismert problémák, kockázatok, ismeretlenek – Stock & ETF Analyzer
 
-> Frissítve: 2026-11-21 (PHASE 03 vége). Valószínűség (V) és hatás (H) skálája: **A** = Alacsony, **K** = Közepes, **M** = Magas.
+> Frissítve: 2026-11-21 (PHASE 04A vége). Valószínűség (V) és hatás (H) skálája: **A** = Alacsony, **K** = Közepes, **M** = Magas.
 
 ## Blokkolók
 
-**Nincs blokkoló a PHASE 04A indításához.** (A PHASE 03-at sem blokkolta semmi.)
+**Nincs blokkoló a PHASE 04B indításához.** Előfeltétel: a tulajdonos az FMP és EODHD kulcsát a `.env.local`-ba írja (nem a chatbe), és az esetleg futó dev szervert újraindítja (KI-17).
+
+## PHASE 04A – ismert problémák és leletek (2026-11-21)
+
+| ID | Probléma / lelet | Hatás | Állapot / teendő | Felelős fázis |
+|---|---|---|---|---|
+| KI-17 | A spike idején a **8081-es porton már futott egy Expo dev szerver** (valószínűleg a tulajdonosé), amely a `.env.local` létrehozása előtt indult, ezért nem látta a `SEC_USER_AGENT`-et (health: `sec-edgar configured: false`). A saját ellenőrzés a 8082-es porton futott. | A | **Teendő:** env-változás után a dev szervert újra kell indítani (Ctrl+C, majd `npm start`). A futó folyamatot nem állítottuk le. | tulajdonos |
+| KI-18 | Negyedéves SEC-adatnál a **Q2/Q3 cash flow tételek hiányoznak**: a 10-Q halmozott (YTD) cash flow-t ad, és a 3 hónapos időszak csak különbségképzéssel állna elő (`calculated`). | K (06) | **Tudatos (D-043):** `MISSING` + megjegyzés. A YTD-különbség a PHASE 06 feladata (D-021). | 06 |
+| KI-19 | **Q4 nincs** a negyedéves készletben (a 10-K nem ad 3 hónapos Q4-et). | K (06) | **Tudatos (D-021):** `Q4 = FY − (Q1+Q2+Q3)` számítás a PHASE 06-ban. | 06 |
+| KI-20 | Tag-lefedettség: a **JPM negyedéves árbevétele** és a **BRK-B EPS-e** `MISSING` (a cégek más tageket használnak, pl. bankoknál „RevenuesNetOfInterestExpense”). | A | **Őszintén `MISSING`.** Új tag felvétele csak valós fixture-rel igazolva (R-05), a PHASE 06-ban. | 06 |
+| KI-21 | **US részvény tőzsdéje ISIN-ből nem határozható meg** az OpenFIGI-vel: ISIN-kérésre csak a kompozit `US` sor jön. | K | A US-listinget a ticker adja (pl. `AAPL@XNAS`); az ISIN → US listing a PHASE 04B-ben az EODHD/FMP keresővel. | 04B |
+| KI-22 | Az OpenFIGI **nem ad jegyzési pénznemet** → `ListingCandidate.tradingCurrency: null`. | K | **Tudatos (D-042).** A PHASE 04B árforrása tölti ki (EODHD). | 04B |
+| KI-23 | A rate limiter (SEC 110 ms) és a ticker-memo **memóriabeli, példányonkénti**; az EAS Hosting / Workers példányai nem osztanak memóriát (U-03). | A (saját használat) | Elfogadva a D-008 mellett. Tartós/globális limiter: PHASE 13/15 (vagy Cloudflare KV, D-004 tartalék). | 13, 15 |
+| KI-24 | **Nincs proxy cache:** minden kimutatás-kérés egy teljes SEC companyfacts letöltés (több MB). | K (költség, sebesség) | **Tudatos (D-044):** `no-store`. TTL-cache: PHASE 13 (ARCHITECTURE 11.: kimutatás 7 nap). | 13 |
+| KI-25 | A **ticker → CIK leképezés változhat** (valós lelet: az XOM ticker új holding-CIK-re mutat, amely alatt még nincs 10-K → az éves készlet üres). | A | Kezelve: üres készlet + megjegyzés. A ticker-lista 24 órás memóban van. | – |
+| KI-26 | A csak összehasonlító adatként szereplő éves időszakok címkéje a záródátum évéből jön (január 1–7. → előző év) `[FELTÉTELEZÉS]`. | A | Megjegyzés jelzi a kimenetben. A PHASE 06 felülvizsgálja (pl. 52/53 hetes, januári év végű cégek). | 06 |
+| KI-27 | A dev szerver az API-route (szerver) kód változását **nem töltötte újra** (gyorsítótárazott szerver-bundle). | A | Szerverkód módosítása után a dev szervert újra kell indítani. | – |
+| KI-28 | A címlapról (dei) vett részvényszám dátuma (`asOf`) **eltér** az időszak végétől (pl. JNJ: 2025-12-28 mérleg, 2026-02-06 címlap). | A | Az `asOf` és a `reference` jelzi (R-16). A PHASE 06 dönt a market cap-számításnál. | 06 |
+| KI-29 | Az **EAS Hosting nem telepít „secret” típusú env-változót**, csak „plain text”/„sensitive”-et (Expo docs). Az EAS-próbatelepítés nem készült el. | K (04B kulcsok) | A D-004 Ideiglenes marad. A kulcsokat „sensitive” változóként kell kezelni, vagy a Cloudflare Workers tartalék. Döntés: a PHASE 04B / 16 előtt. | 04B, 16 |
 
 ## PHASE 03 – ismert problémák és leletek (2026-11-21)
 
 | ID | Probléma / lelet | Hatás | Állapot / teendő | Felelős fázis |
 |---|---|---|---|---|
 | KI-11 | **A PHASE 02 route-tesztjei kisbetűs meghajtójú munkakönyvtárból (`c:\…`, pl. VS Code terminál, Git Bash) pirosak voltak** (5/15: „Invalid hook call”). Ok: a Jest a modulokat `c:\` és `C:\` kulccsal kétszer töltötte be, így két React-példány keletkezett. PowerShellből (`C:\…`) zöldek voltak, ezért a PHASE 02 „15/15” eredménye csak onnan igaz. | K: hamis piros teszt a VS Code-ban | **Megoldva:** `jest.config.js` kanonikus `rootDir`-rel (D-041). Igazolva: kisbetűs útvonalról 98/98 zöld. | – |
-| KI-12 | A PHASE 03-ban az appot **nem** indítottuk el emulátoron. Ellenőrizve: typecheck, lint, tesztek (a route-tesztek a valódi `_layout`-ot renderelik a Providerrel), `npx expo export --platform android` (Hermes bundle sikeres). Látható UI-változás nem történt. | A | **Nyitott.** Következő emulátoros futtatáskor (legkésőbb PHASE 04A) érdemes megnézni: `npm run android`. | 04A |
+| KI-12 | A PHASE 03-ban az appot **nem** indítottuk el emulátoron. Ellenőrizve: typecheck, lint, tesztek (a route-tesztek a valódi `_layout`-ot renderelik a Providerrel), `npx expo export --platform android` (Hermes bundle sikeres). Látható UI-változás nem történt. | A | **Nyitott.** A PHASE 04A-ban sem futtattuk emulátoron (nincs UI-változás); ellenőrizve: `npx expo export --platform android` (Hermes bundle, 3,6 MB) és a route-tesztek. Következő UI-változásnál: `npm run android`. | 12 |
 | KI-13 | A portfólió-tároló memóriában él (`InMemoryPortfolioRepository`): az app újraindításakor az adatok elvesznek. | A most (nincs portfólió-UI) | **Tudatos (D-040).** SQLite: PHASE 13. | 13 |
-| KI-14 | `live` adatmódban az árfolyam-lekérés `UPSTREAM / NOT_IMPLEMENTED` hibát ad. | A | **Tudatos:** őszinte hiba csendes demóadat helyett. A PHASE 04A proxy kliense váltja. | 04A |
+| KI-14 | `live` adatmódban az árfolyam-lekérés `UPSTREAM / NOT_IMPLEMENTED` hibát ad. | A | **Részben megoldva (04A):** `live` módban a proxy gateway-ek futnak (kimutatás, jegyzés, FX). Az árfolyamhoz nincs még élő forrás: `CAPABILITY_UNAVAILABLE` → `MISSING_DATA(['source'])`; proxy URL nélkül `NOT_IMPLEMENTED`. Árforrás: PHASE 04B. | 04B |
 | KI-15 | A lokális ID-generátor `Math.random`-ot és időbélyeget használ (nem kriptográfiai UUID). Egy eszközön belül egyedi, eszközök között nem garantáltan. | A | **Nyitott.** Tartós tárolásnál felülvizsgálandó (pl. `expo-crypto` `randomUUID`). | 13 |
-| KI-16 | Az ARCHITECTURE 7. tervében szereplő `Logger` port és az ARCHITECTURE 10. naplózás még nincs megvalósítva; az `FxGateway` és az `AiGateway` sem. | A | **Tudatos (D-040):** a portok az első használójukkal együtt kerülnek be (04A: FxGateway, Logger; 11: AiGateway). | 04A, 11 |
+| KI-16 | Az ARCHITECTURE 7. tervében szereplő `Logger` port és az ARCHITECTURE 10. naplózás még nincs megvalósítva; az `FxGateway` és az `AiGateway` sem. | A | **Részben megoldva (04A):** `FxGateway` kész (`convertMoney`); szerveroldali JSON-napló kész (`src/server/logging.ts`). Kliensoldali `Logger` port még nincs (nincs használója); `AiGateway`: PHASE 11. | 11, 12 |
 
 ## PHASE 02 – ismert problémák és leletek (2026-11-21)
 
@@ -27,7 +45,7 @@
 | KI-04 | A felhasználói `Path` hivatkozik a `%ANDROID_HOME%`-ra és a `%JAVA_HOME%`-ra, de ezek nincsenek definiálva, és a `Path` registry-típusa `REG_SZ` (nem `REG_EXPAND_SZ`), így a hivatkozások nem oldódnak fel. Az `adb` nincs a PATH-ban. | A: az Expo CLI `ANDROID_HOME` nélkül is megtalálja az SDK-t az alapértelmezett helyen | **Nyitott (opcionális).** A javítás leírása: `docs/phases/phase-02-project-setup.md` 13.2. Gépbeállítást módosít, ezért a tulajdonos dönt róla; a PHASE 02-ben nem futtattuk. | tulajdonos |
 | KI-05 | A JDK az Android Studio JBR-je (OpenJDK 25.0.3), a `JAVA_HOME` nincs beállítva. A helyi natív build (`npx expo run:android`, development build) JDK-követelménye RN 0.88 / Gradle mellett nincs igazolva. | A most (Expo Go) / K dev buildnél | **Nyitott.** Akkor kell ellenőrizni, amikor development buildre váltunk (D-002). | dev build döntéskor |
 | KI-06 | A sablon néhány SDK 58-as függősége jelenleg nincs használva (`@expo/ui`, `expo-glass-effect`, `expo-device`, `expo-symbols`, `expo-web-browser`, `expo-image`, `react-native-reanimated`/`worklets`, `react-native-gesture-handler`). | A: Expo Go-ban nincs költsége, natív buildben méretet növel | **Nyitott.** A PHASE 12 a UI-döntések után eltávolíthatja a feleslegeseket (D-029). | 12 |
-| KI-07 | A web platform (`npm run web`, `web.output: "server"`) nincs tesztelve. Nem célplatform, de az API route-ok (proxy) ugyanerre a szerverkimenetre épülnek. | A | **Nyitott.** A PHASE 04A spike ellenőrzi az API route-okat. | 04A |
+| KI-07 | A web platform (`npm run web`, `web.output: "server"`) nincs tesztelve. Nem célplatform, de az API route-ok (proxy) ugyanerre a szerverkimenetre épülnek. | A | **Nyitott.** A PHASE 04A spike ellenőrzi az API route-okat. **04A:** az API route-ok lokálisan működnek (`npx expo start`), a `npx expo export --platform web` szerver-bundle elkészül; a web UI továbbra sem tesztelt. | 04A |
 | KI-08 | Az SDK 58-as Expo Go **store-verziójának** elérhetőségét nem ellenőriztük. Emulátoron az Expo CLI maga telepítette az Expo Go 58.0.5-öt. | A emulátoron / K saját telefonon | **Nyitott.** Saját telefonos teszt előtt a store-verziót ellenőrizni kell; tartalék: USB + `npm run android` vagy development build. | 12 vagy 16 |
 | KI-09 | Az RNTL 14 `render`/`fireEvent` aszinkron. `await` nélkül átfedő `act()` hívások keletkeznek, és a *következő* tesztek véletlenszerűen buknak. | – | **Megoldva:** `await` + `@typescript-eslint/no-floating-promises` lint-szabály (D-030, D-032). | – |
 | KI-10 | A `<Link asChild>` + függvény formájú `Pressable` `style` miatt a gomb háttere eltűnt (emulátoron észlelve). | – | **Megoldva:** statikus style a `PrimaryButton`-ban + regressziós teszt (D-034). | – |
@@ -54,10 +72,10 @@ A DP-01…DP-04 döntési pontokra 2026-11-21-én megjött a válasz. A DP-05 tu
 | R-02 | Az ingyenes csomagok „personal/internal use” feltételűek. **Megoldva:** csak saját használat (D-008). A feltételeket így is be kell tartani (pl. az adat nem osztható meg másokkal). | A | A | D-008; DATA_SOURCES 7.6 | 04 |
 | R-03 | **Nincs igazolt ingyenes ETF holdings forrás.** | M | K | Holdings az MVP-n kívül; SEC N-PORT vizsgálat (csak US alapok); kézi metaadat | 08 |
 | R-04 | Rate limitek (SEC 10/mp; Tiingo 50/óra; FMP 250/nap; AV 25/nap). | K | K | Proxy cache; deduplikált kérések; adattípusonkénti TTL; 429-kezelés `retryAfter`-rel | 04, 13 |
-| R-05 | **A SEC XBRL tagek heterogének** (pl. több árbevétel-tag, adósság-komponensek duplázása), ami hibás mutatókat okozhat. | M | M | Tag-fallback lista; 10+ valós cég fixture-tesztje; a provenance-ben a használt tag; `MISSING`, ha bizonytalan | 04, 06 |
+| R-05 | **A SEC XBRL tagek heterogének** (pl. több árbevétel-tag, adósság-komponensek duplázása), ami hibás mutatókat okozhat. | M | M | Tag-fallback lista; 10+ valós cég fixture-tesztje; a provenance-ben a használt tag; `MISSING`, ha bizonytalan **04A:** 12 valós cég fixture-je, tag-prioritás valós adaton javítva (Revenues elöl, Domestic kizárva), a `reference` a használt taget mutatja, a totalDebt szándékosan MISSING (D-043). | 04, 06 |
 | R-06 | Az SDK 58-as Expo Go store-elérhetősége nem igazolt; a `create-expo-app` alapból SDK 57-et adhat. **PHASE 02: kezelve.** Explicit `--template default@sdk-58`; emulátoron az Expo CLI telepítette az Expo Go 58.0.5-öt. Saját telefonhoz lásd KI-08. | A | K | Explicit SDK 58 sablon; Expo Go CLI-ből Android emulátorra; szükség esetén development build | 02 ✅ |
 | R-07 | **Proxy visszaélés:** fiók nélkül bárki hívhatja a végpontot, aki ismeri az URL-t. | K | K | Allowlist, validáció, rate limit, cache, AI kill switch és napi keret; később app attestation | 04, 11, 15 |
-| R-08 | Az EAS Hosting rate-limit/KV képessége nem ismert (U-03). | K | K | Spike a 04-ben; tartalék: Cloudflare Workers (D-004) | 04 |
+| R-08 | Az EAS Hosting rate-limit/KV képessége nem ismert (U-03). | K | K | Spike a 04-ben; tartalék: Cloudflare Workers (D-004) **04A:** U-03 megválaszolva: nincs KV/rate-limit primitív → memóriabeli limiter (KI-23); a Cloudflare-tartalék indoka erősödött. | 04 |
 | R-09 | AI-költség és hallucináció. | K | M | Strukturált kimenet + zod; `basedOn`; csak számított bemenet; cache; költségkorlát; az AI opcionális | 11 |
 | R-10 | Jogi: a BUY/SELL címkék nyilvános kiadásnál befektetési ajánlásnak minősülhetnének (MiFID II / MAR, jogi ellenőrzés kellene). **Saját használatnál nem releváns** (D-008); csak akkor, ha a DP-02 megváltozik. | A | A | Jogi nyilatkozat; konfigurálható címkék | 10 |
 | R-11 | Késői integráció: a UI csak a 12-ben jön, így a hibák későn derülnek ki. | K | K | Use case-integrációs tesztek a 04-től; opcionális dev-diagnosztika képernyő (ROADMAP kiegészítések 2.) | 04–11 |
@@ -74,9 +92,9 @@ A DP-01…DP-04 döntési pontokra 2026-11-21-én megjött a válasz. A DP-05 tu
 | R-22 | EODHD free kvóta: 20 hívás/nap. Egy fundamentum-kérés 10, egy bulk 100 hívás, így free-ben gyakorlatilag nincs fundamentum és bulk; kb. 15–18 nem US instrumentum frissíthető naponta. | M | K | Kvóta-költségvetés; prioritás (portfólió > watchlist > keresés); `/api/user` (0 hívás); a 402/429 kezelése | 04B |
 | R-23 | Az FMP free lefedettsége és feltételei hivatalos forrásból nem igazoltak (két hivatalos URL is 403). | K | K | A PHASE 04B a saját kulccsal próbahívásokkal és a fiók-dashboarddal igazolja | 04B |
 | R-24 | API-kulcs szivárgása (chatbe illesztés, véletlen commit). **PHASE 02:** `.gitignore` → `.env*` + `!.env.example`, `git check-ignore` ellenőrizve. | K | M | Kulcs csak `.env.local`-ba (gitignore), soha chatbe; a PHASE 02 `.gitignore`-ja; secret-scan a PHASE 15-ben | 02 ✅, 04, 15 |
-| R-25 | A PHASE 04 túl nagy egy chathez. | M | K | D-028: 04A + 04B | 04 |
+| R-25 | A PHASE 04 túl nagy egy chathez. | M | K | D-028: 04A + 04B **04A:** a 04A egy chatben elkészült (D-028 Elfogadva). | 04 |
 | R-26 | Ugyanaz az ETF több tőzsdén és devizában forog, ami rossz listing választásához és téves P/L-hez vezethet. **PHASE 03:** az `Instrument`/`Listing` modell és a listinghez kötött `Transaction` elkészült. | K | K | D-025 Security/Listing; a pozíció listinghez kötött; a keresés listinget kínál | 03 ✅, 09 |
-| R-27 | Az ECB kb. 30 devizát közöl. Globális listingeknél lehet olyan deviza, ami nincs benne. | K | K | `MISSING` státusz; opcionálisan a Frankfurter más központi banki forrása, külön provenance-szel | 04A |
+| R-27 | Az ECB kb. 30 devizát közöl. Globális listingeknél lehet olyan deviza, ami nincs benne. | K | K | `MISSING` státusz; opcionálisan a Frankfurter más központi banki forrása, külön provenance-szel **04A:** megvalósítva: az ECB-n kívüli deviza `missing` listába kerül, átváltáskor `MISSING_DATA` (D-046). | 04A |
 
 ## Ismeretlenek (ellenőrizendő)
 
@@ -84,11 +102,11 @@ A DP-01…DP-04 döntési pontokra 2026-11-21-én megjött a válasz. A DP-05 tu
 |---|---|---|
 | ~~U-01~~ | **Lezárva (PHASE 02):** React **19.3.0**, RN 0.88.1 (sablon + `npm ls` + `expo install --check`) | – |
 | U-02 | Az SDK 58-as Expo Go store-verziója megjelent-e. **PHASE 02 részeredmény:** emulátorra a CLI telepíti (Expo Go 58.0.5); a store-t nem ellenőriztük → KI-08 | saját telefonos teszt előtt |
-| U-03 | Van-e az EAS Hostingon tartós rate-limit/KV primitív, vagy elég-e a memóriabeli | PHASE 04 |
+| U-03 | Van-e az EAS Hostingon tartós rate-limit/KV primitív, vagy elég-e a memóriabeli | **Megválaszolva (04A):** nincs ilyen primitív (Expo docs); a memóriabeli limiter példányonkénti (KI-23). |
 | U-04 | Az FMP free keretei és licence hivatalos forrásból (most `[HARMADIK FÉL]`) | PHASE 04B |
 | U-05 | ~~Alpha Vantage ToS~~ – nem releváns, nincs adapter (D-024) | – |
 | U-06 | ~~Tiingo lefedettség~~ – nem releváns, amíg nincs Tiingo adapter (D-024) | – |
-| U-07 | SEC `company_tickers.json` (ticker → CIK) elérhetősége és formátuma | PHASE 04 |
+| U-07 | SEC `company_tickers.json` (ticker → CIK) elérhetősége és formátuma | **Lezárva (04A):** elérhető, `{ "0": { cik_str, ticker, title } }`, 10 399 sor; User-Agent nélkül 403. |
 | U-08 | A SEC N-PORT használhatósága US ETF holdingsra (gyakoriság, késleltetés) | PHASE 08 |
 | U-09 | A `@anthropic-ai/sdk` futása az EAS Hosting runtime-on | PHASE 11 |
 | U-10 | `Intl` (hu-HU) támogatás Hermesen mindkét platformon | PHASE 12 |

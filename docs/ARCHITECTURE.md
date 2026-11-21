@@ -1,6 +1,6 @@
 # Architektúra – Stock & ETF Analyzer
 
-> Állapot: **részben megvalósítva** (PHASE 03, 2026-11-21). A 3., 4.4, 5. és 7. fejezet a **tényleges kódot** írja le; a proxy (6.), a cache (11.) és az offline működés (12.) még terv.
+> Állapot: **részben megvalósítva** (PHASE 04A, 2026-11-21). A 3., 4.4–4.5, 5., 6.3 (04A-végpontok) és 7. fejezet a **tényleges kódot** írja le; a ProviderRouter és a kvóta (6.4/10–12, PHASE 04B), a cache (11.) és az offline működés (12.) még terv.
 > Kapcsolódó dokumentumok: [DECISIONS.md](DECISIONS.md), [DATA_SOURCES.md](DATA_SOURCES.md), [DATA_DICTIONARY.md](DATA_DICTIONARY.md), [REQUIREMENTS.md](REQUIREMENTS.md).
 
 ## 1. Alapelvek
@@ -86,6 +86,17 @@ flowchart LR
 | `no-restricted-imports` – regex | **bármilyen** külső csomag (React, Expo, zod…) | `src/domain` |
 | `no-restricted-imports` – csoportok | `react*`, `react-native*`, `expo*`, `@expo/*` | `src/contracts`, `src/application` |
 | `no-restricted-globals` | `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource` | `domain`, `contracts`, `application`, `presentation`, `src/app` (kivéve a jövőbeli `src/app/api/**`) |
+
+**PHASE 04A kiegészítés (D-038 következményei, megvalósítva):**
+
+| Zóna | Mit tilt |
+|---|---|
+| `src/server` | `src/app`, `src/presentation`, `src/infrastructure`, `src/config`, `src/application` importját (csak `domain` + `contracts`); UI/Expo-csomagokat (`no-restricted-imports`) |
+| `src/config` | `src/server` importját (a kliens composition rootja sem húzhat be szerverkódot) |
+| `src/app/api/**` (`+api.ts`) | saját zónakészlet: a `src/server`-t importálhatja, a kliensoldali rétegeket (`infrastructure`, `presentation`, `config`, `application`, `contracts`) nem; a `fetch` itt megengedett |
+| `src/app` (többi) és `src/presentation` | továbbra sem érheti el a `src/server`-t |
+
+Igazolás: 4 szándékosan hibás ideiglenes fájl 4 várt hibát adott, a valódi `health+api.ts` (szerver-import) átment; a próbafájlok törölve (phase-04 útmutató, 9. lépés). A végponttól végpontig integrációs teszt (`src/__tests__/proxy-integration.test.ts`) zónán kívül van, ezért importálhatja a klienst és a szervert is.
 
 A szabályok működését szándékosan hibás importokkal igazoltuk: 8 várt hiba jelent meg, a próbafájlokat utána töröltük. A kimenet a [phase-03 útmutató](phases/phase-03-architecture-domain-model.md) 7. lépésében olvasható. Új csomag nem kellett: az `eslint-plugin-import` és a TypeScript import-resolver az `eslint-config-expo`-ból jön.
 
@@ -186,6 +197,26 @@ flowchart TD
 
 A tranzakció rögzítésének útja: `recordTransaction(command)` → `parsePortfolioId` → `PortfolioRepository.getPortfolio` (ha nincs: `NOT_FOUND`) → `createTransaction` (domain; a „ma” a `Clock`-ból jön) → `addTransaction` (ha hibázik: `STORAGE`) → `ok(transaction)`.
 
+### 4.5 Adatút a proxyn át (PHASE 04A, megvalósítva)
+
+```mermaid
+flowchart TD
+  UC["Use case (kliens)<br/>getFinancialStatements / getSecurityListings /<br/>convertMoney / getListingQuote"] --> GW["Proxy gateway-ek<br/>src/infrastructure/api-client/proxy-gateways.ts"]
+  GW --> HTTP["proxy-http-client.ts<br/>offline → NETWORK, timeout → TIMEOUT,<br/>nem JSON → CONTRACT_MISMATCH"]
+  HTTP -->|"HTTPS /api/v1/... (EXPO_PUBLIC_API_BASE_URL)"| ROUTE["src/app/api/v1/**/+api.ts<br/>(vékony: getServerContext().handlers.x)"]
+  ROUTE --> H["src/server/handlers/api-handlers.ts<br/>bemenet-validáció → szolgáltató → AppError → HTTP<br/>+ kimenet ellenőrzése a közös contract-sémával"]
+  H --> REG{"ProviderRegistry<br/>PROXY_DATA_MODE: live XOR mock"}
+  REG -->|financialStatements| SEC["sec-edgar<br/>ticker→CIK (24 h memo), companyfacts,<br/>110 ms ütemező, User-Agent"]
+  REG -->|fxRates| ECB["ecb-fx (Frankfurter v2)"]
+  REG -->|listings| FIGI["openfigi (igazolt exchCode→MIC)"]
+  REG -->|"mock módban: minden"| MOCK["mock (kind: 'mock')"]
+  SEC & ECB & FIGI --> REQ["request-json.ts<br/>timeout / 429 / 402 / 404 / 5xx / hibás JSON"]
+  H -->|"boríték: apiVersion + data vagy error"| HTTP
+  HTTP -->|"parseApiResponse + contract-séma<br/>(withDomain → domain-konstruktor)"| UC
+```
+
+Árfolyamhoz (quote) a 04A-ban nincs élő forrás: a proxy őszintén `CAPABILITY_UNAVAILABLE`-t ad, a kliensen `MISSING_DATA(['source'])` lesz belőle (nem csendes demóadat). Az FX keresztárfolyam és az elavultság megítélése a kliensen fut (domain `deriveFxRate`, `convertMoney` use case).
+
 ### 4.3 Miért így?
 - A **normalizálás a szerveren** történik. Szolgáltatócsere vagy formátumváltozás esetén elég a proxyt újratelepíteni, nem kell új mobilverzió (store review nélkül javítható).
 - A **számítás a kliensen** fut, így offline is működik, determinisztikus, és nem terheli a szervert.
@@ -235,7 +266,31 @@ src/
 | `src/presentation` | UI-komponensek, téma, szövegek, DI-hook | „Hogyan néz ki, és honnan kapja a szolgáltatásokat?” |
 | `src/app` | route-ok (képernyők) | „Melyik URL melyik képernyő?” |
 
-**Még nem létező mappák** (a saját fázisuk hozza létre): `calculations/` (05), `scoring/` (10), `explanation/` (11), `server/` és `app/api/` (04A), `infrastructure/storage/` (13), `presentation/{hooks,formatters,view-models}` (12).
+**PHASE 04A-ban létrejött:**
+
+```
+src/
+├─ app/api/v1/                    proxy-route-ok (+api.ts): health, fx, securities/[isin]/listings,
+│                                 stocks/[id]/financials, instruments/[id]/quote
+├─ server/                        CSAK SZERVER (domain + contracts importálható)
+│  ├─ env.ts                      PROXY_DATA_MODE, SEC_USER_AGENT, OPENFIGI_API_KEY (validált)
+│  ├─ server-context.ts           a proxy composition rootja (live XOR mock)
+│  ├─ logging.ts                  JSON-soros napló, titok és személyes adat nélkül
+│  ├─ http/                       request-json.ts (hibaleképezés), request-scheduler.ts (ütemező, TTL-memo)
+│  ├─ handlers/                   api-handlers.ts, http.ts (boríték, AppError → HTTP)
+│  ├─ providers/                  market-data-provider.ts (szerződés), sec-edgar/, ecb-fx/, openfigi/, mock/
+│  │                              (+ __fixtures__/: valós, megvágott válaszok)
+│  └─ testing/                    test-helpers.ts (fixture-betöltő, hamis fetch) – csak tesztekhez
+├─ domain/instrument/listing-candidate.ts, fundamentals/financial-statement-set.ts, fx/fx-conversion.ts
+├─ contracts/                     + fx.ts, listings.ts, financials.ts, health.ts
+├─ application/use-cases/         + convert-money.ts (FxService), get-market-reference-data.ts
+├─ infrastructure/api-client/     proxy-http-client.ts, proxy-gateways.ts, not-implemented-… (URL nélkül)
+├─ infrastructure/mock/           + mock-fx-gateway.ts
+└─ __tests__/proxy-integration.test.ts   kliens ↔ szerver végponttól végpontig (hálózat nélkül)
+scripts/record-sec-fixtures.mjs   SEC fixture-rögzítő (fejlesztői eszköz)
+```
+
+**Még nem létező mappák** (a saját fázisuk hozza létre): `calculations/` (05), `scoring/` (10), `explanation/` (11), `server/routing/` (04B), `server/cache/` (13), `infrastructure/storage/` (13), `presentation/{hooks,formatters,view-models}` (12).
 
 ### 5.2 Tervezett teljes struktúra (PHASE 01 terv)
 
@@ -301,6 +356,8 @@ Nem tárol portfóliót, nincs felhasználói fiók, nem számol mutatót, nem p
 
 ### 6.3 Végpontok (contract v1 – javaslat, a PHASE 04 véglegesíti)
 
+> **PHASE 04A állapot:** megvalósítva és lokálisan élő adattal igazolva: `health`, `fx`, `securities/{isin}/listings`, `stocks/{id}/financials`, `instruments/{id}/quote` (élőben `CAPABILITY_UNAVAILABLE` a 04B-ig). A pontos sémák és hibakódok: [DATA_DICTIONARY 11.](DATA_DICTIONARY.md#11-api-szerződés-v1-phase-04a). Új hibakód: `CAPABILITY_UNAVAILABLE` (D-044). A `search`, `providers/status`, `profile`, `prices`, `corporate-actions` a PHASE 04B-ben jön.
+
 | Metódus | Útvonal | Leírás | Fázis |
 |---|---|---|---|
 | GET | `/api/v1/health` | verzió, szolgáltatók elérhetősége | 04 |
@@ -352,6 +409,7 @@ Hibakódok: `VALIDATION_FAILED`, `NOT_FOUND`, `UNSUPPORTED_MARKET`, `RATE_LIMITE
 |---|---|---|---|
 | `EXPO_PUBLIC_API_BASE_URL` | kliens | nem | a proxy alap URL-je |
 | `EXPO_PUBLIC_DATA_MODE` | kliens | nem | `live` \| `mock` |
+| `PROXY_DATA_MODE` | szerver | nem | `live` (alap) \| `mock` – a proxy CSAK élő vagy CSAK demó szolgáltatókat futtat (D-045). PHASE 04A |
 | `SEC_USER_AGENT` | szerver | nem titok, de személyes adat | „AppNév kapcsolattartó@email” (a tulajdonos adja meg, `.env`-ben, NEM a kódban) |
 | `FMP_API_KEY` | szerver | **igen** | Financial Modeling Prep (a tulajdonosnak megvan) |
 | `EODHD_API_KEY` | szerver | **igen** | EODHD (a tulajdonosnak megvan) |

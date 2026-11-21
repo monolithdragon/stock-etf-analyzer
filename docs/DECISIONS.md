@@ -76,6 +76,17 @@
   - Az SDK 58-ban az API route-ok a `web.output: "server"` beállítással működnek. Ezt a PHASE 02/04 állítja be és ellenőrzi.
   - A natív app abszolút URL-lel hívja a proxyt (`EXPO_PUBLIC_API_BASE_URL`). A relatív fetch natívon alfa funkció.
 - **Felülvizsgálat:** a PHASE 04 végén, a spike eredménye alapján.
+- **Spike eredménye (PHASE 04A, 2026-11-21): részben igazolva, a státusz Ideiglenes marad.**
+  - **Lokálisan igazolva:** `npx expo start` alatt mind az 5 API route élő adattal működik (`/api/v1/health`, `/fx`, `/securities/{isin}/listings`, `/stocks/{id}/financials`, `/instruments/{id}/quote`). Forrás: SEC, ECB/Frankfurter, OpenFIGI. Nem létező útvonal → 404 (nincs általános továbbító).
+  - `npx expo export --platform web`: a szerver-bundle elkészül (5 függvény, ~629 KB/route). Az Android kliens-bundle-ben nincs szerverkód, szolgáltatói URL vagy User-Agent (szkenneléssel ellenőrizve).
+  - Az SDK 58 dokumentáció szerint az API route-ok a meglévő `web.output: "server"` mellett működnek; a dinamikus szegmens a handler 2. argumentuma.
+  - **EAS Hosting (Expo docs, 2026-11):**
+    - Cloudflare Workers alapú.
+    - **Nincs** tartós KV-, cache- vagy rate-limit primitív (U-03 megválaszolva).
+    - „Secrets cannot be deployed with Expo Hosting”: csak „plain text” és „sensitive” láthatóságú változó telepíthető, telepítésenként rögzítve.
+    - Az ingyenes csomag CPU- és kéréskorlátai a dokumentációból nem derültek ki.
+  - **Nem csináltuk:** EAS Hosting próbatelepítést. Az `eas deploy` Expo-fiókot és a tulajdonos döntését igényli. Ezért a D-004 Ideiglenes marad; a tartalék (Cloudflare Workers + KV) indoka erősödött.
+  - **Következmény:** a rate limiter memóriabeli és példányonkénti (KI-23); a proxy cache a PHASE 13 kérdése.
 
 ### D-005 – A szolgáltató-adapterek a szerveren futnak, a kliens csak a saját szerződést látja
 - **Dátum:** 2026-11-21 · **Státusz:** Elfogadva
@@ -306,7 +317,7 @@ A tulajdonos válaszai:
   - FMP `[HARMADIK FÉL]`: Starter kb. $19–29/hó.
 
 ### D-028 – A PHASE 04 két chatben (04A, 04B)
-- **Dátum:** 2026-11-21 · **Státusz:** Javasolt
+- **Dátum:** 2026-11-21 · **Státusz:** Elfogadva (a 04A elkészült: `docs/handoffs/phase-04a-handoff.md`)
 - **Indok:** proxy váz, 6 adapter, routing, kvóta és FX egy chatben túl nagy, ami kontextus- és hibakockázatot jelent.
 - **Döntés:**
   - **04A:** proxy váz és D-004 spike; contracts; `sec-edgar`, `ecb-fx`, `openfigi`, `mock`; `FxService`; kliens gateway. Átadás: `docs/handoffs/phase-04a-handoff.md`.
@@ -423,6 +434,7 @@ A tulajdonos válaszai:
 - **Kontextus:** a PHASE 01-es 85–95 napos sáv kizárta volna a 14 hetes (98 napos) negyedévet, amely 53 hetes üzleti évben előfordul (pl. 2022-09-25…2022-12-31).
 - **Döntés:** negyedév: 80–100 nap; év: 350–380 nap, mindkét végpontot beleszámolva. Konstans: `PERIOD_DURATION_DAYS`.
 - **Felülvizsgálat:** a PHASE 04A/06-ban, valós SEC fixture-ökön.
+- **PHASE 04A (2026-11-21): megerősítve.** 12 valós cég minden negyedéve belefért a 80–100 napos sávba (pl. KO 2026-04-04…07-03, 52/53 hetes naptár), a 10-Q-k 6/9 hónapos YTD tényei pedig helyesen kiestek (D-043).
 
 ### D-038 – Rétegszabályok kikényszerítése ESLinttel
 - **Dátum:** 2026-11-21 · **Státusz:** Elfogadva
@@ -473,3 +485,79 @@ A tulajdonos válaszai:
   - Ez a projektgyökér valódi (`fs.realpathSync.native`) útvonalát használja `rootDir`-ként, és csak kis/nagybetű-eltérés esetén `chdir`-el rá.
   - Ugyanez a kanonikus útvonal az ESLint zónák `basePath`-ja.
 - **Következmények:** a tesztek bármelyik terminálból zöldek. Más OS-en a `realpathSync.native` változatlan útvonalat ad.
+
+---
+
+## PHASE 04A – Proxy váz és ingyenes alapforrások (2026-11-21)
+
+### D-042 – Jegyzés-jelölt (ListingCandidate) és üzemeltetői MIC
+- **Dátum:** 2026-11-21 · **Státusz:** Elfogadva
+- **Kontextus:** az OpenFIGI (valós válasz alapján) nem ad jegyzési pénznemet és MIC-et, csak Bloomberg `exchCode`-ot. A domain `Listing` viszont kötelezően tartalmaz pénznemet (a pozíció és a P/L ehhez kötődik).
+- **Döntés:**
+  - Új domain-típus: `ListingCandidate` (`tradingCurrency: CurrencyCode | null`) és `SecurityListings`. Ez utóbbi a kihagyott sorokat okonként megszámolja (`unmappedVenue`, `composite`, `invalidSymbol`). A `Listing` szigorú marad.
+  - Az `exchCode` → MIC tábla CSAK igazolt párokat tartalmaz: 14 kódot, mindegyiket az OpenFIGI `micCode` szűrőjével ellenőriztük (a bizonyíték a kódban: `verifiedBy`). Ami nincs benne, az kimarad, de meg van számolva.
+  - A listing-azonosítóban az **üzemeltetői (operating) MIC** szerepel (XNGS/XNMS → XNAS, MTAA → XMIL), így egy tőzsde egy azonosítót kap.
+  - A kompozit (ország-szintű) sort az adatból ismerjük fel: `figi === compositeFIGI`.
+- **Alternatíva:** nullable `Listing.tradingCurrency`. Elvetve, mert a pozíciószámításnál a pénznem nem hiányozhat.
+- **Következmények:** a pénznemet egy árforrás tölti ki (PHASE 04B, EODHD). US részvénynél az ISIN-kérés csak kompozit sort ad (KI-21).
+
+### D-043 – SEC companyfacts normalizálási szabályok
+- **Dátum:** 2026-11-21 · **Státusz:** Elfogadva (12 valós cég fixture-ján igazolva; részletek: DATA_DICTIONARY 4.4)
+- **Döntés:**
+  1. **Pénznem:** a pénzösszeg-tények leggyakoribb egysége (TSM: TWD, mert az USD csak kényelmi átszámítás). Eltérő pénznemű tény nem kerül be.
+  2. **Időszak:** a `start`/`end`-ből (D-021). FY 350–380, negyedév 80–100 nap. A D-037 sávja megerősítve: a 6/9 hónapos (YTD) tények kiesnek.
+  3. **Címke** (`fiscalYear`, `fp`): annak a filingnek a mezőiből, amelynek ez a **saját** (legkésőbbi) időszaka. Ha nincs saját filing: évnél a záródátum éve (január 1–7. → előző év, `[FELTÉTELEZÉS]`); negyedévnél kihagyás + megjegyzés.
+  4. **Érték:** tag-prioritási lista; időszakonként az első tag, amelynek pontos ténye van; ezen belül a legkésőbb beadott érték (restatement). Tagek értékei soha nem adódnak össze.
+  5. **Valós adat alapján:** a `Revenues` az első, mert a BRK-B-nél és a WMT-nél a `RevenueFromContract…` csak részösszeg. A `…BeforeIncomeTaxesDomestic` kimarad, mert csak a belföldi rész.
+  6. **`totalDebt`:** szándékosan `MISSING`, indoklással (dupla számolás veszélye; a PHASE 05/06 dönt).
+  7. **Részvényszám:** `CommonStockSharesOutstanding` az időszak végén. Tartalékként a címlap (dei) adata, **csak az időszak saját filingjéből**; ekkor az `asOf` a címlap dátuma (valós lelet: JNJ).
+  8. **Kiáramlás negatív értékkel** → `INVALID_INPUT` (nem fordítjuk meg az előjelet).
+  9. **Méretkorlát:** legfeljebb 15 éves vagy 20 negyedéves időszak.
+  10. **CIK:** számként és szövegként is elfogadott (valós lelet: az XOM új CIK-jénél string).
+- **Következmények:** negyedéves Q2/Q3 cash flow és Q4 nincs. A YTD-különbség `calculated` lenne, ez a PHASE 06 feladata (KI-18, KI-19).
+
+### D-044 – Proxy hibamodell, kimenet-önellenőrzés, cache nélkül
+- **Dátum:** 2026-11-21 · **Státusz:** Elfogadva
+- **Döntés:**
+  - A szerver is az `AppError`-t használja, nincs külön szerver-hibatípus. Az `appErrorToResponse` képezi HTTP-státuszra és API-kódra; a kliens `apiErrorToAppError`-ja a párja.
+  - **Új API-kód:** `CAPABILITY_UNAVAILABLE` (501) = nincs bekötött forrás a képességhez (pl. árfolyam a 04B-ig, vagy hiányzó `SEC_USER_AGENT`). A kliensen: `MISSING_DATA(['source'])`.
+  - **Leképezés:** VALIDATION → 400; NOT_FOUND → 404; RATE_LIMITED → 429 + `Retry-After`; TIMEOUT → 504; NETWORK és HTTP_ERROR → 502 `UPSTREAM_ERROR`; INVALID_RESPONSE → 502 `UPSTREAM_INVALID`; MISSING_DATA(market) → 422 `UNSUPPORTED_MARKET`.
+  - **Felfelé:** a 402 (kvóta) → `RATE_LIMITED` (`retryAfterSec: null`). A hálózati hiba eredeti üzenete (benne URL) nem jut a kliensig.
+  - **Kimenet-önellenőrzés:** minden sikeres választ a kliensével KÖZÖS contract-sémán is átfuttatunk; eltérés esetén 500 `INTERNAL` + napló. A tesztekben ez két valós eltérést fogott meg (listing-mezőnév, quote-alak → `quoteToDto`).
+  - **`Cache-Control: no-store`:** a 04A-ban nincs proxy cache, minden kérés friss (a kézi frissítés egyszerűen új kérés). TTL-cache: PHASE 13.
+- **Következmények:** a SEC companyfacts kérésenként több MB (KI-24).
+
+### D-045 – Proxy adatmód: live XOR mock
+- **Dátum:** 2026-11-21 · **Státusz:** Elfogadva
+- **Döntés:**
+  - `PROXY_DATA_MODE=live|mock` (alapértelmezés: live).
+  - A regiszter (`createProviderRegistry`) programozási hibát dob, ha élő módban mock, vagy mock módban élő szolgáltatót kapna.
+  - Minden mock kimenet `kind: 'mock'`; demóból számolt FX-ráta is `mock` marad.
+- **Következmények:** demó és éles adat nem keveredhet észrevétlenül; a health végpont kiírja az adatmódot.
+
+### D-046 – FX: EUR-pivot a szerveren, keresztárfolyam a domainben, elavultság-szabály
+- **Dátum:** 2026-11-21 · **Státusz:** Elfogadva (a D-017 megvalósítása)
+- **Döntés:**
+  - A proxy csak ECB-rátát ad, EUR bázissal. A keresztárfolyamot a domain számolja (`deriveFxRate`: közvetlen → inverz → EUR-on át), `calculated` provenance-szel, képlettel és bemenetekkel. Eltérő dátumú bemeneteknél a régebbi dátum lesz az `asOf`.
+  - `FxConversion`: az `original` (natív) és a `converted` (kijelzési) összeg külön; a `rate` (dátum, forrás) mindig a kimenetben.
+  - **Frissesség** `[FELTÉTELEZÉS – PHASE 13]`: 4 napig FRESH; 10 napig STALE (átvált, de jelölve); utána EXPIRED → `MISSING_DATA`, becslés nincs. Történeti átváltásnál a kért naphoz mérjük.
+  - **Penny:** `GBX` → GBP explicit /100. A `parseCurrencyCode` a `GBp`-t `GBX`-re képezi (a sima nagybetűsítés 100-szoros hibát okozna).
+  - **Kijelzési pénznemek:** HUF, EUR, USD, GBP, CHF, JPY (`DISPLAY_CURRENCIES`). Az ECB-listán kívüli deviza `missing` lesz (R-27).
+- **Új port:** `FxGateway`, a D-040 szerint az első használójával (`convertMoney` use case) együtt.
+
+### D-047 – Valós, megvágott fixture-ök és rögzítő script
+- **Dátum:** 2026-11-21 · **Státusz:** Elfogadva
+- **Döntés:**
+  - Fixture-ök helye: `src/server/providers/<adapter>/__fixtures__/`. Valós válaszokból készülnek, `_fixture` fejléccel (forrás, URL, dátum, megjegyzés). SEC: 12 cég, csak a használt tagek, `filed ≥ 2021-01-01` (~2 MB).
+  - Rögzítő: `scripts/record-sec-fixtures.mjs`. A `SEC_USER_AGENT`-et a `.env.local`-ból olvassa; nem írja ki és nem menti. A tag-listát a `sec-tags.ts`-ből importálja (függőség nélküli fájl, Node 26 type-stripping).
+  - A fixture-öket a Prettier nem formázza újra (`.prettierignore`).
+  - A tesztek `jest.requireActual`-lal töltik be a fixture-öket, így nem kell `@types/node`, és a kliens kód sem kap Node-típusokat.
+- **Alternatíva:** kézzel írt fixture. Elvetve: a valós adat két normalizálási hibát és két formátum-meglepetést (CIK stringként, JNJ címlap) mutatott meg.
+
+### D-048 – Kimutatás-készlet frissessége
+- **Dátum:** 2026-11-21 · **Státusz:** Feltételezés (a PHASE 13 véglegesíti)
+- **Döntés:** a legutolsó felhasznált filing dátumától (`provenance.asOf`) mérjük:
+  - negyedéves: 120 napig FRESH, 400 napig STALE;
+  - éves: 400 napig FRESH, 800 napig STALE;
+  - utána EXPIRED.
+  - Az OpenFIGI-jegyzésnek nincs `asOf`-ja, ezért UNKNOWN.

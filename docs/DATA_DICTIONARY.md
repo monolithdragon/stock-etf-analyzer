@@ -3,7 +3,8 @@
 > Állapot: **kiinduló definíciók** (PHASE 01) + **domain típusok a kódban** (PHASE 03, 2026-11-21). A mezők és a kód közti leképezés: [10. fejezet](#10-kód-leképezés-phase-03).
 > - A képletdefiníciókat a **PHASE 05** véglegesíti, a DCF-et a **PHASE 07**, az ETF-mutatókat a **PHASE 08**, a portfóliót a **PHASE 09**.
 > - Definíció csak dokumentált indokkal változtatható (DECISIONS.md-be bejegyzés kell).
-> - Az XBRL tag-nevek **jelöltek**: a PHASE 04/06 valós fixture-ökön igazolja őket `[NEM IGAZOLT]`.
+> - Az XBRL tag-nevek a 4.1–4.2-ben **jelöltek** (PHASE 01). A ténylegesen használt, 12 valós cégen igazolt prioritási lista: **4.4** és `src/server/providers/sec-edgar/sec-tags.ts` (PHASE 04A).
+> - PHASE 04A (2026-11-21): új fejezetek 3.3 (jegyzés-jelölt), 4.4 (SEC-normalizálás), 8. (FX, megvalósítva), 11. (API-szerződés v1).
 
 ## 1. Általános konvenciók
 
@@ -103,6 +104,22 @@ Egy értékpapír (pl. egy UCITS ETF, egy ISIN) több tőzsdén és több deviz�
 | `isPrimary` | bool? | Elsődleges listing, ha a forrás megadja |
 | `figi` | string? | Listing szintű FIGI, ha elérhető |
 
+### 3.3 `ListingCandidate` és `SecurityListings` (PHASE 04A, D-042)
+
+Az azonosító-forrás (OpenFIGI) a jegyzés pénznemét nem közli, ezért a jegyzés-jelölt külön típus. A `Listing` szigorú marad.
+
+| Mező | Típus | Leírás |
+|---|---|---|
+| `listingId` | ListingId | `{symbol}@{üzemeltetői MIC}` (pl. `VWCE@XETR`, `AAPL@XNAS`) |
+| `securityId` | SecurityId | mindig az ISIN |
+| `symbol`, `mic`, `exchangeName` | | a MIC az igazolt `exchCode` táblából (DATA_SOURCES 10.3) |
+| `tradingCurrency` | CurrencyCode \| **null** | `null` = a forrás nem közölte; **nem találjuk ki** (PHASE 04B tölti) |
+| `figi`, `compositeFigi` | string \| null | listing- és ország-szintű FIGI |
+| `kindHint` | `'stock' \| 'etf' \| null` | a forrás besorolásából (`ETP` → etf, `Common Stock` → stock) |
+| `sourceName` | string \| null | a forrás (gyakran rövidített) neve, pl. „VANG FTSE AW USDA” |
+
+`SecurityListings = { isin, securityId, listings[], omitted: { unmappedVenue, composite, invalidSymbol }, provenance }`. Az `omitted` számlálók biztosítják, hogy a kihagyott sorok ne tűnjenek el szó nélkül.
+
 ## 4. Fundamentális mezők (jelentett, `reported`)
 
 ### 4.1 Eredménykimutatás (időszaki, „duration”)
@@ -147,6 +164,39 @@ Egy értékpapír (pl. egy UCITS ETF, egy ISIN) több tőzsdén és több deviz�
 6. **Részvényfelosztás:** részvényenkénti adat (EPS, DPS) és részvényszám csak **azonos split-bázison** hasonlítható össze. Forrás: a legutolsó filing (amely visszamenőleg korrigál), vagy a split-események alapján korrigálunk. Ha nem biztosítható: `NOT_MEANINGFUL` + magyarázat.
 7. **Eltérő pénzügyi év vége:** a `fiscalYear` a FY záródátumának éve. Cégek közti összehasonlításnál jelezni kell az eltérő záródátumot.
 8. **Beszámoló ≠ jegyzési pénznem** (pl. ADR): árfolyam alapú szorzónál (P/E, P/S, EV/…) a beszámolói értéket FX-szel a jegyzési pénznemre váltjuk, az FX dátumát és forrását rögzítjük. FX hiányában `MISSING`.
+
+### 4.4 SEC companyfacts normalizálás (megvalósítva, PHASE 04A, D-043)
+
+Kód: `src/server/providers/sec-edgar/sec-normalizer.ts`. Kimenet: `FinancialStatementSet` (időszakonként income + balance + cashflow kimutatás, egy forrásból).
+
+| Lépés | Szabály | Miért (valós lelet) |
+|---|---|---|
+| Pénznem | a pénzösszeg-tények leggyakoribb egysége; eltérő pénznemű tény kimarad | TSM: TWD és USD is van, az USD csak kényelmi átszámítás |
+| Időszak | `start`/`end`; FY 350–380, Q 80–100 nap (D-037) | a 10-Q 6/9 hónapos YTD tényei kiesnek |
+| Címke | a SAJÁT filing (`end` = a filing legkésőbbi dátuma) `fy`/`fp`-je | összehasonlító adatnál a `fy` a beadó filing éve (AAPL 2023 → `fy: 2026`) |
+| Címke-tartalék | évnél a záródátum éve (jan. 1–7. → előző év) `[FELTÉTELEZÉS]`; negyedévnél kihagyás + megjegyzés | a megvágott fixture legrégebbi évei csak összehasonlító adatként szerepelnek |
+| Érték | prioritási lista első tagje, amelynek pontos ténye van; azon belül a legkésőbb beadott | restatement (4.3/3); a provenance `reference`: `tag accn form filed` |
+| Részvényszám | `CommonStockSharesOutstanding` az időszak végén; tartalék: a SAJÁT filing címlapja (dei), `asOf` = címlap dátuma | JNJ: nincs `CommonStockSharesOutstanding`; egy későbbi 10-Q címlapja hibás napot adott volna |
+| Kiáramlás < 0 | `INVALID_INPUT` | nem fordítunk előjelet csendben |
+| Hiány | `MISSING`, a keresett tagek felsorolásával; **soha nem 0** | BRK-B EPS, JPM negyedéves árbevétel |
+| `totalDebt` | szándékosan `MISSING` (összetett tétel, dupla számolás veszélye) | PHASE 05/06 dönt |
+| Nincs adat | üres készlet + megjegyzés | XOM új CIK (nincs még 10-K); TSM negyedéves (20-F filer) |
+| Méret | max. 15 év / 20 negyedév | válaszméret |
+
+**Használt tag-prioritás** (`us-gaap` → `ifrs-full`; teljes lista: `sec-tags.ts`):
+
+| Tétel | Tagek sorrendben |
+|---|---|
+| `revenue` | `Revenues`, `RevenueFromContractWithCustomerExcludingAssessedTax`, `SalesRevenueNet`, `RevenueFromContractWithCustomerIncludingAssessedTax`, `ifrs:Revenue` |
+| `costOfRevenue` | `CostOfRevenue`, `CostOfGoodsAndServicesSold`, `ifrs:CostOfSales` |
+| `pretaxIncome` | `…BeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest`, `…BeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments`, `ifrs:ProfitLossBeforeTax` (a `…Domestic` NEM: csak belföldi rész) |
+| `netIncome` | `NetIncomeLoss`, `ifrs:ProfitLossAttributableToOwnersOfParent` |
+| `depreciationAmortization` | `DepreciationDepletionAndAmortization`, `DepreciationAndAmortization`, `DepreciationAmortizationAndAccretionNet`, `ifrs:DepreciationAndAmortisationExpense` |
+| `capitalExpenditure` | `PaymentsToAcquirePropertyPlantAndEquipment`, `PaymentsToAcquireProductiveAssets`, `ifrs:PurchaseOfPropertyPlantAndEquipment…` |
+| `dividendsPaid` | `PaymentsOfDividends`, `PaymentsOfDividendsCommonStock`, `ifrs:DividendsPaidClassifiedAsFinancingActivities` |
+| `debtRepayment` | `RepaymentsOfLongTermDebt`, `RepaymentsOfDebt`, `ifrs:RepaymentsOfBorrowings…` |
+
+**Ismert korlátok:** negyedéves Q2/Q3 cash flow hiányzik (a 10-Q YTD-t ad; a különbségképzés `calculated` → PHASE 06), Q4 nincs (D-021). Részletek: KNOWN_ISSUES KI-18…KI-20.
 
 ## 5. Számított mutatók (`calculated`) – kiinduló definíciók (a PHASE 05 véglegesíti)
 
@@ -250,6 +300,21 @@ Jelölés: `Δ` = előző időszakhoz képest. „avg” = az időszak eleji és
 
 `FxRate = { base, quote, rate, asOf (dátum), source ('ecb'), fetchedAt, kind: 'reported' }`. Keresztárfolyam EUR-on át számolva: `HUF/USD = (EUR/USD) / (EUR/HUF)` → `calculated`. Hétvégén/ünnepnapon az utolsó elérhető ECB nap rátája érvényes, az `asOf` jelzi.
 
+**Megvalósítás (PHASE 04A, D-046):**
+
+| Fogalom | Definíció |
+|---|---|
+| `FxRate` | 1 `base` = `rate` `quote`; `provenance` (ECB: `sourceId: 'ecb-fx'`, `kind: 'reported'`, `asOf` = ECB-nap) |
+| `FxRateSet` | egy lekérés rátái, mind ugyanabból a pivotból (EUR); `missing[]` = kért, de a forrásban nem szereplő devizák (nincs ráta, nem 0) |
+| Ráta-levezetés (`deriveFxRate`) | 1) közvetlen (`reported`); 2) inverz `1/r` (`calculated`, képlet: `1 / (to→from)`); 3) kereszt `r(EUR→to) / r(EUR→from)` (`calculated`, `inputs: ['EUR/USD@2026-11-20', …]`); eltérő dátumoknál a **régebbi** az `asOf`; különben `MISSING_DATA` |
+| `FxConversion` | `original` (natív összeg, változatlan), `converted` (kijelzési összeg), `rate` (vagy `null`, ha nem kellett átváltani), `minorUnitDivisor` (GBX: 100) |
+| Penny | `GBX` → GBP: `/100` explicit; a `GBp` bemenet `GBX`-re normalizálódik (nem `GBP`-re) |
+| Kijelzési pénznemek | `DISPLAY_CURRENCIES = HUF, EUR, USD, GBP, CHF, JPY` |
+| Frissesség (`FX_FRESHNESS_POLICY`) | ≤ 4 nap FRESH, ≤ 10 nap STALE (átvált, jelölve), utána EXPIRED → hiba `[FELTÉTELEZÉS – PHASE 13]` |
+| Demó | demóból számolt ráta `kind: 'mock'` marad |
+
+Példa (valós ECB 2026-11-20, számítással ellenőrizve): 100 USD → HUF = 100 / 1,099 × 373,55 = **33 989,99 HUF**; a `rate` = 339,8999… (USD→HUF, `calculated`), `asOf: 2026-11-20`. (Ugyanezt a képletet teszteli a `proxy-integration.test.ts`.)
+
 ## 9. Elemzési és AI-mezők (kiinduló)
 
 | Entitás | Mezők |
@@ -283,6 +348,10 @@ Minden domain típus az `@/domain` modulból importálható. Ahol konstruktor va
 | Portfólió (7.) | `Portfolio`, `Transaction`, `Position` (csak típus) | `createPortfolio`, `createTransaction` | `src/domain/portfolio/portfolio.ts` |
 | Elemzés (9.) | `AnalysisResult`, `AnalysisSubject` | `createAnalysisResult`, `summarizeCompleteness` | `src/domain/analysis/analysis-result.ts` |
 | Contract (hálózat) | `QuoteDto`, `metricSchema`, `dataProvenanceSchema` | `parseApiResponse`, `quoteFromDto`, `apiErrorToAppError` | `src/contracts/*` |
+| Jegyzés-jelölt (3.3) — 04A | `ListingCandidate`, `SecurityListings` | `createListingCandidate` | `src/domain/instrument/listing-candidate.ts` |
+| Kimutatás-készlet (4.4) — 04A | `FinancialStatementSet`, `StatementFrequency` | `createFinancialStatementSet` (egy forrás, gyakoriság-egyezés) | `src/domain/fundamentals/financial-statement-set.ts` |
+| FX-átváltás (8.) — 04A | `FxRateSet`, `FxConversion`, `DisplayCurrency` | `createFxRateSet`, `deriveFxRate`, `convertMoney`, `toMajor` | `src/domain/fx/fx-conversion.ts` |
+| Contract v1 (11.) — 04A | `FxRateSetDto`, `SecurityListingsDto`, `FinancialStatementSetDto`, `HealthDto` | `withDomain`, `fiscalPeriodSchema`, `quoteToDto` | `src/contracts/{fx,listings,financials,health}.ts` |
 
 **Validációs józansági határok.** Ezek nem üzleti definíciók; a hibás bemenet kiszűrésére szolgálnak.
 
@@ -293,4 +362,19 @@ Minden domain típus az `@/domain` modulból importálható. Ahol konstruktor va
 | `fiscalYear` | 1900 … 2200, egész | Elírás elleni védelem. |
 | Portfólió neve | 1 … 80 karakter | UI-korlát. |
 | Tranzakció megjegyzése | ≤ 500 karakter | Méretkorlát (tárolás, megjelenítés). |
-| Pénznemkód | 3 nagybetű (csak formátum) | Teljes ISO-lista nincs; a `GBX` jegyzési kód is átmegy (1. fejezet). |
+| Pénznemkód | 3 nagybetű (csak formátum) | Teljes ISO-lista nincs; a `GBX` jegyzési kód is átmegy (1. fejezet). A kisbetűs `GBp` → `GBX` (PHASE 04A). |
+| FX-kérés devizái | 1 … 30 | Proxy-bemenet korlátja. |
+
+## 11. API-szerződés v1 (PHASE 04A)
+
+Boríték: siker `{ apiVersion: "1", data, warnings[] }`, hiba `{ apiVersion: "1", error: { code, message, retryAfterSec } }`. A szerver minden sikeres választ a kliensével közös zod-sémán is ellenőriz (D-044). Cache: `no-store` (PHASE 13-ig).
+
+| Végpont | `data` séma | Hibakódok (HTTP) |
+|---|---|---|
+| `GET /api/v1/health` | `healthDtoSchema`: `status`, `serverTime`, `dataMode` (`live`\|`mock`), `providers[]` (`id`, `name`, `kind`, `capabilities[]`, `configured`, `note`), `unavailableCapabilities[]` | – |
+| `GET /api/v1/fx?base=EUR&quotes=…&date=` | `fxRateSetDtoSchema` (alap `quotes`: a 6 kijelzési deviza) | `VALIDATION_FAILED` (400: hibás deviza, >30 deviza, hibás/jövőbeli dátum), `RATE_LIMITED` (429), `TIMEOUT` (504), `UPSTREAM_*` (502) |
+| `GET /api/v1/securities/{isin}/listings` | `securityListingsDtoSchema` | 400 (hibás ISIN/ellenőrző jegy), `NOT_FOUND` (404), 429, 502, 504 |
+| `GET /api/v1/stocks/{listingId}/financials?period=annual\|quarterly` | `financialStatementSetDtoSchema` (minden sortétel-kulcs kötelező) | 400, 404 (ismeretlen ticker), `UNSUPPORTED_MARKET` (422: nem US), `CAPABILITY_UNAVAILABLE` (501: nincs `SEC_USER_AGENT`), 502, 504 |
+| `GET /api/v1/instruments/{listingId}/quote` | `quoteDtoSchema` (lapos `price` + `currency`; `quoteToDto`) | élőben a 04B-ig: `CAPABILITY_UNAVAILABLE` (501); mock módban demóár |
+
+Képességek (`PROVIDER_CAPABILITIES`): `quote`, `priceHistory`, `profile`, `financialStatements`, `dividends`, `etfMetadata`, `etfHoldings`, `listings`, `fxRates`. A 04A-ban élőben elérhető: `financialStatements` (SEC), `fxRates` (ECB), `listings` (OpenFIGI). A többi forrása: PHASE 04B (FMP, EODHD) és PHASE 08.

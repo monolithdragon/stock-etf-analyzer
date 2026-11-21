@@ -12,6 +12,8 @@ export const API_ERROR_CODES = [
   'VALIDATION_FAILED',
   'NOT_FOUND',
   'UNSUPPORTED_MARKET',
+  /** Ehhez a képességhez nincs bekötött forrás (pl. árfolyam a PHASE 04B-ig). PHASE 04A. */
+  'CAPABILITY_UNAVAILABLE',
   'RATE_LIMITED',
   'TIMEOUT',
   'UPSTREAM_ERROR',
@@ -50,6 +52,8 @@ export function apiErrorToAppError(error: ApiErrorDto): AppError {
       return { kind: 'NOT_FOUND', message, resource: 'api', id: '' };
     case 'UNSUPPORTED_MARKET':
       return AppErrors.missingData(['market'], message);
+    case 'CAPABILITY_UNAVAILABLE':
+      return AppErrors.missingData(['source'], message);
     case 'RATE_LIMITED':
       return AppErrors.rateLimited(message, error.retryAfterSec ?? null);
     case 'TIMEOUT':

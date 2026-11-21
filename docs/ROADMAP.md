@@ -1,6 +1,6 @@
 # Roadmap – Stock & ETF Analyzer
 
-> Frissítve: 2026-11-21 (PHASE 03 vége). Minden fázis külön chatben fut, a `stock_etf_analyzer_prompts` csomag `NN_*.md` promptja alapján.
+> Frissítve: 2026-11-21 (PHASE 04A vége). Minden fázis külön chatben fut, a `stock_etf_analyzer_prompts` csomag `NN_*.md` promptja alapján.
 > **Fázisszabály:** a következő fázis csak akkor indul, ha az előző befejezési feltételei teljesültek, vagy a hiányok a KNOWN_ISSUES-ban dokumentálva vannak.
 > **Verzió:** a promptok egy része SDK 57-et említ. Mindenhol **SDK 58** értendő (D-020).
 
@@ -11,7 +11,7 @@
 | 01 | Követelmények és architektúra | **KÉSZ** (2026-11-21) | – |
 | 02 | Projekt setup | **KÉSZ** (2026-11-21) | **M1 Futó váz ✅** |
 | 03 | Architektúra és domain modell | **KÉSZ** (2026-11-21) | |
-| 04 | Adatforrások, proxy és deviza – **két chatben: 04A + 04B** (D-028) | NEM KEZDŐDÖTT – **04A következik** | M2 Adat a csövön |
+| 04 | Adatforrások, proxy és deviza – **két chatben: 04A + 04B** (D-028) | **04A KÉSZ** (2026-11-21) – **04B következik** | M2 Adat a csövön |
 | 05 | Pénzügyi calculation engine | NEM KEZDŐDÖTT | |
 | 06 | Részvény fundamentális elemzés | NEM KEZDŐDÖTT | |
 | 07 | Értékelés és DCF | NEM KEZDŐDÖTT | |
@@ -159,6 +159,22 @@ Minden fázis közös lezárása (CLAUDE.md):
   - A proxy lokálisan fut.
   - A spike eredménye a D-004-ben.
   - Átadás: `docs/handoffs/phase-04a-handoff.md`.
+- **Eredmény (2026-11-21): KÉSZ.**
+  - Proxy váz: 5 API route (`health`, `fx`, `securities/{isin}/listings`, `stocks/{id}/financials`, `instruments/{id}/quote`), hosztfüggetlen handlerek, kimenet-önellenőrzés a közös contract-sémával (D-044).
+  - `MarketDataProvider` szerződés (képességenként külön metódus, `capabilitiesOf`), `ProviderRegistry` live XOR mock (D-045).
+  - Adapterek: `sec-edgar` (12 valós cég fixture-je, D-043), `ecb-fx`, `openfigi` (igazolt exchCode → MIC, D-042), `mock`.
+  - Kliens: `ProxyMarketDataGateway`, `ProxyFxGateway`, proxy HTTP-kliens; `FxGateway` port; use case-ek: `convertMoney` (FxService, D-046), `getSecurityListings`, `getFinancialStatements`.
+  - Spike: lokálisan igazolva, EAS-próbatelepítés nem készült; U-03 megválaszolva (D-004 frissítve).
+  - Ellenőrzés: `npm run check` exit 0, **228/228 teszt** (19 suite); `expo export` web (szerver-bundle) és Android OK; a kliens-bundle-ben nincs szerverkód és titok.
+  - Új döntések: D-042…D-048. Új ismert problémák: KI-17…KI-29.
+  - **Eltérés a tervtől:** a `/search` végpont a 04B-be került (FMP/EODHD kereső kell hozzá).
+- **A PHASE 04B kapcsolódási pontjai (PHASE 04A-ból):**
+  - Új adapterek: `src/server/providers/fmp/`, `src/server/providers/eodhd/` – a `MarketDataProvider` metódusait valósítják meg (`getQuote`, `getPriceHistory`, …); profil/osztalék/ETF-metódus a saját domain-típusával együtt kerül be.
+  - A `findProvider` (első találat) helyére a `ProviderRouter` jön (`src/server/routing/`), a regiszter `providers` listájára építve.
+  - Env: `FMP_API_KEY`, `EODHD_API_KEY`, `FMP_PLAN`, `EODHD_PLAN` → `src/server/env.ts` bővítése (érték soha nem kerül naplóba vagy health-válaszba).
+  - A `ListingCandidate.tradingCurrency` kitöltése és az ISIN → US listing (KI-21, KI-22).
+  - Hibák: a 402 már `RATE_LIMITED`-re képződik; a `QUOTA_EXHAUSTED`/`PLAN_LIMIT` megkülönböztetéséhez a `CAPABILITY_UNAVAILABLE` mellé új kód vagy `unavailableReason` mező kellhet (contract-bővítés, visszafelé kompatibilisen).
+  - Tesztminta: `fakeFetch` + `loadFixture` (`src/server/testing/test-helpers.ts`), és a végponttól végpontig minta (`src/__tests__/proxy-integration.test.ts`).
 
 #### 04B – FMP, EODHD, routing és kvóta
 - **Benne:**

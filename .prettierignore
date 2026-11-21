@@ -10,3 +10,6 @@ expo-env.d.ts
 
 # A Markdown dokumentációt kézzel formázzuk (magyar szöveg, táblázatok) – a Prettier nem írja át.
 *.md
+
+# Rögzített szolgáltatói válaszok (teszt-fixture): nyers adat, nem formázzuk újra (PHASE 04A).
+**/__fixtures__/**
