@@ -1,10 +1,21 @@
 # Ismert problémák, kockázatok, ismeretlenek – Stock & ETF Analyzer
 
-> Frissítve: 2026-11-22 (PHASE 09 vége). Valószínűség (V) és hatás (H) skálája: **A** = Alacsony, **K** = Közepes, **M** = Magas.
+> Frissítve: 2026-11-22 (PHASE 10 vége). Valószínűség (V) és hatás (H) skálája: **A** = Alacsony, **K** = Közepes, **M** = Magas.
 
 ## Blokkolók
 
-**Nincs blokkoló a PHASE 10 indításához.** A PHASE 10 (score és döntés) a PHASE 06–09 kimeneteire épít: részvény-mutatók, DCF, `EtfAnalysis.features` és a `PortfolioAnalysis` (koncentráció, kitettség, kockázat a `reliability` címkével). A hiányzó értékek mindenhol nem-OK státuszok okkal – a score-nak nem szabad 0-nak venni őket.
+**Nincs blokkoló a PHASE 11 indításához.** A PHASE 11 (AI-magyarázó) bemenete az `InstrumentEvaluation` (score-kártya, szabálynyom, `drivers`, confidence, thesis) + a PHASE 06–09 mutatói. Az AI csak magyaráz: a pontot, a címkét és a confidence-t nem módosíthatja (`aiInvolvement: 'none'` a PHASE 10 kimenetében).
+
+## PHASE 10 – ismert problémák és leletek (2026-11-22)
+
+| ID | Leírás | Hatás | Állapot / teendő | Fázis |
+|---|---|---|---|---|
+| KI-83 | **Portfólió-kontextus csak közvetlen súllyal:** a túlsúly-jelzés (`portfolioWeight`) a PHASE 09 `PositionAnalysis.weight` mezőjéből jön; az ETF-eken át meglévő (look-through) kitettség nem számít bele. | K | Tudatos (D-075/2). Bővítés: ISIN szerinti teljes kitettség a `concentration.singleNames`-ből (ehhez a részvény ISIN-je kell az elemzésben). | 12/14 |
+| KI-84 | **MOAT nem pontozott, a Menedzsment csak proxy:** a versenyelőnyhöz nincs gépileg pontozható, irányt hordozó forrásolt bemenet; a Menedzsment kategória egyetlen mutatója a részvényszám 3 éves változása (tény, nem a vezetés minősítése). | K | Tudatos (D-073/6, /8). Lehetőség: strukturált, forrásolt felhasználói értékelés (pl. „erős / közepes / gyenge” + kötelező hivatkozás) kategória-szabállyal – külön döntéssel. | később |
+| KI-85 | **Iparág-független horgonyok:** a kiinduló küszöbök széles piaci konvenciók; bank, biztosító, közmű, REIT vagy korai növekedési cég esetén torzítanak. Bankoknál az ipari mutatók eleve hiányoznak → `NOT_RATED` (valós JPM-fixture). | K | Tudatos (D-073/9). A konfiguráció felülírható; iparági konfigurációs készletek (és szektor szerinti kiválasztás) külön döntéssel. | 14+ |
+| KI-86 | **Nincs kalibráció / visszateszt:** a horgonyok, súlyok és döntési küszöbök szakmai konvenciók, nem historikus hozamokon optimalizált értékek; a címkéknek nincs igazolt előrejelző ereje (és ilyet a rendszer nem is állít). | M | Tudatos (D-075/5, minden kimenetben `disclaimer`). Visszateszthez hosszú, túlélési torzítástól mentes adat kellene (fizetős, DP-05). | – |
+| KI-87 | **ETF pénzösszeg-küszöbök csak EUR/USD/GBP:** az AUM és a napi forgalom más pénznemben (pl. HUF, CHF, GBX) nem pontozott (nincs csendes FX). | A | Enyhítés: az ETF-elemzésnél `displayCurrency: 'EUR'` (az AUM átváltva érkezik). Bővítés: további pénznemek a konfigurációba. | 12 |
+| KI-88 | **A béta szolgáltatói érték:** a részvény kockázati dimenziója az FMP-profil bétájából jön (módszertana nem közölt); saját béta indexsor nélkül nem számolható (KI-69). Free csomagban nem US részvénynél a profil nem elérhető → a kockázati dimenzió `null` (a döntési szabályok nem használják, csak a plafon). | A | Dokumentált (D-062/3, D-075/1). | 13, 15 |
 
 ## PHASE 09 – ismert problémák és leletek (2026-11-22)
 
@@ -50,7 +61,7 @@
 
 | ID | Probléma / lelet | Hatás | Állapot / teendő | Felelős fázis |
 |---|---|---|---|---|
-| KI-50 | **Eltérő jegyzési és beszámolói pénznem** (ADR, pl. TSM: TWD kimutatás, USD ár) esetén az ár-alapú szorzók (P/E, P/S, P/B, P/FCF, FCF-hozam, EV/EBITDA, PEG) `MISSING`. | K | Tudatos (D-062/4): nincs csendes FX. **PHASE 07 (D-065/4):** nem került be; a DCF a beszámolói pénznemben számol, eltérő jegyzési pénznemnél a MOS `MISSING` (ár felülírással megadható). **PHASE 09:** a többdevizás PORTFÓLIÓ-értékelés elkészült (`analyzePortfolio`, D-072/3), de a részvény-szorzók FX-e nem a portfólió része → nem került be. **Teendő:** a `convertMoney` bekötése a részvény-értékelésbe (aszinkron FX, dátum + forrás) – PHASE 10 előtt vagy a PHASE 12 UI-val. | 10/12 |
+| KI-50 | **Eltérő jegyzési és beszámolói pénznem** (ADR, pl. TSM: TWD kimutatás, USD ár) esetén az ár-alapú szorzók (P/E, P/S, P/B, P/FCF, FCF-hozam, EV/EBITDA, PEG) `MISSING`. | K | Tudatos (D-062/4): nincs csendes FX. **PHASE 07 (D-065/4):** nem került be; a DCF a beszámolói pénznemben számol, eltérő jegyzési pénznemnél a MOS `MISSING` (ár felülírással megadható). **PHASE 09:** a többdevizás PORTFÓLIÓ-értékelés elkészült (`analyzePortfolio`, D-072/3), de a részvény-szorzók FX-e nem a portfólió része → nem került be. **PHASE 10:** a score ezt adathiányként kezeli (az Értékelés kategória kimarad vagy részleges, a confidence csökken; a DCF-jelzések ismeretlenek) – nem került be. **Teendő:** a `convertMoney` bekötése a részvény-értékelésbe (aszinkron FX, dátum + forrás) – a PHASE 12 UI-val. | 12 |
 | KI-51 | **Becsült `totalDebt`:** ha egy rövid lejáratú komponensnek nincs ténye, 0-nak vesszük (`estimated`, megnevezve) – pl. MSFT FY2026, KO Q3 2026. **Bankoknál, biztosítóknál és IFRS-filereknél** (JPM, BRK-B, TSM) a `totalDebt` `MISSING`. | K | Dokumentált (D-059). Bővítés: további tagek (pl. `NotesPayable`, `LongTermDebtAndFinanceLeaseObligations`, IFRS `Bonds…`) valós fixture-rel igazolva. | 07, 15 |
 | KI-52 | **TTM EPS** gyakorlatilag mindig `MISSING`: a származtatott Q4 EPS nem additív (D-060/2), és a 10-K nem ad Q4 EPS-t. | K | Tudatos. A szorzók ezért a legutóbbi FY EPS-ével számolnak (D-062/1). **PHASE 07 döntés (D-065/3):** nem vezetjük be (vegyes alapú szorzót adna, a TTM cash flow is hiányos – KI-18); a szorzók FY-alapúak maradnak. | 13, 15 |
 | KI-53 | A **split-gyanú heurisztika** (részvényszám > 1,5× változás, D-061/2) nagy akvizíciós kibocsátásnál téves riasztást adhat (az EPS-növekedés / CAGR ekkor `NOT_MEANINGFUL`, nem hibás szám). | A | Elfogadva (konzervatív: inkább nincs érték, mint vegyes bázisú). Javítás: split-események forrásból (FMP `splits`) – PHASE 07/13. | 07, 13 |
@@ -160,7 +171,7 @@ A DP-01…DP-04 döntési pontokra 2026-11-21-én megjött a válasz. A DP-05 tu
 | R-07 | **Proxy visszaélés:** fiók nélkül bárki hívhatja a végpontot, aki ismeri az URL-t. | K | K | Allowlist, validáció, rate limit, cache, AI kill switch és napi keret; később app attestation | 04, 11, 15 |
 | R-08 | Az EAS Hosting rate-limit/KV képessége nem ismert (U-03). | K | K | Spike a 04-ben; tartalék: Cloudflare Workers (D-004) **04A:** U-03 megválaszolva: nincs KV/rate-limit primitív → memóriabeli limiter (KI-23); a Cloudflare-tartalék indoka erősödött. | 04 |
 | R-09 | AI-költség és hallucináció. | K | M | Strukturált kimenet + zod; `basedOn`; csak számított bemenet; cache; költségkorlát; az AI opcionális | 11 |
-| R-10 | Jogi: a BUY/SELL címkék nyilvános kiadásnál befektetési ajánlásnak minősülhetnének (MiFID II / MAR, jogi ellenőrzés kellene). **Saját használatnál nem releváns** (D-008); csak akkor, ha a DP-02 megváltozik. | A | A | Jogi nyilatkozat; konfigurálható címkék | 10 |
+| R-10 | Jogi: a BUY/SELL címkék nyilvános kiadásnál befektetési ajánlásnak minősülhetnének (MiFID II / MAR, jogi ellenőrzés kellene). **Saját használatnál nem releváns** (D-008); csak akkor, ha a DP-02 megváltozik. | A | A | Jogi nyilatkozat; konfigurálható címkék. **PHASE 10: megvalósítva** – a címkeszöveg konfigurálható, minden értékelés `disclaimer`-t ad (elemzési kategória, nem előrejelzés, nem tanács), `NOT_RATED` adathiánynál. | 10 ✅ |
 | R-11 | Késői integráció: a UI csak a 12-ben jön, így a hibák későn derülnek ki. | K | K | Use case-integrációs tesztek a 04-től; opcionális dev-diagnosztika képernyő (ROADMAP kiegészítések 2.) | 04–11 |
 | R-12 | Lebegőpontos kerekítési hiba. | A | K | Kerekítés csak a megjelenítésnél; tűréses tesztek; D-009 felülvizsgálata a 09-ben | 05, 09 |
 | R-13 | Adatvédelem: a portfólió összetétele AI-hívással az LLM-szolgáltatóhoz kerül. | K | K | Explicit, egyszeri beleegyezés; minimális DTO (súlyok és típusok, összegek nélkül, ha elég) | 11 |

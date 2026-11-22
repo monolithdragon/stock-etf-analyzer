@@ -349,3 +349,21 @@ export function marginOfSafety(input: {
     return bad ?? calcOk((intrinsicValue - price) / intrinsicValue);
   });
 }
+
+/**
+ * Az az ár, amelynél a biztonsági sáv pontosan `marginOfSafety` (PHASE 10, D-073):
+ * ár = belső érték × (1 − MOS). A MOS-definíció inverze (`marginOfSafety`). A döntés
+ * érvénytelenítési feltételeihez (pl. „ha az ár X fölé megy”). Belső érték ≤ 0 vagy MOS ≥ 1 →
+ * `INVALID_INPUT`.
+ */
+export function priceAtMarginOfSafety(input: {
+  readonly intrinsicValue: NumericInput;
+  readonly marginOfSafety: NumericInput;
+}): CalcResult<number> {
+  return chainCalc(requireInputs(input), ({ intrinsicValue, marginOfSafety: mos }) => {
+    const bad = mustBePositive('intrinsicValue', intrinsicValue);
+    if (bad !== null) return bad;
+    if (mos >= 1) return calcInvalidInput(`A MOS (${mos}) 1 alatti kell legyen.`);
+    return calcOk(intrinsicValue * (1 - mos));
+  });
+}

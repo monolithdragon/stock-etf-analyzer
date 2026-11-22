@@ -16,6 +16,7 @@ import {
   marginOfSafety,
   marketCap,
   pegRatio,
+  priceAtMarginOfSafety,
   priceToBook,
   priceToEarnings,
   priceToFreeCashFlow,
@@ -283,5 +284,27 @@ describe('marginOfSafety', () => {
   });
   it.each([0, -5])('belső érték = %p → INVALID_INPUT', (intrinsicValue) => {
     expect(marginOfSafety({ intrinsicValue, price: 80 }).status).toBe('INVALID_INPUT');
+  });
+});
+
+describe('ár adott biztonsági sávnál (PHASE 10, D-073)', () => {
+  it('a MOS-definíció inverze: P = IV × (1 − MOS)', () => {
+    expect(okValue(priceAtMarginOfSafety({ intrinsicValue: 200, marginOfSafety: 0.25 }))).toBe(150);
+    expect(
+      okValue(priceAtMarginOfSafety({ intrinsicValue: 200, marginOfSafety: -0.1 })),
+    ).toBeCloseTo(220, 10);
+    const price = okValue(priceAtMarginOfSafety({ intrinsicValue: 137.5, marginOfSafety: 0.3 }));
+    expect(okValue(marginOfSafety({ intrinsicValue: 137.5, price }))).toBeCloseTo(0.3, 12);
+  });
+  it('IV ≤ 0 vagy MOS ≥ 1 → INVALID_INPUT; hiány → MISSING', () => {
+    expect(priceAtMarginOfSafety({ intrinsicValue: 0, marginOfSafety: 0.2 }).status).toBe(
+      'INVALID_INPUT',
+    );
+    expect(
+      failureReason(priceAtMarginOfSafety({ intrinsicValue: 10, marginOfSafety: 1 })),
+    ).toContain('1 alatti');
+    expect(priceAtMarginOfSafety({ intrinsicValue: null, marginOfSafety: 0.2 }).status).toBe(
+      'MISSING',
+    );
   });
 });

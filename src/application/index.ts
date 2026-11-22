@@ -10,6 +10,7 @@ import type {
   RecalculateStockValuation,
 } from './use-cases/analyze-stock-valuation';
 import type { ConvertMoney } from './use-cases/convert-money';
+import type { EvaluateEtf, EvaluateStock } from './use-cases/evaluate-instrument';
 import type { GetListingQuote } from './use-cases/get-listing-quote';
 import type {
   GetDividendHistory,
@@ -52,6 +53,16 @@ export {
   PORTFOLIO_ANALYSIS_DISCLAIMER,
 } from './portfolio/portfolio-analysis';
 export { MAX_FORWARD_FILL_DAYS, MAX_CORRELATION_POSITIONS } from './portfolio/portfolio-history';
+export * from './use-cases/evaluate-instrument';
+export * from './scoring/types';
+export {
+  buildStockEvaluation,
+  buildStockFeatures,
+  buildStockFlags,
+  stockPriceInvalidation,
+} from './scoring/stock-evaluation';
+export { buildEtfEvaluation, buildEtfFeatures } from './scoring/etf-evaluation';
+export { portfolioWeightFeature } from './scoring/portfolio-context';
 
 /** A UI számára elérhető szolgáltatások – a composition root (`src/config/container.ts`) állítja elő. */
 export interface AppServices {
@@ -74,4 +85,8 @@ export interface AppServices {
   readonly analyzeEtf: AnalyzeEtf;
   /** PHASE 09: portfólióelemzés (pozíciók, P/L két nézetben, kitettség, koncentráció, historikus). */
   readonly analyzePortfolio: AnalyzePortfolio;
+  /** PHASE 10: részvény-score és determinisztikus döntés (fundamentumok + DCF lekéréssel). */
+  readonly evaluateStock: EvaluateStock;
+  /** PHASE 10: ETF-score és döntés (külön konfiguráció, a részvénytől elválasztva). */
+  readonly evaluateEtf: EvaluateEtf;
 }
