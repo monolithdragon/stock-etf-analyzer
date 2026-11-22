@@ -34,7 +34,7 @@ Mobilalkalmazás (Expo SDK 58, React Native, TypeScript) részvények, ETF-ek é
 | **Portfólió és kockázat** | **Kész** (PHASE 09, D-072): `analyzePortfolio`; átlagáras könyvelés lépésenkénti naplóval; két P/L-nézet (natív / bázis: árhatás + FX-hatás; ráta: rögzített → ECB ügyleti napi → hiány); súlyok; visszakövethető összesítések; kitettség közvetlen és look-through nézetben; koncentráció (top N, HHI, egyedi részvény ISIN szerint, szektor/ország); historikus TWR + kockázat a tényleges mennyiségekből (csak kérésre); korreláció; ETF-átfedés adatmodell; napló-validáció. **Korlát:** többdevizás historikushoz nincs FX-idősor végpont (KI-77); tárolás memóriában. UI nincs (PHASE 12). |
 | **Score és döntés** | **Kész** (PHASE 10, D-073…D-075): új `src/scoring` réteg (tiszta szabálymotor); külön részvény- (8 kategória, MOAT 0 súllyal) és ETF-score (9 kategória) konfigurált, automatikusan ellenőrzött súlyokkal; kategóriánkénti pont, indoklás, hiányok, adatminőség, frissesség; hiányzó adat: kimarad + újranormalizálás minimummal + confidence-csökkentés (soha nem 0); determinisztikus, többdimenziós döntés (kapu → szabályok → plafonok, szabálynyom), konfigurálható címkék; `AnalysisConfidence` (nem hozam-valószínűség); thesis risks + érvénytelenítés (DCF-árszinttel); `evaluateStock`, `evaluateEtf`. Az AI nem vesz részt. UI nincs (PHASE 12). |
 | Tárolás, cache | **Nincs** – PHASE 13 (SQLite, proxy cache) |
-| Git | `main`-en a PHASE 09 merge (`296eeba`, PR #5); a PHASE 10 a **`phase-10`** branchen, **commit nélkül** (a commit a tulajdonos jóváhagyásával) |
+| Git | `main`-en a PHASE 09 merge (`296eeba`, PR #5); a PHASE 10 a **`phase-10`** branchen **commitolva** (`6721be3`); PR/merge: a tulajdonos dönt |
 
 Fázisonkénti állapot: [ROADMAP.md](ROADMAP.md).
 
@@ -133,7 +133,7 @@ Teljes lista: [DECISIONS.md](DECISIONS.md).
 | (04A) | A SEC User-Agent kapcsolattartó e-mailjét a tulajdonos a `.env.local`-ba írta |
 
 ## Nyitott kérdések
-- **Commit:** a PHASE 10 a `phase-10` branchen, commit nélkül – a commit és a PR a tulajdonos jóváhagyásával. A PHASE 09 már a `main`-en (PR #5, merge `296eeba`).
+- **Commit:** a PHASE 10 tulajdonosi jóváhagyással commitolva a `phase-10` branchen (`6721be3`); a PR és a merge a tulajdonos döntése. A PHASE 09 már a `main`-en (PR #5, merge `296eeba`).
 - **Ellentmondás-javítás:** a PHASE 09 végi PROJECT_STATE „PR #5 nyitva” állapotot írt; a PHASE 10 indulásakor a PR #5 már merge-ölve volt (`296eeba`).
 - **Ellentmondás-javítás:** a PHASE 07 handoff „commit nélkül” állapotot írt, de a PHASE 07 már commitolva és a `main`-be merge-ölve volt (`aee88fc`, merge `3fc0258`).
 - **Eldöntve (2026-11-22):** D-070 kockázati megbízhatósági címke (megvalósítva); D-071 N-PORT adapter helyett kibocsátói holdings-fájl import (PHASE 13, KI-74).

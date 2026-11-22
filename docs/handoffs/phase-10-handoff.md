@@ -55,7 +55,7 @@ Részletek: [../KNOWN_ISSUES.md](../KNOWN_ISSUES.md) „PHASE 10” szakasz.
 - **KI-50 (nyitott):** az ADR-ek ár-alapú szorzói `MISSING` → az Értékelés kategória hiányos; a PHASE 12-vel.
 
 ## 6. Nyitott kérdések
-- **Commit:** a PHASE 10 a `phase-10` branchen van, **commit nélkül**. A commit és a PR a tulajdonos jóváhagyásával készül. Javasolt üzenet:
+- **Commit:** tulajdonosi jóváhagyással commitolva a `phase-10` branchen (`6721be3`); a PR és a merge a tulajdonos döntése. Üzenet:
   `feat: PHASE 10 – score és döntési engine (src/scoring réteg, külön részvény/ETF-score konfigurált súlyokkal, hiányzó adat D-074, determinisztikus döntés plafonokkal, AnalysisConfidence, thesis risks és érvénytelenítés)`
 - **Súlyok és küszöbök:** a kiinduló értékek szakmai konvenciók. Ha a tulajdonos más hangsúlyt szeretne (pl. kisebb súlyt az Értékelésnek, más P/E-horgonyt), azt a konfigurációban kell módosítani. Ilyenkor a golden teszteket frissíteni kell, és a változást a DECISIONS-ben dokumentálni.
 - A régebbi nyitott pontok (EAS-próbatelepítés, FMP-keret és ToS, DP-05) változatlanok, és nem blokkolják a PHASE 11-et.
