@@ -1,0 +1,46 @@
+{
+  "_fixture": {
+    "source": "FMP stable",
+    "url": "https://financialmodelingprep.com/stable/historical-price-eod/non-split-adjusted?symbol=NVDA&from=2024-06-06&to=2024-06-11",
+    "recordedAt": "2026-11-21T16:00:00Z",
+    "note": "VALÓS válasz (élő próbahívás a tulajdonos free kulcsával), teszt-fixture-nek megvágva. A kulcs NEM szerepel benne. Az adjClose mező itt NYERS ár (2024-06-07: 1208.9)."
+  },
+  "response": [
+    {
+      "symbol": "NVDA",
+      "date": "2024-06-11",
+      "adjOpen": 121.77,
+      "adjHigh": 122.87,
+      "adjLow": 118.74,
+      "adjClose": 120.91,
+      "volume": 222551200
+    },
+    {
+      "symbol": "NVDA",
+      "date": "2024-06-10",
+      "adjOpen": 120.37,
+      "adjHigh": 123.1,
+      "adjLow": 117.01,
+      "adjClose": 121.79,
+      "volume": 314162650
+    },
+    {
+      "symbol": "NVDA",
+      "date": "2024-06-07",
+      "adjOpen": 1197.7,
+      "adjHigh": 1216.9,
+      "adjLow": 1180.2,
+      "adjClose": 1208.9,
+      "volume": 41238600
+    },
+    {
+      "symbol": "NVDA",
+      "date": "2024-06-06",
+      "adjOpen": 1240.5,
+      "adjHigh": 1255.9,
+      "adjLow": 1183.2,
+      "adjClose": 1210,
+      "volume": 66469619
+    }
+  ]
+}

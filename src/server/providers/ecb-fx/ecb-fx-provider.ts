@@ -121,6 +121,8 @@ export function createEcbFxProvider(deps: EcbFxProviderDeps): MarketDataProvider
       name: ECB_FX_SOURCE.sourceName,
       kind: 'live',
       configured: true,
+      plan: null,
+      coverage: 'Az ECB által közölt ~30 deviza EUR ellen (HUF, USD, GBP, CHF, JPY is).',
       note: 'Csak EUR bázis; munkanaponként ~16:00 CET. „Csak tájékoztató célra” (ECB).',
     },
 

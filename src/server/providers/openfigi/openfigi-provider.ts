@@ -139,6 +139,8 @@ export function createOpenFigiProvider(deps: OpenFigiProviderDeps): MarketDataPr
       name: OPENFIGI_SOURCE.sourceName,
       kind: 'live',
       configured: true,
+      plan: null,
+      coverage: 'Globális ISIN → jegyzés; csak az igazolt exchCode → MIC tőzsdék (pénznem nélkül).',
       note:
         deps.apiKey === null
           ? 'Kulcs nélkül: 25 kérés/perc. Jegyzési pénznemet nem ad.'

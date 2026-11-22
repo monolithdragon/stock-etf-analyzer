@@ -561,3 +561,58 @@ A tulajdonos válaszai:
   - éves: 400 napig FRESH, 800 napig STALE;
   - utána EXPIRED.
   - Az OpenFIGI-jegyzésnek nincs `asOf`-ja, ezért UNKNOWN.
+
+
+## PHASE 04B – FMP, EODHD, routing és kvóta (2026-11-21)
+
+### D-049 – ProviderRouter és a véglegesített routing-tábla
+- **Dátum:** 2026-11-21 · **Státusz:** Elfogadva (a D-024 és a DATA_SOURCES 5.2–5.3 megvalósítása)
+- **Döntés:**
+  - A 04A `findProvider` (első találat) helyett `ProviderRouter` (`src/server/routing/provider-router.ts`): képesség × piac (`US` | `EU` | `GLOBAL` | `ANY`, a MIC-ből) → szolgáltató-lánc.
+  - Tábla: quote / ártörténet / osztalék: US `fmp → eodhd`, EU és globális `eodhd`; profil: US `fmp`, máshol `PLAN_LIMIT`; kimutatás: US `sec-edgar`, máshol `PLAN_LIMIT`; jegyzések: `openfigi → eodhd`; keresés: `fmp → eodhd`; FX: `ecb-fx`; ETF-metaadat/holdings: sehol (`PLAN_LIMIT`).
+  - Fallback: NOT_FOUND, RATE_LIMITED, TIMEOUT, NETWORK, UPSTREAM (a hibás válasz is, naplózva), UNAVAILABLE esetén. VALIDATION esetén nem.
+  - A nem konfigurált és a jegyzést nem lefedő (`covers`) szolgáltatót hálózati hívás nélkül átugorja.
+  - A válasz `warnings` mezője megmondja, ha tartalék forrás adott választ; a napló `fallbackFrom` mezője rögzíti a sikertelen kísérleteket. A provenance mindig a ténylegesen használt forrás. Egy válasz = egy forrás (nincs összefésülés).
+- **Viselkedésváltozás (contract):** nem US kimutatás eddig `422 UNSUPPORTED_MARKET` volt, most `501 CAPABILITY_UNAVAILABLE` + `unavailableReason: PLAN_LIMIT` (fizetős EODHD Fundamentals-szel elérhető volna, D-027).
+- **Indok:** a `sec-edgar` ticker → CIK leképezése nem US jegyzésnél hamis céget adhat (pl. `SAP@XETR` vs. a US `SAP` ADR), ezért csak US-re route-olunk.
+
+### D-050 – Ártörténet-korrekció: explicit fajta (`NONE` | `SPLIT` | `SPLIT_DIVIDEND`)
+- **Dátum:** 2026-11-21 · **Státusz:** Elfogadva
+- **Döntés:** a `PriceSeries.adjusted: boolean` helyett `adjustment: PriceAdjustment`, és a sorozat `notes` mezőt kap.
+  - Élő próba (NVDA 10:1 split, 2024-06-10): FMP `full` `close` = split-korrigált (120.89), `non-split-adjusted` `adjClose` = nyers (1208.9), `dividend-adjusted` = split + osztalék (120.55). EODHD: `close` nyers (doksi, KI-33), `adjusted_close` split + osztalék (ASML-en igazolt eltérés).
+  - Az EODHD a `SPLIT` fajtát nem adja → `UNAVAILABLE / NOT_COVERED` (a router továbbléphet).
+  - A végpont alapértelmezése: `split_dividend` (mindkét élő forrás adja).
+- **Alternatíva:** a bool megtartása. Elvetve: a két forrás „adjusted” értéke más jelentésű, csendes keverést okozna (R-21).
+
+### D-051 – Csomagmátrix env-ből; napi kvóta-költségvetés
+- **Dátum:** 2026-11-21 · **Státusz:** Elfogadva (a D-027 megvalósítása)
+- **Döntés:**
+  - `FMP_PLAN` (`free` | `starter`) és `EODHD_PLAN` (`free` | `eod-all-world`) → `PlanSpec` (`src/server/routing/plans.ts`): bekapcsolt képességek, lefedettség, napi kvóta, ártörténet-ablak. Ismeretlen érték → `free` + figyelmeztetés; nem igazolt (fizetős) sor → figyelmeztetés.
+  - A free sorok élő próbával igazoltak: EODHD 20/nap, 365 napos ablak; FMP csak US, 250/nap `[HARMADIK FÉL]`.
+  - Kvóta (`src/server/routing/quota.ts`): szolgáltatónként, UTC-napra; minden elindított hívást számol (konzervatív); a keresés (`low`) a keret 75%-áig fogyaszthat, a maradék az árfolyamé. Túllépésnél NEM indít hívást (`QUOTA_EXHAUSTED`).
+  - A számláló memóriabeli, folyamatonként (KI-23, KI-32), a `providers/status` `scope: "instance"`-ként jelzi.
+- **Igazolás:** teszt mutatja, hogy az `EODHD_PLAN` átírása (kód nélkül) megszünteti az 1 éves levágást.
+
+### D-052 – A jegyzés pénzneme: forrásból vagy helyszíni szabályból, soha nem kitalálva
+- **Dátum:** 2026-11-21 · **Státusz:** Elfogadva
+- **Döntés:** sem az FMP quote, sem az EODHD `real-time`/`eod` válasza nem közöl pénznemet. Sorrend:
+  1. **Helyszíni szabály** csak egypénznemű tőzsdére: US tőzsdék → USD; Xetra → EUR (a Xetra EUR-ban kereskedik; a keresőben is minden XETRA-jegyzés EUR).
+  2. Egyébként az **EODHD kereső** (`/api/search/{kód}?exchange=…`, `Code` + `Exchange` pontos egyezés), 24 órás memóval.
+  3. Ha egyik sem ad pénznemet: `NOT_FOUND` – nem találjuk ki.
+- **Indok:** az LSE-n ugyanaz az ETF GBX-ben, GBP-ben és USD-ben is jegyzett (ISF/ISFU, VWRP/VWRA – élő keresés), így tőzsdéből nem következtethető.
+- **Osztalék:** az EODHD soronként adja a pénznemet (ISF: ár GBX, osztalék GBP) – megtartjuk, és eltérés esetén megjegyzést adunk; az FMP osztaléknál (csak US) USD a helyszíni szabály, a `notes` kimondja.
+
+### D-053 – `UNAVAILABLE` hibafajta és `unavailableReason` a szerződésben
+- **Dátum:** 2026-11-21 · **Státusz:** Elfogadva
+- **Döntés:**
+  - Új `AppError` fajta: `UNAVAILABLE` + `reason: PLAN_LIMIT | NOT_COVERED | QUOTA_EXHAUSTED`. Nem újrapróbálható (`isRetryable: false`).
+  - HTTP: `CAPABILITY_UNAVAILABLE` + opcionális `unavailableReason` (visszafelé kompatibilis); kvótánál 503, egyébként 501. A kliens ok nélküli `CAPABILITY_UNAVAILABLE`-t a 04A szerint `MISSING_DATA(source)`-ként kezel.
+  - A közös `requestJson` 402-je: `RATE_LIMITED` helyett `UNAVAILABLE / QUOTA_EXHAUSTED` (EODHD-doksi: napi keret). Az FMP 402-je saját leképezéssel `PLAN_LIMIT` (élő próba; ismeretlen tickerre is ezt adja, KI-30). EODHD 403 → `PLAN_LIMIT`, 401 → kulcshiba (kulcs nélküli üzenettel).
+
+### D-054 – Új domain-típusok és végpontok; szerverkontextus a `globalThis`-en
+- **Dátum:** 2026-11-21 · **Státusz:** Elfogadva
+- **Döntés:**
+  - Domain: `DividendEvent`/`DividendHistory` (eseményenkénti `Money`, 0 vagy negatív összeg nem esemény), `InstrumentProfile` (lapos, forrásközeli, hiány = `null`, ETF-metaadat nélkül), `InstrumentSearchHit`/`InstrumentSearchResult` (csak igazolt MIC, a kihagyások okonként megszámolva, `truncated` is).
+  - Végpontok: `GET /api/v1/instruments/{id}/prices`, `/profile`, `/dividends`, `GET /api/v1/search?q=`, `GET /api/v1/providers/status`. A tervezett `corporate-actions` helyett `dividends` (split-végpont nincs bekötve – a név ne ígérjen többet).
+  - Kliens: `MarketDataGateway` + 4 use case (`getPriceHistory` saját frissesség-szabállyal: 4 nap FRESH, 14 nap STALE `[FELTÉTELEZÉS – PHASE 13]`; `getInstrumentProfile`; `getDividendHistory`; `searchInstruments`).
+  - A szerverkontextus singletonja a `globalThis`-en él, mert az Expo route-onként külön bundle-t fordít (KI-31).

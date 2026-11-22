@@ -1,0 +1,115 @@
+{
+  "_fixture": {
+    "source": "FMP stable",
+    "url": "https://financialmodelingprep.com/stable/search-symbol?query=SAP",
+    "recordedAt": "2026-11-21T16:00:00Z",
+    "note": "VALÓS válasz (élő próbahívás a tulajdonos free kulcsával), teszt-fixture-nek megvágva. A kulcs NEM szerepel benne. Az első 15 sor (AMEX, CRYPTO, ZAc is)."
+  },
+  "response": [
+    {
+      "symbol": "SAP",
+      "name": "SAP SE",
+      "currency": "USD",
+      "exchangeFullName": "New York Stock Exchange",
+      "exchange": "NYSE"
+    },
+    {
+      "symbol": "SAPH",
+      "name": "SAP SE ADRhedged",
+      "currency": "USD",
+      "exchangeFullName": "New York Stock Exchange Arca",
+      "exchange": "AMEX"
+    },
+    {
+      "symbol": "SAPX",
+      "name": "Seven Arts Entertainment, Inc.",
+      "currency": "USD",
+      "exchangeFullName": "Other OTC",
+      "exchange": "OTC"
+    },
+    {
+      "symbol": "SAPLF",
+      "name": "Sylvania Platinum Limited",
+      "currency": "USD",
+      "exchangeFullName": "Other OTC",
+      "exchange": "OTC"
+    },
+    {
+      "symbol": "SAPMY",
+      "name": "Saipem S.p.A.",
+      "currency": "USD",
+      "exchangeFullName": "Other OTC",
+      "exchange": "OTC"
+    },
+    {
+      "symbol": "SAPIF",
+      "name": "Saputo Inc.",
+      "currency": "USD",
+      "exchangeFullName": "Other OTC",
+      "exchange": "OTC"
+    },
+    {
+      "symbol": "SAPMD",
+      "name": "Saipem S.p.A.",
+      "currency": "USD",
+      "exchangeFullName": "Other OTC",
+      "exchange": "OTC"
+    },
+    {
+      "symbol": "SAPGF",
+      "name": "Sap Se",
+      "currency": "USD",
+      "exchangeFullName": "Other OTC",
+      "exchange": "OTC"
+    },
+    {
+      "symbol": "SAPMF",
+      "name": "Saipem S.p.A.",
+      "currency": "USD",
+      "exchangeFullName": "Other OTC",
+      "exchange": "OTC"
+    },
+    {
+      "symbol": "SAP.TO",
+      "name": "Saputo Inc.",
+      "currency": "CAD",
+      "exchangeFullName": "Toronto Stock Exchange",
+      "exchange": "TSX"
+    },
+    {
+      "symbol": "SAP.DE",
+      "name": "SAP SE",
+      "currency": "EUR",
+      "exchangeFullName": "Deutsche Börse",
+      "exchange": "XETRA"
+    },
+    {
+      "symbol": "SAPE.L",
+      "name": "Leverage Shares - -1x Apple",
+      "currency": "EUR",
+      "exchangeFullName": "London Stock Exchange",
+      "exchange": "LSE"
+    },
+    {
+      "symbol": "SAP.JO",
+      "name": "Sappi Limited",
+      "currency": "ZAc",
+      "exchangeFullName": "Johannesburg Stock Exchange",
+      "exchange": "JNB"
+    },
+    {
+      "symbol": "SAPL.L",
+      "name": "Leverage Shares - -1x Apple",
+      "currency": "GBp",
+      "exchangeFullName": "London Stock Exchange",
+      "exchange": "LSE"
+    },
+    {
+      "symbol": "SAPPUSD",
+      "name": "Sapphire USD",
+      "currency": "USD",
+      "exchangeFullName": "CCC",
+      "exchange": "CRYPTO"
+    }
+  ]
+}

@@ -1,8 +1,8 @@
 # PHASE 04 – Adatforrások, proxy és deviza (kezdőbarát útmutató)
 
-> Dátum: 2026-11-21 · Állapot: **04A KÉSZ**, 04B következik (D-028) · Előző: [phase-03-architecture-domain-model.md](phase-03-architecture-domain-model.md) · Átadás: [../handoffs/phase-04a-handoff.md](../handoffs/phase-04a-handoff.md)
+> Dátum: 2026-11-21 · Állapot: **KÉSZ (04A + 04B)** (D-028) · Előző: [phase-03-architecture-domain-model.md](phase-03-architecture-domain-model.md) · Átadás: [../handoffs/phase-04-handoff.md](../handoffs/phase-04-handoff.md) (04A: [../handoffs/phase-04a-handoff.md](../handoffs/phase-04a-handoff.md))
 
-Ez az útmutató lépésenként leírja, mi készült a PHASE 04A-ban, miért, és hogyan ellenőrizheted magad. A **teljes, aktuális kód a repóban van** a megadott útvonalakon. Itt a lényeget, a parancsokat és a várt eredményt mutatjuk meg. A PHASE 04B (FMP, EODHD, routing) a 04B végén új fejezetként kerül ide.
+Ez az útmutató lépésenként leírja, mi készült a PHASE 04A-ban, miért, és hogyan ellenőrizheted magad. A **teljes, aktuális kód a repóban van** a megadott útvonalakon. Itt a lényeget, a parancsokat és a várt eredményt mutatjuk meg. A PHASE 04B (FMP, EODHD, routing, kvóta) a [15. fejezetben](#15-phase-04b--fmp-eodhd-routing-és-kvóta) van.
 
 ## Tartalom
 0. [Szakszavak röviden](#0-szakszavak-röviden)
@@ -20,6 +20,7 @@ Ez az útmutató lépésenként leírja, mi készült a PHASE 04A-ban, miért, �
 12. [Build- és biztonsági ellenőrzés](#12-build--és-biztonsági-ellenőrzés)
 13. [Gyakori hibák és javításuk](#13-gyakori-hibák)
 14. [A 04A befejezésének feltételei](#14-befejezési-feltételek)
+15. [PHASE 04B – FMP, EODHD, routing és kvóta](#15-phase-04b--fmp-eodhd-routing-és-kvóta)
 
 ---
 
@@ -250,8 +251,8 @@ npx expo export --platform android --output-dir $env:TEMP\export-android
 | A SEC HTTP 403-at ad, vagy a health szerint `sec-edgar` nincs konfigurálva | hiányzik vagy hibás a `SEC_USER_AGENT`, vagy a dev szerver a `.env.local` előtt indult | írd be: `SEC_USER_AGENT="AppNév cím@domain.hu"`, majd indítsd újra a dev szervert |
 | `Port 8081 is unavailable` | már fut egy dev szerver | használd azt, vagy állítsd le (Ctrl+C), vagy indíts másik porton: `npx expo start --port 8082` |
 | A szerverkód módosítása után a régi viselkedés látszik | a dev szerver gyorsítótárazza a szerver-bundle-t | indítsd újra a dev szervert (KI-27) |
-| `CAPABILITY_UNAVAILABLE` az árfolyamnál | a 04A-ban nincs árforrás | várt viselkedés; PHASE 04B |
-| `UNSUPPORTED_MARKET` egy európai részvény kimutatásánál | a SEC csak US-filereket fed le | várt; nem US fundamentum: DATA_SOURCES 6. |
+| `CAPABILITY_UNAVAILABLE` az árfolyamnál | (04A) nem volt árforrás; (04B) hiányzó kulcs vagy kvóta | lásd a 15.8 fejezetet |
+| `UNSUPPORTED_MARKET` (04A) / `CAPABILITY_UNAVAILABLE` + `PLAN_LIMIT` (04B) egy európai részvény kimutatásánál | a SEC csak US-filereket fed le; free-ben nincs más forrás | várt; nem US fundamentum: DATA_SOURCES 6. |
 | `npm run check` Prettier-hibát ad egy `__fixtures__` fájlra | régi `.prettierignore` | a `.prettierignore` végén legyen: `**/__fixtures__/**` |
 | A rögzítő script: „SEC_USER_AGENT nincs beállítva” | nincs `.env.local`, vagy nincs benne `@` | lásd [2. fejezet](#2-a-envlocal-létrehozása) |
 
@@ -267,4 +268,150 @@ npx expo export --platform android --output-dir $env:TEMP\export-android
 - [x] `npm run check` exit 0 (228 teszt); a tesztek nem hívnak élő API-t
 - [x] Dokumentáció: DATA_SOURCES, DATA_DICTIONARY, DECISIONS, KNOWN_ISSUES, ROADMAP, PROJECT_STATE, handoff
 
-**PHASE 04B (következik):** FMP és EODHD adapter, ProviderRouter, kvóta-költségvetés, `/providers/status`, ár- és ártörténet-végpontok – lásd [ROADMAP](../ROADMAP.md) „04B”.
+**PHASE 04B (mind teljesült, 2026-11-21):** lásd a [15. fejezet](#15-phase-04b--fmp-eodhd-routing-és-kvóta) végén.
+
+---
+
+## 15. PHASE 04B – FMP, EODHD, routing és kvóta
+
+> Állapot: **KÉSZ** (2026-11-21) · Átadás: [../handoffs/phase-04-handoff.md](../handoffs/phase-04-handoff.md) · Döntések: D-049…D-054 · Ismert problémák: KI-30…KI-41
+
+### 15.0 Szakszavak röviden (04B)
+
+| Szó | Jelentés |
+|---|---|
+| **Csomag (plan)** | A szolgáltatói előfizetés szintje (pl. `free`). Meghatározza, mely adatokat kapod és naponta hány hívást. |
+| **Kvóta** | Napi hívás-keret (EODHD free: 20). Ha elfogy, a szolgáltató HTTP 402-t ad. |
+| **Router** | A proxy része, amely eldönti, melyik szolgáltatót kérdezze (pl. US részvényhez először FMP), és hiba esetén a következőre vált (**fallback**). |
+| **Split-korrekció** | Részvényfelosztás (pl. 10:1) után a régi árakat elosztják, hogy a grafikon ne „zuhanjon”. Az osztalék-korrekció ezen felül az osztalékot is visszaszámolja. |
+| **Helyszíni szabály** | Ha egy tőzsde csak egy pénznemben kereskedik (pl. Xetra: EUR), a jegyzés pénzneme ebből tudható. |
+| **GBX** | Penny (a font századrésze). Az LSE-n sok ETF pennyben jegyzett: 1010,8 GBX = 10,108 GBP. |
+
+### 15.1 Előfeltétel: kulcsok a `.env.local`-ban
+
+**Cél:** a proxy lássa az FMP és az EODHD kulcsát – de a kulcs soha ne kerüljön a kódba, a chatbe vagy a gitbe.
+
+1. Nyisd meg a projekt gyökerében a `.env.local` fájlt (VS Code-ban).
+2. Legyen benne (a saját értékeiddel; a `free` maradhat):
+   ```dotenv
+   FMP_API_KEY=ide_a_te_fmp_kulcsod
+   FMP_PLAN=free
+   EODHD_API_KEY=ide_a_te_eodhd_kulcsod
+   EODHD_PLAN=free
+   ```
+3. Mentsd el, és **indítsd újra** a dev szervert (Ctrl+C, majd `npm start`) – a futó szerver nem olvassa újra az env-et (KI-17, KI-27).
+
+**Ellenőrzés:** `curl.exe -s http://localhost:8081/api/v1/providers/status` → az `fmp` és az `eodhd` sorban `"configured":true`, `"plan":"free"`. A válaszban **nincs** kulcs.
+
+### 15.2 Mit derítettünk ki élő próbahívásokkal (DATA_SOURCES 11.)
+
+| Kérdés | Válasz |
+|---|---|
+| Milyen csomag? | Mindkettő **free** (EODHD `/api/user`: `dailyRateLimit: 20`) |
+| FMP: mit ad free-ben? | US quote, ártörténet (3 korrekció), profil, osztalék, keresés. **Nem** ad: nem US szimbólum, ETF-adat, ISIN-keresés (402) |
+| EODHD: mit ad free-ben? | késleltetett ár, ártörténet **1 évre**, osztalék, keresés (ISIN-nel is, **pénznemmel**). Fundamentum: 403 |
+| Meglepetések | Az FMP az ismeretlen tickerre is 402-t ad; az EODHD 1 évnél régebbi kérésre egy **rossz dátumú** sort ad `warning`-gal (eldobjuk); az ISF ára GBX, osztaléka GBP |
+
+### 15.3 Az új kód – hol mi van
+
+| Mit | Fájl | Miért |
+|---|---|---|
+| Hibafajta: nem elérhető adat | `src/domain/shared/errors.ts` (`UNAVAILABLE`) | A „csomag nem engedi / kvóta elfogyott” nem azonos a „nincs ilyen adat”-tal |
+| Ártörténet-korrekció | `src/domain/market/quote.ts` (`PriceAdjustment`, `notes`) | Az FMP és az EODHD mást ért „adjusted” alatt (D-050) |
+| Osztalék, profil, keresés | `src/domain/market/dividend.ts`, `src/domain/instrument/instrument-profile.ts`, `instrument-search.ts` | Saját, validált típusok; a szolgáltatói formátum nem szivárog be |
+| Szerződés (hálózat) | `src/contracts/market.ts`, `search.ts`, `provider-status.ts` | Ugyanaz a séma ellenőrzi a szervert és a klienst |
+| FMP adapter | `src/server/providers/fmp/` (`fmp-symbols.ts`, `fmp-normalizer.ts`, `fmp-provider.ts`, teszt, `__fixtures__/`) | DTO-séma → normalizálás → domain |
+| EODHD adapter | `src/server/providers/eodhd/` (ugyanígy) | + jegyzés-pénznem feloldása, free ablak |
+| Router, csomag, kvóta | `src/server/routing/provider-router.ts`, `plans.ts`, `quota.ts`, `markets.ts` | Forrásválasztás, fallback, env-ből kapcsolt csomag |
+| Végpontok | `src/server/handlers/api-handlers.ts` + `src/app/api/v1/instruments/[id]/{prices,profile,dividends}+api.ts`, `search+api.ts`, `providers/status+api.ts` | Vékony route → handler → router |
+| Kliens | `src/application/use-cases/get-market-data.ts`, `src/infrastructure/api-client/proxy-gateways.ts`, `src/infrastructure/mock/mock-market-data-gateway.ts`, `src/config/container.ts` | Use case-ek frissesség-számítással |
+
+A teljes, aktuális kód a repóban van; ez a fejezet a lényeget és az ellenőrzést mutatja.
+
+### 15.4 A routing egy példán
+
+Kérés: `GET /api/v1/instruments/BRK.B@XNYS/quote`
+1. A handler validálja a listing-azonosítót (`BRK.B@XNYS`).
+2. A MIC (`XNYS`) → piac: `US` → lánc: `fmp → eodhd`.
+3. Az FMP 402-t ad (a free csomag nem tartalmazza a BRK-B-t) → `UNAVAILABLE / PLAN_LIMIT` → a router továbblép.
+4. Az EODHD válaszol (`BRK-B.US`, USD a helyszíni szabályból).
+5. A válasz: `data.provenance.sourceId = "eodhd"`, és a `warnings`-ban: „fmp: … csomagkorlát…”, „Az adat forrása: eodhd (tartalék forrás).”
+
+Európai jegyzésnél (`VWCE@XETR`) a lánc csak `eodhd`. Nem US profilnál vagy kimutatásnál a lánc üres → `501 CAPABILITY_UNAVAILABLE`, `unavailableReason: "PLAN_LIMIT"`.
+
+### 15.5 Tesztek futtatása
+
+Hol: a projekt gyökerében (VS Code → Terminal → New Terminal).
+```powershell
+npm run check
+```
+**Elvárt:** a végén `Test Suites: 25 passed`, `Tests: 337 passed`, és nincs lint- vagy Prettier-hiba. A tesztek **nem** hívnak élő API-t: minden szolgáltatói válasz valós, megvágott fixture a `__fixtures__` mappákban, a `fetch` hamis.
+
+Csak az új részek:
+```powershell
+npx jest src/server/providers/fmp src/server/providers/eodhd src/server/routing src/server/handlers
+```
+
+### 15.6 Kipróbálás élő adattal
+
+1. Indítsd a dev szervert (ha fut egy régi, előbb Ctrl+C): `npm start`
+2. Másik terminálban:
+   ```powershell
+   curl.exe -s http://localhost:8081/api/v1/providers/status
+   curl.exe -s http://localhost:8081/api/v1/instruments/AAPL@XNAS/quote
+   curl.exe -s "http://localhost:8081/api/v1/instruments/NVDA@XNAS/prices?from=2024-06-06&to=2024-06-11&adjustment=split"
+   curl.exe -s http://localhost:8081/api/v1/instruments/AAPL@XNAS/profile
+   curl.exe -s "http://localhost:8081/api/v1/search?q=VWCE"
+   curl.exe -s http://localhost:8081/api/v1/instruments/VWCE@XETR/quote
+   curl.exe -s http://localhost:8081/api/v1/instruments/VWCE@XETR/profile
+   ```
+
+**Elvárt (2026-11-21-i futás):**
+
+| Hívás | Eredmény |
+|---|---|
+| providers/status | `fmp` és `eodhd`: `configured: true`, `plan: "free"`, `quota` (pl. `usedToday`, `dailyLimit: 20`) |
+| AAPL quote | `"price":342.56`, `"currency":"USD"`, forrás `fmp` |
+| NVDA prices (split) | 4 pont, 2024-06-07: `120.89` (a 10:1 split után visszaszámolva) |
+| AAPL profile | `"isin":"US0378331005"`, forrás `fmp` |
+| search VWCE | `VWCE@XETR`, `EUR` |
+| VWCE quote | `"currency":"EUR"`, forrás `eodhd` (**1 EODHD-hívás** a napi 20-ból!) |
+| VWCE profile | HTTP 501, `"unavailableReason":"PLAN_LIMIT"` – várt (free-ben nincs ETF-metaadat) |
+
+> **Takarékosság:** az EODHD free napi 20 hívást ad. Egy európai quote vagy ártörténet 1–2 hívás (a pénznem-keresés naponta egyszer). A felhasználást a `providers/status` mutatja (újraindításig).
+
+### 15.7 Fizetős csomagra váltás (ha egyszer szükséges, DP-05)
+
+Kódot nem kell módosítani:
+1. A `.env.local`-ban (élesben az EAS env-ben): `EODHD_PLAN=eod-all-world`.
+2. A dev szerver újraindítása.
+3. Ellenőrzés: `providers/status` → `"plan":"eod-all-world"`; a szerver induláskor figyelmeztet, hogy a sor paraméterei nincsenek élő próbával igazolva (KI-38). Egy régi időszakos `prices` kérés már nem vágódik 1 évre.
+
+Ezt egy teszt is igazolja: `src/server/handlers/api-handlers-04b.test.ts` → „csomagváltás CSAK env-módosítással”.
+
+### 15.8 Gyakori hibák (04B)
+
+| Tünet | Ok | Javítás |
+|---|---|---|
+| `providers/status`: `fmp` vagy `eodhd` `"configured":false` | hiányzó kulcs, vagy a szerver a kulcs beírása előtt indult | írd be a kulcsot a `.env.local`-ba, indítsd újra a szervert |
+| Az új végpontok 404-et adnak | régi dev szerver fut (pl. 8081/8082, KI-41) | állítsd le (Ctrl+C) és indítsd újra |
+| `CAPABILITY_UNAVAILABLE` + `QUOTA_EXHAUSTED` | elfogyott a napi keret (EODHD: 20) | UTC éjfél után újra megy; ne frissíts feleslegesen |
+| `CAPABILITY_UNAVAILABLE` + `PLAN_LIMIT` egy európai ETF profiljánál | a free csomagokban nincs ETF-metaadat | várt viselkedés (PHASE 08: kézi bevitel) |
+| `prices?adjustment=split` európai jegyzésre 501 | az EODHD nem ad csak split-korrigált sort | használd az alapértelmezést (`split_dividend`) vagy a `none`-t |
+| A `prices` válasz `notes`-a szerint levágott időszak | a free EODHD csak 1 évet ad | várt; fizetős csomaggal megszűnik (15.7) |
+| Az FMP 402-t ad egy létező US tickerre | a free csomag a US-nak is csak egy részét fedi le | a router automatikusan az EODHD-re vált (warning jelzi) |
+| `Port 8082 is unavailable` | már fut ott egy szerver | `npx expo start --port 8083` |
+
+### 15.9 A PHASE 04B befejezési feltételei (mind teljesült)
+
+- [x] `fmp` és `eodhd` adapter valós fixture-ökkel; a szolgáltatói formátum nem szivárog a domainbe
+- [x] Csomagszint felderítve (U-13): mindkettő free; képességmátrix `FMP_PLAN`/`EODHD_PLAN`-ből
+- [x] `ProviderRouter` a DATA_SOURCES 5.2–5.3 szerint; fallback tesztelve (402, 429, timeout, NOT_FOUND, hibás válasz)
+- [x] Kvóta-költségvetés és `/providers/status`; `UNAVAILABLE (PLAN_LIMIT | NOT_COVERED | QUOTA_EXHAUSTED)`
+- [x] Fixture: 3 UCITS ETF (VWCE, IWDA, ISF – GBX) és 4 nem US részvény (SAP, ASML, NESN, OTP)
+- [x] Hiány ≠ 0: hiányzó záróár, 0 összegű osztalék, ismeretlen pénznem soha nem lesz 0 vagy kitalált érték
+- [x] Natív és kijelzési pénznem külön (az osztalék saját pénznemével együtt)
+- [x] Kulcs csak szerver env-ben: repó- és bundle-szkenner 0 találat; válasz és napló kulcsmentes (teszt)
+- [x] Fizetős csomagra váltás csak env-módosítás (teszt)
+- [x] `npm run check` exit 0 (337 teszt); élő füstpróba; Android- és web-export
+- [x] Dokumentáció: DATA_SOURCES (11.), DATA_DICTIONARY (3.4–3.7, 11.), DECISIONS (D-049…D-054), KNOWN_ISSUES, ROADMAP, PROJECT_STATE, ARCHITECTURE, handoff

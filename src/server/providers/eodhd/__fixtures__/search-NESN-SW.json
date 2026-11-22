@@ -1,0 +1,22 @@
+{
+  "_fixture": {
+    "source": "EODHD",
+    "url": "https://eodhd.com/api/search/NESN?exchange=SW&limit=50&fmt=json",
+    "recordedAt": "2026-11-21T16:30:00Z",
+    "note": "VALÓS válasz (élő próbahívás a tulajdonos free kulcsával), teszt-fixture-nek megvágva. A kulcs NEM szerepel benne. Az exchange szűrő működik."
+  },
+  "response": [
+    {
+      "Code": "NESN",
+      "Exchange": "SW",
+      "Name": "Nestle S.A.",
+      "Type": "Common Stock",
+      "Country": "Switzerland",
+      "Currency": "CHF",
+      "ISIN": "CH0038863350",
+      "isPrimary": true,
+      "previousClose": 85.55,
+      "previousCloseDate": "2026-11-20"
+    }
+  ]
+}

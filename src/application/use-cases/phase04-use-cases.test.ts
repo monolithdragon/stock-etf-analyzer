@@ -59,6 +59,22 @@ function fxGateway(result: Result<FxRateSet>): FxGateway & { requests: unknown[]
 
 const usd100 = { amount: 100, currency: c('USD') };
 
+/** A blokkban nem használt (PHASE 04B) gateway-képességek: hívásuk tesztelési hiba. */
+const unusedPhase04bMethods = {
+  getPriceHistory: async () => {
+    throw new Error('nem várt hívás');
+  },
+  getInstrumentProfile: async () => {
+    throw new Error('nem várt hívás');
+  },
+  getDividends: async () => {
+    throw new Error('nem várt hívás');
+  },
+  searchInstruments: async () => {
+    throw new Error('nem várt hívás');
+  },
+};
+
 describe('convertMoney (FxService)', () => {
   it('friss rátával átvált; a natív összeg megmarad; a ráta FRESH jelölést kap', async () => {
     const gateway = fxGateway(ok(ratesAsOf('2026-11-20')));
@@ -143,6 +159,7 @@ describe('getFinancialStatements / getSecurityListings', () => {
   function gatewayWithFiling(asOf: string | null): MarketDataGateway & { calls: number } {
     const gateway = {
       calls: 0,
+      ...unusedPhase04bMethods,
       async getQuote() {
         return err(AppErrors.notFound('x', 'x'));
       },

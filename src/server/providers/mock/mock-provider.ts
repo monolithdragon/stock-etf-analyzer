@@ -8,11 +8,16 @@
  */
 import {
   AppErrors,
+  createDividendEvent,
+  createDividendHistory,
   createFinancialStatement,
   createFinancialStatementSet,
   createFiscalPeriod,
   createFxRate,
   createFxRateSet,
+  createInstrumentProfile,
+  createInstrumentSearchHit,
+  createPriceSeries,
   createQuote,
   err,
   metricOk,
@@ -25,6 +30,8 @@ import {
   type CurrencyCode,
   type DataProvenance,
   type FxRate,
+  type IsoDate,
+  type InstrumentSearchHit,
   type Metric,
 } from '@/domain';
 
@@ -41,6 +48,32 @@ const DEMO_QUOTES: Readonly<
   'DEMO@XNAS': { price: 100, currency: 'USD', ageMinutes: 5 },
   'DEMOETF@XETR': { price: 50, currency: 'EUR', ageMinutes: 5 },
 };
+
+/** Kitalált, rögzített dátumú demó záróárak (a kért időszakra szűrve). */
+const DEMO_CLOSES: Readonly<Record<string, readonly (readonly [string, number])[]>> = {
+  'DEMO@XNAS': [
+    ['2026-11-16', 96],
+    ['2026-11-17', 98],
+    ['2026-11-18', 97],
+    ['2026-11-19', 99],
+    ['2026-11-20', 100],
+  ],
+  'DEMOETF@XETR': [
+    ['2026-11-19', 49],
+    ['2026-11-20', 50],
+  ],
+};
+
+const DEMO_SEARCH: readonly {
+  symbol: string;
+  mic: string;
+  name: string;
+  kind: 'stock' | 'etf';
+  currency: string;
+}[] = [
+  { symbol: 'DEMO', mic: 'XNAS', name: 'Demo Corp (kitalált)', kind: 'stock', currency: 'USD' },
+  { symbol: 'DEMOETF', mic: 'XETR', name: 'Demo ETF (kitalált)', kind: 'etf', currency: 'EUR' },
+];
 
 /** Kerek, nyilvánvalóan kitalált demó ráták (1 EUR = …). */
 export const DEMO_EUR_RATES: Readonly<Record<string, number>> = {
@@ -69,6 +102,8 @@ export function createMockProvider(deps: { readonly now: () => Date }): MarketDa
       name: MOCK_PROVIDER_SOURCE.sourceName,
       kind: 'mock',
       configured: true,
+      plan: null,
+      coverage: 'Csak kitalált DEMO* instrumentumok.',
       note: 'DEMÓ mód: minden adat kitalált és „mock” jelölésű.',
     },
 
@@ -86,6 +121,103 @@ export function createMockProvider(deps: { readonly now: () => Date }): MarketDa
         asOf,
         delayMinutes: null,
         provenance: mockProvenance(now, { asOf, currency: currency.value }),
+      });
+    },
+
+    async getPriceHistory(request) {
+      const closes = DEMO_CLOSES[request.listingId];
+      const fixture = DEMO_QUOTES[request.listingId];
+      if (closes === undefined || fixture === undefined) {
+        return err(AppErrors.notFound('demó ártörténet', request.listingId));
+      }
+      const currency = parseCurrencyCode(fixture.currency);
+      if (!currency.ok) return currency;
+      const points = closes
+        .filter(([date]) => date >= request.from && date <= request.to)
+        .map(([date, close]) => ({ date, close }));
+      const last = points[points.length - 1];
+      return createPriceSeries({
+        listingId: request.listingId,
+        currency: currency.value,
+        adjustment: request.adjustment,
+        points,
+        notes: ['Demó adat: kitalált záróárak; a korrekció fajtája csak címke.'],
+        provenance: mockProvenance(deps.now(), {
+          asOf: last === undefined ? null : (last.date as IsoDate),
+          currency: currency.value,
+        }),
+      });
+    },
+
+    async getProfile(listingId) {
+      const entry = DEMO_SEARCH.find((d) => `${d.symbol}@${d.mic}` === listingId);
+      if (entry === undefined) return err(AppErrors.notFound('demó profil', listingId));
+      return createInstrumentProfile({
+        listingId,
+        name: entry.name,
+        kindHint: entry.kind,
+        isin: null, // demó módban nincs (kitalált) ISIN
+        cik: null,
+        country: null,
+        sector: null,
+        industry: null,
+        exchangeName: entry.mic,
+        tradingCurrency: entry.currency,
+        website: null,
+        description: 'Kitalált demó instrumentum – nem valós vállalat vagy alap.',
+        provenance: mockProvenance(deps.now()),
+      });
+    },
+
+    async getDividends(request) {
+      if (request.listingId !== 'DEMO@XNAS') {
+        return err(AppErrors.notFound('demó osztalék', request.listingId));
+      }
+      const usd = parseCurrencyCode('USD');
+      if (!usd.ok) return usd;
+      const event = createDividendEvent({
+        exDate: '2026-08-10',
+        paymentDate: '2026-08-20',
+        recordDate: null,
+        declarationDate: null,
+        amount: 0.5,
+        currency: usd.value,
+        splitAdjustedAmount: 0.5,
+        frequency: 'Demo',
+      });
+      if (!event.ok) return event;
+      const events =
+        event.value.exDate >= request.from && event.value.exDate <= request.to ? [event.value] : [];
+      return createDividendHistory({
+        listingId: request.listingId,
+        events,
+        notes: ['Demó adat: kitalált osztalék.'],
+        provenance: mockProvenance(deps.now()),
+      });
+    },
+
+    async searchInstruments(query) {
+      const needle = query.toUpperCase();
+      const hits: InstrumentSearchHit[] = [];
+      for (const entry of DEMO_SEARCH) {
+        if (!entry.symbol.includes(needle) && !entry.name.toUpperCase().includes(needle)) continue;
+        const hit = createInstrumentSearchHit({
+          symbol: entry.symbol,
+          mic: entry.mic,
+          name: entry.name,
+          kindHint: entry.kind,
+          isin: null,
+          tradingCurrency: entry.currency,
+          exchangeName: entry.mic,
+        });
+        if (!hit.ok) return hit;
+        hits.push(hit.value);
+      }
+      return ok({
+        query,
+        hits,
+        omitted: { unmappedVenue: 0, invalidSymbol: 0, unsupportedType: 0, truncated: 0 },
+        provenance: mockProvenance(deps.now()),
       });
     },
 

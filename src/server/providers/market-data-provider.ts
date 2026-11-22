@@ -2,25 +2,29 @@
  * `MarketDataProvider` – a szolgáltató-adapterek közös szerződése (PHASE 04 feladat 1. és 4.).
  *
  * Elvek:
- * - Minden képesség KÜLÖN metódus (quote, ártörténet, kimutatások, jegyzések, FX…), és mind
- *   opcionális: egy adapter csak azt valósítja meg, amit a forrás TÉNYLEGESEN szolgáltat.
- *   Nem ígérünk olyan adatot, amit az API nem ad (pl. az ECB nem ad árfolyamot).
+ * - Minden képesség KÜLÖN metódus (quote, ártörténet, profil, osztalék, kimutatások,
+ *   jegyzések, keresés, FX), és mind opcionális: egy adapter csak azt valósítja meg (és a
+ *   csomagja csak azt kapcsolja be), amit a forrás TÉNYLEGESEN szolgáltat. Nem ígérünk olyan
+ *   adatot, amit az API nem ad (pl. ETF-metaadat a free csomagokban – élő próbával igazolva).
  * - A visszatérési érték MINDIG normalizált domain-objektum (a domain konstruktorain átment,
  *   provenance-szel). A szolgáltatói formátum (DTO) az adapter mappáján belül marad.
- * - A PHASE 04B `ProviderRouter`-e a `capabilitiesOf()` alapján választ és vált tartalékra.
+ * - A `ProviderRouter` (`src/server/routing/`) a `capabilitiesOf()` és a `covers()` alapján
+ *   választ, és vált tartalékra (PHASE 04B).
  *
- * Még NINCS metódus (nincs hozzá domain-típus és igazolt ingyenes forrás): profil, osztalék/split,
- * ETF-metaadat, ETF-holdings. Ezeket a PHASE 04B (FMP/EODHD) és a PHASE 08 vezeti be
- * a saját domain-típusukkal együtt; addig a health végpont „nem elérhető” képességként jelzi.
+ * Még NINCS metódus: ETF-metaadat, ETF-holdings (nincs igazolt free forrás → PHASE 08).
  */
 import type { ProviderCapability, ServerDataMode } from '@/contracts';
 import type {
   CurrencyCode,
+  DividendHistory,
   FinancialStatementSet,
   FxRateSet,
+  InstrumentProfile,
+  InstrumentSearchResult,
   IsoDate,
   Isin,
   ListingId,
+  PriceAdjustment,
   PriceSeries,
   Quote,
   Result,
@@ -36,6 +40,10 @@ export interface ProviderInfo {
   readonly kind: ServerDataMode;
   /** Be van-e állítva minden, ami a működéshez kell (pl. SEC User-Agent). */
   readonly configured: boolean;
+  /** Csomagszint (pl. `free`); `null`, ha a forrásnak nincs csomagja (SEC, ECB, OpenFIGI). */
+  readonly plan: string | null;
+  /** Emberi leírás a lefedettségről (providers/status). */
+  readonly coverage: string;
   readonly note: string | null;
 }
 
@@ -43,7 +51,13 @@ export interface PriceHistoryRequest {
   readonly listingId: ListingId;
   readonly from: IsoDate;
   readonly to: IsoDate;
-  readonly adjusted: boolean;
+  readonly adjustment: PriceAdjustment;
+}
+
+export interface DividendsRequest {
+  readonly listingId: ListingId;
+  readonly from: IsoDate;
+  readonly to: IsoDate;
 }
 
 export interface FxRatesRequest {
@@ -56,25 +70,53 @@ export interface FxRatesRequest {
 
 export interface MarketDataProvider {
   readonly info: ProviderInfo;
+  /**
+   * Kiszolgálja-e ezt a jegyzést (hálózati hívás NÉLKÜL eldönthető: MIC, csomag)?
+   * Hiányzó metódus = mindent megpróbál. Hiba: `UNAVAILABLE` (PLAN_LIMIT | NOT_COVERED).
+   */
+  covers?(listingId: ListingId): Result<true>;
   getQuote?(listingId: ListingId): Promise<Result<Quote>>;
   getPriceHistory?(request: PriceHistoryRequest): Promise<Result<PriceSeries>>;
+  getProfile?(listingId: ListingId): Promise<Result<InstrumentProfile>>;
+  getDividends?(request: DividendsRequest): Promise<Result<DividendHistory>>;
   getFinancialStatements?(
     listingId: ListingId,
     frequency: StatementFrequency,
   ): Promise<Result<FinancialStatementSet>>;
   getSecurityListings?(isin: Isin): Promise<Result<SecurityListings>>;
   getFxRates?(request: FxRatesRequest): Promise<Result<FxRateSet>>;
+  searchInstruments?(query: string): Promise<Result<InstrumentSearchResult>>;
 }
 
-const METHOD_BY_CAPABILITY = {
+export const METHOD_BY_CAPABILITY = {
   quote: 'getQuote',
   priceHistory: 'getPriceHistory',
+  profile: 'getProfile',
+  dividends: 'getDividends',
   financialStatements: 'getFinancialStatements',
   listings: 'getSecurityListings',
   fxRates: 'getFxRates',
+  search: 'searchInstruments',
 } as const satisfies Partial<Record<ProviderCapability, keyof MarketDataProvider>>;
 
-type ImplementableCapability = keyof typeof METHOD_BY_CAPABILITY;
+export type ImplementableCapability = keyof typeof METHOD_BY_CAPABILITY;
+
+/** Szolgáltató, amelyről tudjuk, hogy az adott képesség metódusa létezik. */
+export type ProviderWith<C extends ImplementableCapability> = MarketDataProvider &
+  Required<Pick<MarketDataProvider, (typeof METHOD_BY_CAPABILITY)[C]>>;
+
+export function isImplementableCapability(
+  capability: ProviderCapability,
+): capability is ImplementableCapability {
+  return Object.hasOwn(METHOD_BY_CAPABILITY, capability);
+}
+
+export function hasCapability<C extends ImplementableCapability>(
+  provider: MarketDataProvider,
+  capability: C,
+): provider is ProviderWith<C> {
+  return provider[METHOD_BY_CAPABILITY[capability]] !== undefined;
+}
 
 /** A képességlista a ténylegesen megvalósított metódusokból származik – nem lehet „hazudni”. */
 export function capabilitiesOf(provider: MarketDataProvider): readonly ProviderCapability[] {
@@ -83,7 +125,7 @@ export function capabilitiesOf(provider: MarketDataProvider): readonly ProviderC
   );
 }
 
-/** A regisztrált szolgáltatók; a PHASE 04B-ben ProviderRouter váltja (prioritás, fallback, kvóta). */
+/** A regisztrált szolgáltatók (élő XOR mock). A választást a `ProviderRouter` végzi. */
 export interface ProviderRegistry {
   readonly dataMode: ServerDataMode;
   readonly providers: readonly MarketDataProvider[];
@@ -101,19 +143,4 @@ export function createProviderRegistry(
     );
   }
   return { dataMode, providers };
-}
-
-/** Az első szolgáltató, amely az adott képességet megvalósítja (04A: nincs még prioritási lista). */
-export function findProvider<C extends ImplementableCapability>(
-  registry: ProviderRegistry,
-  capability: C,
-):
-  | (MarketDataProvider & Required<Pick<MarketDataProvider, (typeof METHOD_BY_CAPABILITY)[C]>>)
-  | null {
-  const method = METHOD_BY_CAPABILITY[capability];
-  const found = registry.providers.find((p) => p[method] !== undefined);
-  // A `find` feltétele garantálja, hogy a metódus létezik – a szűkítés biztonságos.
-  return (found ?? null) as
-    | (MarketDataProvider & Required<Pick<MarketDataProvider, (typeof METHOD_BY_CAPABILITY)[C]>>)
-    | null;
 }

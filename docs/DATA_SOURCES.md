@@ -1,6 +1,6 @@
 # Adatforrások – Stock & ETF Analyzer
 
-> Ellenőrzés dátuma: **2026-11-21** (PHASE 01; a SEC, az ECB/Frankfurter és az OpenFIGI a **PHASE 04A-ban élő próbahívásokkal újraellenőrizve**, lásd 10. fejezet). Az ingyenes keretek és feltételek gyakran változnak; az FMP és az EODHD adatait a PHASE 04B ellenőrzi.
+> Ellenőrzés dátuma: **2026-11-21** (PHASE 01; a SEC, az ECB/Frankfurter és az OpenFIGI a **PHASE 04A-ban**, az **FMP és az EODHD a PHASE 04B-ben** élő próbahívásokkal ellenőrizve, lásd 10. és 11. fejezet). Az ingyenes keretek és feltételek gyakran változnak.
 > Kapcsolódó döntések: D-023 (lefedettség), D-024 (adapterek, routing), D-025 (Security/Listing), D-027 (fizetős bővítés nyitva), D-008 (csak saját használat).
 
 ## 1. Jelölések
@@ -37,8 +37,8 @@ A célpiacok: **US, Európa (UCITS ETF-ek és részvények), globális ETF-ek é
 | **ECB referencia-árfolyam** | nem kell | – | ~30 deviza EUR ellen, köztük HUF, USD, GBP, CHF, JPY | – | hosszú | – | **igen** | naponta ~16:00 CET, munkanapokon | „csak tájékoztató célra” | `[IGAZOLT]` | **IGEN** (Frankfurteren át) |
 | **Frankfurter v2** | nem kell | „nincs kvóta”, visszaélés elleni rate limit | 219 deviza, 112 forrás. Alapból blended, ECB közvetlenül: `/v2/providers/ecb/rates` | – | napi, 1948-tól | – | **igen** | naponta egyszer vagy néhányszor | nyílt forráskódú; közvetlen providerre a provider feltételei vonatkoznak | `[IGAZOLT]` | **IGEN** (az ECB-adapter szállítója) |
 | **OpenFIGI** | opcionális | kulcs nélkül 25 kérés/perc (10 job/kérés), kulccsal 250/perc (100 job/kérés) | globális azonosító-leképezés (ID_ISIN támogatott, válaszban ticker és exchCode) | – | – | – | – | – | ingyenes; ToS `[NEM IGAZOLT]` | `[IGAZOLT]` (limitek) | **IGEN** |
-| **EODHD** (kulcs megvan) | kell | Free: **20 hívás/nap**, 1 év történet | globális EOD: részvény, ETF, forex, index (150 000+ ticker) | Fundamentals csomag: globális részvény és ETF, US alapok. A free-ben `[NEM IGAZOLT]` (a források ellentmondanak), de 10 hívás/kérés áron gyakorlatilag max. 2/nap | free: 1 év; fizetős: 30+ év | `[NEM IGAZOLT]` | EOD | free live: 15 perc késleltetés | személyes és kereskedelmi csomagok külön | `[IGAZOLT]` | **IGEN** |
-| **Financial Modeling Prep** (kulcs megvan) | kell | Basic: 250 hívás/nap, 500 MB/30 nap | US szimbólumok egy köre; nem US a free-ben `[NEM IGAZOLT]` | korlátozott a free-ben | EOD | fizetős `[HARMADIK FÉL]` | `[HARMADIK FÉL]` | EOD | „personal use” csomagok | `[HARMADIK FÉL]` (két hivatalos URL is HTTP 403) | **IGEN** |
+| **EODHD** (kulcs megvan, **free**) | kell | Free: **20 hívás/nap** (+ egyszeri bónusz), 1 év történet | globális EOD: részvény, ETF, forex, index | **free-ben NINCS** (élő próba: HTTP 403 „Only EOD data allowed for free users”) | free: 1 év (élő próba); fizetős: 30+ év | nincs (fundamentum-csomag kellene) | EOD | live: 15–20 perc késleltetés | személyes használat: tárolás/elemzés igen, továbbadás/megjelenítés másnak nem | `[IGAZOLT]` (04B élő) | **IGEN – kész** |
+| **Financial Modeling Prep** (kulcs megvan, **free**) | kell | Basic: 250 hívás/nap `[HARMADIK FÉL]` | **csak US, annak is egy része** (élő próba: `SAP.DE`, `VWCE.DE`, `BRK-B` → 402) | nem vizsgált (a SEC adja) | free-ben is mély (2010 igazolva) | **nincs** (`etf/info`, `etf/holdings` → 402) | nem vizsgált | nem közölt | „personal use” `[HARMADIK FÉL]` (ToS-oldal 403) | képességek `[IGAZOLT]` (04B élő), keret/ToS `[HARMADIK FÉL]` | **IGEN – kész** |
 | Tiingo | kell | Starter $0: 50 kérés/óra, 1 000/nap, 500 egyedi ticker/hó | `[NEM IGAZOLT]` (US EOD várható) | free: 5 év, fizetős kiegészítő | 30+ év | `[NEM IGAZOLT]` | `[NEM IGAZOLT]` | EOD | „Internal Use Only”: csak saját használat | `[IGAZOLT]` (keret, licenc) | most nem (4. fejezet) |
 | Finnhub | kell | ~60 hívás/perc | US valós idejű quote | „basic fundamentals” | candles prémium | prémium | igen | valós idejű (US) | „personal use only” | `[HARMADIK FÉL]` | nem |
 | Twelve Data | kell | Basic $0: 8 kredit/perc, 800/nap | valós idejű US részvény/ETF, forex | free: nincs | – | nincs | igen | valós idejű (US) | **Basic: „Internal non-display usage”** | `[IGAZOLT]` | nem |
@@ -102,22 +102,24 @@ További tények:
 | 2 | `ecb-fx` (Frankfurter v2 ECB provider) | FX | nem | 04A ✅ kész |
 | 3 | `openfigi` | ISIN ↔ ticker/tőzsde; egy ETF összes listingje | opcionális | 04A ✅ kész |
 | 4 | `mock` | determinisztikus teszt- és demóadat (`kind: mock`) | – | 04A ✅ kész |
-| 5 | `fmp` | US ár, profil, kiegészítő fundamentum, ETF info (csomagfüggő) | **igen** (megvan) | 04B |
-| 6 | `eodhd` | globális EOD ár, split, osztalék, keresés, tőzsdelista; fundamentum/ETF csak megfelelő csomaggal | **igen** (megvan) | 04B |
-| – | `ProviderRouter` + kvóta-költségvetés | képesség × piac szerinti választás és fallback | – | 04B |
+| 5 | `fmp` | US ár, ártörténet (3 korrekció), profil, osztalék, szöveges keresés | **igen** (megvan) | 04B ✅ kész |
+| 6 | `eodhd` | késleltetett ár, EOD ártörténet, osztalék, keresés (ISIN is), ISIN → jegyzések pénznemmel | **igen** (megvan) | 04B ✅ kész |
+| – | `ProviderRouter` + kvóta-költségvetés + csomagmátrix | képesség × piac szerinti választás és fallback (D-049, D-051) | – | 04B ✅ kész |
 
-### 5.2 Routing tábla (kiinduló, `[FELTÉTELEZÉS]`, a PHASE 04B véglegesíti a valós képességek alapján)
+### 5.2 Routing tábla (**véglegesítve a PHASE 04B-ben**, D-049; kód: `src/server/routing/provider-router.ts`)
 
 | Képesség | US | Európa (UCITS ETF, részvény) | Globális |
 |---|---|---|---|
-| Keresés | `fmp` → `eodhd` → SEC ticker-lista | `eodhd` → `openfigi` (ISIN) | `eodhd` → `openfigi` |
-| Listingek egy ISIN-hez | `openfigi` | `openfigi` → `eodhd` | `openfigi` → `eodhd` |
-| Legutóbbi ár | `fmp` → `eodhd` | `eodhd` | `eodhd` |
-| Napi ártörténet | `fmp` → `eodhd` | `eodhd` (free: 1 év) | `eodhd` (free: 1 év) |
-| Split, osztalék | `fmp` → `eodhd` | `eodhd` | `eodhd` |
-| Pénzügyi kimutatások | `sec-edgar` (reported) → `fmp` | **`UNAVAILABLE` (PLAN_LIMIT)** free-ben; fizetős `eodhd` Fundamentals-szel bekapcsolható | ua. |
-| ETF metaadat | `fmp` / `eodhd` (csomagfüggő) + kézi bevitel | `eodhd` Fundamentals (fizetős) + kézi bevitel | ua. |
-| ETF holdings | nincs igazolt forrás | nincs igazolt forrás | ua. |
+| Keresés (piactól független) | szöveg: `fmp` → `eodhd`; ISIN: `eodhd` (az FMP ISIN-keresése free-ben 402) | ua. | ua. |
+| Listingek egy ISIN-hez (piactól független) | `openfigi` → `eodhd` (az EODHD pénznemet is ad) | ua. | ua. |
+| Legutóbbi ár | `fmp` → `eodhd` | `eodhd` | `eodhd` (csak az igazolt tőzsdék: lásd 11.2) |
+| Napi ártörténet | `fmp` → `eodhd` | `eodhd` (free: 1 év, levágás + megjegyzés) | ua. |
+| Osztalék | `fmp` → `eodhd` | `eodhd` | `eodhd` |
+| Split | **nincs bekötve** (az FMP `splits` végpontja free-ben működik – későbbi bővítés) | – | – |
+| Profil | `fmp` | **`UNAVAILABLE` (PLAN_LIMIT)** | ua. |
+| Pénzügyi kimutatások | `sec-edgar` (csak US: ticker-ütközés elleni védelem) | **`UNAVAILABLE` (PLAN_LIMIT)**; fizetős EODHD Fundamentals kellene | ua. |
+| ETF metaadat | **`UNAVAILABLE` (PLAN_LIMIT)** – FMP `etf/info` 402, EODHD fundamentals 403; kézi bevitel: PHASE 08 | ua. | ua. |
+| ETF holdings | **`UNAVAILABLE` (PLAN_LIMIT)** | ua. | ua. |
 | FX | `ecb-fx` | `ecb-fx` | `ecb-fx`; ami nincs az ECB listán → `MISSING` |
 
 ### 5.3 Routing-szabályok
@@ -178,12 +180,12 @@ További tények:
 - [x] OpenFIGI: ISIN → listingek – `[IGAZOLT]` (VWCE: 179 sor, ebből 11 igazolt tőzsdei jegyzés). **Pénznemet és MIC-et nem ad** (D-042).
 - [x] D-004 spike: API route-ok lokálisan működnek; EAS Hosting: nincs KV/rate-limit primitív (U-03). EAS-próbatelepítés nem készült (D-004).
 
-**04B**
-- [ ] A meglévő EODHD kulcs csomagja `/api/user`-rel (0 hívás) (U-13).
-- [ ] A meglévő FMP kulcs csomagja és lefedettsége (dashboard + próbahívás; U-13, U-15). Az FMP `[HARMADIK FÉL]` adatainak igazolása.
-- [ ] EODHD free: mely végpontok érhetők el (fundamentum? live?), a történet mélysége (U-14).
-- [ ] Mindkét szolgáltató ToS-e: megjelenítés, cache, attribúció személyes csomagban.
-- [ ] Fixture: legalább 3 UCITS ETF (pl. eltérő devizájú listingekkel, GBX-szel) és 3 nem US részvény.
+**04B** (2026-11-21, részletek: 11. fejezet)
+- [x] EODHD csomag `/api/user`-rel: `subscriptionType: free`, `dailyRateLimit: 20` (U-13).
+- [x] FMP csomag és lefedettség próbahívásokkal: free, csak US (annak is egy része), ETF-végpontok 402 (U-13, U-15). A dashboard (keret) ellenőrzése a tulajdonosé (KI-39).
+- [x] EODHD free végpontjai: EOD (1 év), késleltetett live, osztalék, keresés igen; fundamentum 403 (U-14).
+- [~] ToS: EODHD – olvasva (11.4); FMP – a ToS-oldal 403, `[HARMADIK FÉL]` (KI-39).
+- [x] Fixture: **3 UCITS ETF** (VWCE@XETR, IWDA@XAMS, ISF@XLON – GBX, többlistinges keresés GBX/GBP/USD/EUR/CHF) és **4 nem US részvény** (SAP@XETR, ASML@XAMS, NESN@XSWX – CHF, OTP@XBUD – HUF).
 
 ## 9. Kapcsolódó platform-tények (Expo, `[IGAZOLT]` 2026-11-21)
 
@@ -249,3 +251,67 @@ Minden alábbi tény saját próbahívásból származik. A válaszok a `src/ser
 | UN / UP | XNYS / ARCX | micCode=XNYS / ARCX → UN / UP |
 | UW / UQ | XNAS | micCode=XNGS → UW (AAPL), XNMS → UQ (QQQ); szegmens → XNAS |
 | nem igazolt | – | pl. XPAR (FP) és ETFP: a próba-ISIN-re nem jött sor → nincs a táblában |
+
+## 11. PHASE 04B – élő próbahívásokkal igazolt tények (2026-11-21)
+
+Minden tény saját próbahívásból származik, a tulajdonos **free** kulcsaival (a kulcs sehol nem került ki). A válaszok megvágva a `src/server/providers/{fmp,eodhd}/__fixtures__/` mappában vannak.
+
+### 11.1 Financial Modeling Prep – `fmp` adapter (MEGVALÓSÍTVA)
+
+| Tény | Érték |
+|---|---|
+| API | **stable** API: `https://financialmodelingprep.com/stable/{végpont}?symbol=…&apikey=…` (a kulcs URL-paraméter) |
+| Csomag | free (Basic). Napi keret: 250 `[HARMADIK FÉL]` – a hivatalos árlista és ToS a mi eszközeinkkel HTTP 403. |
+| Működik free-ben (US) | `quote`, `profile`, `historical-price-eod/full` + `/non-split-adjusted` + `/dividend-adjusted`, `dividends`, `splits`, `search-symbol` |
+| NEM működik free-ben | `etf/info`, `etf/holdings`, `search-isin` → **402** „Restricted Endpoint”; nem US szimbólum (`SAP.DE`, `VWCE.DE`) és egyes US szimbólumok (`BRK-B`) → **402** „Premium Query Parameter” |
+| Ismeretlen ticker | szintén **402** (nem 404!) → nem különböztethető meg a csomagkorláttól (KI-30) |
+| `quote` | tömb; `price`, `exchange` (`NASDAQ` \| `NYSE` \| `AMEX`…), `timestamp` (Unix mp); **nincs pénznem** |
+| `historical-price-eod/full` | csökkenő sorrend; `close` **split-korrigált, osztalékkal nem** (NVDA 2024-06-07: 120.89) |
+| `non-split-adjusted` | az `adjClose` mező itt **nyers** ár (1208.9) – a mezőnév félrevezető |
+| `dividend-adjusted` | `adjClose` split + osztalék (120.55) |
+| Történet | free-ben is mély: 2001 és 2010 adat lekérhető; `from`/`to` nélkül ~5 év |
+| `dividends` | `dividend` (tényleges), `adjDividend` (split-korr.), dátumok, `frequency`; nincs pénznem |
+| `profile` | `currency`, `cik`, `isin`, `exchange`, `exchangeFullName`, `isEtf`, `isFund`, `country`, `sector`…; hiány gyakran `""` |
+| `search-symbol` | `symbol` utótaggal (`ISF.L`, `SAP.DE`), `exchange` (`LSE`, `AMS`, `XETRA`, `MIL`, `FSX`, `NASDAQ`, `NYSE`, `AMEX`, `OTC`, `CRYPTO`…), `currency` (`GBp`, `ZAc` is) |
+| `exchange` → MIC (igazolt) | `NASDAQ`→XNAS, `NYSE`→XNYS, `AMEX`→ARCX vagy XASE (kétértelmű: keresésben nem képezzük le), `XETRA`→XETR, `LSE`→XLON, `AMS`→XAMS, `MIL`→XMIL, `FSX`→XFRA |
+
+### 11.2 EODHD – `eodhd` adapter (MEGVALÓSÍTVA)
+
+| Tény | Érték |
+|---|---|
+| API | `https://eodhd.com/api/{végpont}/{KÓD}.{TŐZSDE}?fmt=json&api_token=…` |
+| `/api/user` (0 hívás) | `subscriptionType: free`, `dailyRateLimit: 20`, `extraLimit` (egyszeri bónusz), `apiRequests` (mai felhasználás). A `name`/`email` mezőt nem tároljuk. |
+| Fejléc | `x-ratelimit-limit: 1200` (percenkénti) |
+| `real-time` | `{ code, timestamp, close, … }`; **nincs pénznem**; ismeretlen ticker: **HTTP 200, minden érték `"NA"`** |
+| `eod` | `[{ date, open, high, low, close, adjusted_close, volume }]`; **nincs pénznem**; `adjusted_close` split + osztalék (ASML 1455.4 vs 1453.4556) |
+| Free ablak | 1 évnél régebbi időszakra **HTTP 200, egyetlen, a kért időszakon KÍVÜLI sor** `warning: "Data is limited by one year as you have free subscription"` mezővel → az adapter eldobja és jelzi |
+| `div` | `value` (split-korr.), `unadjustedValue`, `currency` **soronként** (ISF.LSE: ár GBX, osztalék GBP), dátumok (Európán kívül gyakran `null`) |
+| `search` | `Code`, `Exchange`, `Name`, `Type` (`ETF`, `Common Stock`…), `Country`, `Currency` (GBX is), `ISIN`, `isPrimary`; ISIN-nel is keres; `exchange=` szűrő működik |
+| Fundamentals | **HTTP 403** „Only EOD data allowed for free users” (a 403 nem számított bele a keretbe) |
+| Hibás ticker (`eod`) | **404** `text/html` „Ticker Not Found.” |
+| Tőzsdekód ↔ MIC (igazolt) | `XETRA`↔XETR, `F`↔XFRA, `LSE`↔XLON, `AS`↔XAMS, `SW`↔XSWX, `BUD`↔XBUD; `US` = ország-szint (US MIC-ek → `.US`, keresésből nem képezzük vissza) |
+| Hívásköltség | EOD, live, div, search: 1; user: 0; fundamentals: 10 (doksi + 3.1) |
+
+### 11.3 Kapacitás free módban (a 5.4 frissítése, élő adatok alapján)
+
+| Forrás | Napi keret | Költség a mi végpontjainkon | Megjegyzés |
+|---|---|---|---|
+| EODHD free | 20 | quote 1 (+1 pénznem-keresés, ha nincs helyszíni szabály, naponta egyszer), ártörténet 1 (+1), osztalék 1, keresés 1 | kb. 8–15 nem US instrumentum/nap; a keresés legfeljebb a keret 75%-a (D-051) |
+| FMP free | 250 `[HARMADIK FÉL]` | minden végpont 1 | kb. 80–120 US instrumentum/nap (quote + ártörténet) |
+
+### 11.4 Feltételek (ToS)
+
+- **EODHD** (https://eodhd.com/financial-apis/terms-conditions, olvasva 2026-11-21): a „Non-Professional User” személyes befektetési célra **tárolhatja, feldolgozhatja és elemezheti** az adatot; **tilos** továbbadni, újraközölni, másnak megjeleníteni vagy hozzáférést adni (fiókmegosztás is). Attribúciót a ToS nem ír elő; az adat „nem feltétlenül valós idejű vagy pontos”. → Összhangban a D-008-cal (csak saját használat). Több felhasználós kiadás előtt üzleti csomag kell.
+- **FMP**: a ToS-oldal HTTP 403 (`[HARMADIK FÉL]`: „personal use” csomagok). A tulajdonos ellenőrizze a fiókjában (KI-39). Addig ugyanazt a szabályt alkalmazzuk, mint az EODHD-nél.
+- A forrás neve minden válasz provenance-ében szerepel (`sourceId`, `sourceName`), a UI ezt mutatja (7. fejezet 7. pont).
+
+### 11.5 Források
+
+- EODHD: https://eodhd.com/pricing, https://eodhd.com/financial-apis/api-limits, https://eodhd.com/financial-apis/api-for-historical-data-and-volumes, https://eodhd.com/financial-apis/live-realtime-stocks-api, https://eodhd.com/financial-apis/api-splits-dividends, https://eodhd.com/financial-apis/search-api-for-stocks-etfs-mutual-funds, https://eodhd.com/financial-apis/user-api, https://eodhd.com/financial-apis/terms-conditions
+- FMP: https://site.financialmodelingprep.com/developer/docs (HTTP 403 a mi eszközeinkkel), élő próbák: `https://financialmodelingprep.com/stable/…`
+
+### 11.6 Új fixture rögzítése (eljárás)
+
+1. Ellenőrizd a mai EODHD-felhasználást: `GET https://eodhd.com/api/user?api_token=…&fmt=json` (0 hívás).
+2. A kulcsot csak a `.env.local`-ból olvasó szkripttel kérj le (soha ne írd parancssorba vagy chatbe), a válaszból töröld a `name`/`email` mezőt, és értékvak szkennerrel ellenőrizd, hogy a kulcs nincs a fájlban.
+3. Mentsd `{ "_fixture": { source, url, recordedAt, note }, "response": … }` alakban a `__fixtures__` mappába (D-047).

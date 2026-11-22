@@ -4,7 +4,7 @@
  */
 import { z } from 'zod';
 
-import { AppErrors, err, ok, type AppError, type Result } from '@/domain';
+import { AppErrors, UNAVAILABLE_REASONS, err, ok, type AppError, type Result } from '@/domain';
 
 export const API_VERSION = '1';
 
@@ -12,7 +12,10 @@ export const API_ERROR_CODES = [
   'VALIDATION_FAILED',
   'NOT_FOUND',
   'UNSUPPORTED_MARKET',
-  /** Ehhez a képességhez nincs bekötött forrás (pl. árfolyam a PHASE 04B-ig). PHASE 04A. */
+  /**
+   * Ehhez a képességhez nincs elérhető forrás (PHASE 04A). A PHASE 04B-től az opcionális
+   * `unavailableReason` megmondja, miért: csomagkorlát, lefedettség vagy elfogyott kvóta.
+   */
   'CAPABILITY_UNAVAILABLE',
   'RATE_LIMITED',
   'TIMEOUT',
@@ -31,6 +34,8 @@ export const apiErrorSchema = z.object({
     code: z.enum(API_ERROR_CODES),
     message: z.string().max(1000),
     retryAfterSec: z.number().int().nonnegative().nullable().optional(),
+    /** PHASE 04B, visszafelé kompatibilis bővítés: csak `CAPABILITY_UNAVAILABLE` mellett. */
+    unavailableReason: z.enum(UNAVAILABLE_REASONS).nullable().optional(),
   }),
 });
 export type ApiErrorDto = z.output<typeof apiErrorSchema>['error'];
@@ -53,7 +58,9 @@ export function apiErrorToAppError(error: ApiErrorDto): AppError {
     case 'UNSUPPORTED_MARKET':
       return AppErrors.missingData(['market'], message);
     case 'CAPABILITY_UNAVAILABLE':
-      return AppErrors.missingData(['source'], message);
+      return error.unavailableReason === undefined || error.unavailableReason === null
+        ? AppErrors.missingData(['source'], message)
+        : AppErrors.unavailable(error.unavailableReason, message);
     case 'RATE_LIMITED':
       return AppErrors.rateLimited(message, error.retryAfterSec ?? null);
     case 'TIMEOUT':

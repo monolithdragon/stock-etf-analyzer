@@ -50,8 +50,11 @@ describe('GET /api/v1/health', () => {
       ['sec-edgar', ['financialStatements']],
       ['ecb-fx', ['fxRates']],
       ['openfigi', ['listings']],
+      ['fmp', ['quote', 'priceHistory', 'profile', 'dividends', 'search']],
+      ['eodhd', ['quote', 'priceHistory', 'dividends', 'listings', 'search']],
     ]);
-    // Árfolyam, ártörténet, profil, osztalék, ETF: a 04A-ban NINCS forrás – és ezt ki is mondjuk.
+    // FMP/EODHD kulcs NÉLKÜL (ez a teszt nem ad kulcsot) a képességeik „nem elérhetők”;
+    // ETF-metaadat/holdings: free csomagban egyáltalán nincs forrás – és ezt ki is mondjuk.
     expect(parsed.value.unavailableCapabilities).toEqual(
       expect.arrayContaining([
         'quote',
@@ -141,12 +144,15 @@ describe('GET /api/v1/securities/{isin}/listings', () => {
 });
 
 describe('GET /api/v1/stocks/{id}/financials', () => {
-  it('nem US listing → 422 UNSUPPORTED_MARKET', async () => {
-    const response = await liveContext().handlers.financials(get('/x?period=annual'), {
-      id: 'SAP@XETR',
+  it('nem US listing → 501 CAPABILITY_UNAVAILABLE / PLAN_LIMIT (PHASE 04B routing), hívás nélkül', async () => {
+    const { handlers, fetchImpl } = liveContext();
+    const response = await handlers.financials(get('/x?period=annual'), { id: 'SAP@XETR' });
+    expect(response.status).toBe(501);
+    expect(await body(response)).toMatchObject({
+      error: { code: 'CAPABILITY_UNAVAILABLE', unavailableReason: 'PLAN_LIMIT' },
     });
-    expect(response.status).toBe(422);
-    expect(await body(response)).toMatchObject({ error: { code: 'UNSUPPORTED_MARKET' } });
+    // Ticker-ütközés elleni védelem: a SEC-et meg sem kérdezzük (a US `SAP` ADR más jegyzés).
+    expect(fetchImpl.calls).toHaveLength(0);
   });
 
   it('hibás period paraméter → 400', async () => {

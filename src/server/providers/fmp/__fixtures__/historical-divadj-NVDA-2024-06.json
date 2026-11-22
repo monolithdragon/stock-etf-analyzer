@@ -1,0 +1,46 @@
+{
+  "_fixture": {
+    "source": "FMP stable",
+    "url": "https://financialmodelingprep.com/stable/historical-price-eod/dividend-adjusted?symbol=NVDA&from=2024-06-06&to=2024-06-11",
+    "recordedAt": "2026-11-21T16:00:00Z",
+    "note": "VALÓS válasz (élő próbahívás a tulajdonos free kulcsával), teszt-fixture-nek megvágva. A kulcs NEM szerepel benne."
+  },
+  "response": [
+    {
+      "symbol": "NVDA",
+      "date": "2024-06-11",
+      "adjOpen": 121.44,
+      "adjHigh": 122.53,
+      "adjLow": 118.42,
+      "adjClose": 120.58,
+      "volume": 222551200
+    },
+    {
+      "symbol": "NVDA",
+      "date": "2024-06-10",
+      "adjOpen": 120.03,
+      "adjHigh": 122.76,
+      "adjLow": 116.68,
+      "adjClose": 121.45,
+      "volume": 314162650
+    },
+    {
+      "symbol": "NVDA",
+      "date": "2024-06-07",
+      "adjOpen": 119.43,
+      "adjHigh": 121.35,
+      "adjLow": 117.69,
+      "adjClose": 120.55,
+      "volume": 412386000
+    },
+    {
+      "symbol": "NVDA",
+      "date": "2024-06-06",
+      "adjOpen": 123.7,
+      "adjHigh": 125.24,
+      "adjLow": 117.99,
+      "adjClose": 120.66,
+      "volume": 664696190
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # Roadmap – Stock & ETF Analyzer
 
-> Frissítve: 2026-11-21 (PHASE 04A vége). Minden fázis külön chatben fut, a `stock_etf_analyzer_prompts` csomag `NN_*.md` promptja alapján.
+> Frissítve: 2026-11-21 (PHASE 04B vége – a teljes PHASE 04 kész). Minden fázis külön chatben fut, a `stock_etf_analyzer_prompts` csomag `NN_*.md` promptja alapján.
 > **Fázisszabály:** a következő fázis csak akkor indul, ha az előző befejezési feltételei teljesültek, vagy a hiányok a KNOWN_ISSUES-ban dokumentálva vannak.
 > **Verzió:** a promptok egy része SDK 57-et említ. Mindenhol **SDK 58** értendő (D-020).
 
@@ -11,8 +11,8 @@
 | 01 | Követelmények és architektúra | **KÉSZ** (2026-11-21) | – |
 | 02 | Projekt setup | **KÉSZ** (2026-11-21) | **M1 Futó váz ✅** |
 | 03 | Architektúra és domain modell | **KÉSZ** (2026-11-21) | |
-| 04 | Adatforrások, proxy és deviza – **két chatben: 04A + 04B** (D-028) | **04A KÉSZ** (2026-11-21) – **04B következik** | M2 Adat a csövön |
-| 05 | Pénzügyi calculation engine | NEM KEZDŐDÖTT | |
+| 04 | Adatforrások, proxy és deviza – **két chatben: 04A + 04B** (D-028) | **KÉSZ** (04A és 04B, 2026-11-21) | **M2 Adat a csövön ✅** |
+| 05 | Pénzügyi calculation engine | **KÖVETKEZIK** | |
 | 06 | Részvény fundamentális elemzés | NEM KEZDŐDÖTT | |
 | 07 | Értékelés és DCF | NEM KEZDŐDÖTT | |
 | 08 | ETF-elemzés | NEM KEZDŐDÖTT | |
@@ -192,6 +192,20 @@ Minden fázis közös lezárása (CLAUDE.md):
   - A routing és a fallback tesztelt (beleértve a 402/429 esetet).
   - Fizetős csomagra váltás csak env-módosítást igényel (teszttel demonstrálva).
   - Átadás: `docs/handoffs/phase-04-handoff.md`.
+- **Eredmény (2026-11-21): KÉSZ.**
+  - Csomagszint (U-13): mindkét kulcs **free**. Az FMP free csak US (annak is egy része); az EODHD free 20 hívás/nap, 1 év történet, fundamentum nélkül. Élő próbák: DATA_SOURCES 11.
+  - Adapterek: `fmp` (quote, ártörténet 3 korrekcióval, profil, osztalék, keresés), `eodhd` (quote, ártörténet, osztalék, keresés ISIN-nel is, ISIN → jegyzések pénznemmel).
+  - `ProviderRouter` (D-049), csomagmátrix `FMP_PLAN`/`EODHD_PLAN`-ből (D-051), napi kvóta-őr prioritással, `UNAVAILABLE` hibafajta + `unavailableReason` (D-053).
+  - Új végpontok: `prices`, `profile`, `dividends`, `search`, `providers/status` (összesen 10). Kliens: 4 új use case frissesség-számítással.
+  - Fixture: 3 UCITS ETF (VWCE, IWDA, ISF – GBX) és 4 nem US részvény (SAP, ASML, NESN – CHF, OTP – HUF), valamint FMP: AAPL (quote, profil, osztalék), SPY (ETF, NYSE Arca), NVDA (split, 3 korrekció), keresés (ISF, SAP).
+  - Ellenőrzés: `npm run check` exit 0, **337/337 teszt** (25 suite); élő füstpróba a 8083-as porton; Android- és web-export szkennelve (nincs titok, a kliens-bundle-ben nincs szolgáltatói kód); repó-szkenner: 0 találat.
+  - Új döntések: D-049…D-054. Új ismert problémák: KI-30…KI-41.
+  - **Eltérés a tervtől:** `prices?adjusted` helyett `adjustment=none|split|split_dividend`; `corporate-actions` helyett `dividends` (split nincs bekötve); EAS-próbatelepítés továbbra sincs (tulajdonosi döntés, KI-29).
+- **A PHASE 05 kapcsolódási pontjai (PHASE 04-ből):**
+  - A képletek bemenete domain-típus: `FinancialStatementSet` (SEC, `Metric` `MISSING`/`OK`), `PriceSeries` (`adjustment`!), `DividendHistory` (eseményenkénti pénznem!), `Quote`, `FxConversion`.
+  - Hozamhoz: `SPLIT_DIVIDEND` sorozat = total return; `SPLIT` = árhozam. Különböző korrekciójú sorozatot nem szabad keverni.
+  - Osztalékhozamhoz az osztalék és az ár pénznemét egyeztetni kell (ISF: GBP osztalék vs. GBX ár → `toMajor`).
+  - A `src/calculations/` mappa még nem létezik (az ESLint-szabályokban a `./calculations` réteg már szerepel).
 
 ### PHASE 05 – Pénzügyi calculation engine
 - **Cél:** tiszta, dokumentált, tesztelt képletkönyvtár.

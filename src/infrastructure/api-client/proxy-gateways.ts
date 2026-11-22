@@ -4,8 +4,12 @@
  */
 import type { FxGateway, MarketDataGateway } from '@/application';
 import {
+  dividendHistoryDtoSchema,
   financialStatementSetDtoSchema,
   fxRateSetDtoSchema,
+  instrumentProfileDtoSchema,
+  instrumentSearchResultDtoSchema,
+  priceSeriesDtoSchema,
   quoteDtoSchema,
   quoteFromDto,
   securityListingsDtoSchema,
@@ -30,6 +34,30 @@ export function createProxyMarketDataGateway(http: ProxyHttpClient): MarketDataG
         `${API}/stocks/${segment(listingId)}/financials?period=${frequency}`,
         financialStatementSetDtoSchema,
       );
+    },
+    getPriceHistory({ listingId, from, to, adjustment }) {
+      const params = new URLSearchParams({ from, to, adjustment: adjustment.toLowerCase() });
+      return http.get(
+        `${API}/instruments/${segment(listingId)}/prices?${params.toString()}`,
+        priceSeriesDtoSchema,
+      );
+    },
+    getInstrumentProfile(listingId) {
+      return http.get(
+        `${API}/instruments/${segment(listingId)}/profile`,
+        instrumentProfileDtoSchema,
+      );
+    },
+    getDividends({ listingId, from, to }) {
+      const params = new URLSearchParams({ from, to });
+      return http.get(
+        `${API}/instruments/${segment(listingId)}/dividends?${params.toString()}`,
+        dividendHistoryDtoSchema,
+      );
+    },
+    searchInstruments(query) {
+      const params = new URLSearchParams({ q: query });
+      return http.get(`${API}/search?${params.toString()}`, instrumentSearchResultDtoSchema);
     },
   };
 }

@@ -8,13 +8,18 @@
 import type {
   AppError,
   CurrencyCode,
+  DividendHistory,
   FinancialStatementSet,
   FxRateSet,
+  InstrumentProfile,
+  InstrumentSearchResult,
   IsoDate,
   Isin,
   ListingId,
   Portfolio,
   PortfolioId,
+  PriceAdjustment,
+  PriceSeries,
   Quote,
   Result,
   SecurityListings,
@@ -46,6 +51,22 @@ export interface MarketDataGateway {
     listingId: ListingId,
     frequency: StatementFrequency,
   ): Promise<Result<FinancialStatementSet, AppError>>;
+  /** Napi ártörténet (PHASE 04B). A free EODHD csak 1 évet ad – ezt a `notes` jelzi. */
+  getPriceHistory(request: {
+    readonly listingId: ListingId;
+    readonly from: IsoDate;
+    readonly to: IsoDate;
+    readonly adjustment: PriceAdjustment;
+  }): Promise<Result<PriceSeries, AppError>>;
+  /** Instrumentum-profil (free: csak US). Nem US → `UNAVAILABLE / PLAN_LIMIT`. */
+  getInstrumentProfile(listingId: ListingId): Promise<Result<InstrumentProfile, AppError>>;
+  getDividends(request: {
+    readonly listingId: ListingId;
+    readonly from: IsoDate;
+    readonly to: IsoDate;
+  }): Promise<Result<DividendHistory, AppError>>;
+  /** Keresés ticker, név vagy ISIN alapján. */
+  searchInstruments(query: string): Promise<Result<InstrumentSearchResult, AppError>>;
 }
 
 /** Referencia-devizaárfolyamok (ECB, EUR pivot). A keresztárfolyamot a domain számolja. */

@@ -6,10 +6,14 @@
  */
 import {
   createConvertMoney,
+  createGetDividendHistory,
   createGetFinancialStatements,
+  createGetInstrumentProfile,
   createGetListingQuote,
+  createGetPriceHistory,
   createGetSecurityListings,
   createRecordTransaction,
+  createSearchInstruments,
   type AppServices,
   type Clock,
   type FxGateway,
@@ -99,6 +103,10 @@ export function createAppServices(
     getListingQuote: createGetListingQuote(market),
     getSecurityListings: createGetSecurityListings(market),
     getFinancialStatements: createGetFinancialStatements(market),
+    getPriceHistory: createGetPriceHistory(market),
+    getInstrumentProfile: createGetInstrumentProfile(market),
+    getDividendHistory: createGetDividendHistory(market),
+    searchInstruments: createSearchInstruments(market),
     convertMoney: createConvertMoney({ fxGateway: deps.fx, clock: deps.clock }),
     recordTransaction: createRecordTransaction({
       portfolioRepository: deps.portfolioRepository,

@@ -38,10 +38,10 @@ describe('requestJson – hibaleképezés', () => {
     expect(r).toMatchObject({ ok: false, error: { kind: 'RATE_LIMITED', retryAfterSec: 42 } });
   });
 
-  it('402 (kvóta elfogyott) → RATE_LIMITED, ismeretlen várakozással', async () => {
+  it('402 (napi kvóta elfogyott) → UNAVAILABLE / QUOTA_EXHAUSTED (PHASE 04B, EODHD-doksi)', async () => {
     expect(await call(() => jsonResponse({}, 402))).toMatchObject({
       ok: false,
-      error: { kind: 'RATE_LIMITED', retryAfterSec: null },
+      error: { kind: 'UNAVAILABLE', reason: 'QUOTA_EXHAUSTED' },
     });
   });
 
@@ -125,10 +125,17 @@ describe('createTtlMemo', () => {
 
 describe('parseServerEnv', () => {
   it('alapértelmezés: live, kulcs és User-Agent nélkül', () => {
-    expect(parseServerEnv({})).toEqual({
-      env: { dataMode: 'live', secUserAgent: null, openFigiApiKey: null },
-      issues: [],
+    const { env, issues } = parseServerEnv({});
+    expect(issues).toEqual([]);
+    expect(env).toMatchObject({
+      dataMode: 'live',
+      secUserAgent: null,
+      openFigiApiKey: null,
+      fmpApiKey: null,
+      eodhdApiKey: null,
     });
+    // Csomag nélkül a legszűkebb (free) csomag a kiindulás.
+    expect([env.fmpPlan.id, env.eodhdPlan.id]).toEqual(['free', 'free']);
   });
 
   it('hibás SEC_USER_AGENT: elveti, és az értéket NEM írja a hibaüzenetbe', () => {
@@ -145,10 +152,32 @@ describe('parseServerEnv', () => {
       OPENFIGI_API_KEY: ' k ',
     });
     expect(issues).toEqual([]);
-    expect(env).toEqual({
+    expect(env).toMatchObject({
       dataMode: 'mock',
       secUserAgent: 'StockEtfAnalyzer dev@example.com',
       openFigiApiKey: 'k',
     });
+  });
+
+  it('FMP/EODHD kulcs és csomag (PHASE 04B); a kulcs értéke soha nem kerül hibaüzenetbe', () => {
+    const { env, issues } = parseServerEnv({
+      FMP_API_KEY: ' fmp-titok-123 ',
+      FMP_PLAN: 'FREE',
+      EODHD_API_KEY: 'eodhd-titok-456',
+      EODHD_PLAN: 'nincs-ilyen',
+    });
+    expect(env.fmpApiKey).toBe('fmp-titok-123');
+    expect(env.eodhdApiKey).toBe('eodhd-titok-456');
+    expect(env.fmpPlan.id).toBe('free');
+    // Ismeretlen csomag → a legszűkebb csomag + figyelmeztetés (nem csendes „fizetős” feltevés).
+    expect(env.eodhdPlan.id).toBe('free');
+    expect(issues.map((i) => i.variable)).toEqual(['EODHD_PLAN']);
+    expect(JSON.stringify(issues)).not.toMatch(/titok/);
+  });
+
+  it('nem igazolt fizetős csomag: elfogadja, de figyelmeztet', () => {
+    const { env, issues } = parseServerEnv({ EODHD_PLAN: 'eod-all-world' });
+    expect(env.eodhdPlan).toMatchObject({ id: 'eod-all-world', historyWindowDays: null });
+    expect(issues[0]?.message).toContain('NINCSENEK élő próbával igazolva');
   });
 });

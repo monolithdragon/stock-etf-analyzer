@@ -9,6 +9,10 @@ const fakeServices: AppServices = {
   getListingQuote: jest.fn(),
   getSecurityListings: jest.fn(),
   getFinancialStatements: jest.fn(),
+  getPriceHistory: jest.fn(),
+  getInstrumentProfile: jest.fn(),
+  getDividendHistory: jest.fn(),
+  searchInstruments: jest.fn(),
   convertMoney: jest.fn(),
   recordTransaction: jest.fn(),
 };

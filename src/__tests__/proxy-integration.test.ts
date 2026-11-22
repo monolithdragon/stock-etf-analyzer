@@ -30,9 +30,12 @@ function clientFetchFor(server: ServerContext) {
     if ((m = path.match(/^\/api\/v1\/stocks\/([^/]+)\/financials$/))) {
       return handlers.financials(request, { id: decodeURIComponent(m[1] ?? '') });
     }
-    if ((m = path.match(/^\/api\/v1\/instruments\/([^/]+)\/quote$/))) {
-      return handlers.quote(request, { id: decodeURIComponent(m[1] ?? '') });
+    if ((m = path.match(/^\/api\/v1\/instruments\/([^/]+)\/(quote|prices|profile|dividends)$/))) {
+      const params = { id: decodeURIComponent(m[1] ?? '') };
+      const endpoint = m[2] as 'quote' | 'prices' | 'profile' | 'dividends';
+      return handlers[endpoint](request, params);
     }
+    if (path === '/api/v1/search') return handlers.search(request);
     return new Response('Not found', { status: 404 });
   };
 }
@@ -112,21 +115,104 @@ describe('kliens ↔ proxy ↔ adapter (élő mód, fixture-ökkel)', () => {
     expect(result.ok && result.value.listings.map((l) => l.listingId)).toContain('VWCE@XETR');
   });
 
-  it('árfolyam élő módban: őszinte „nincs forrás” hiba a kliensig (MISSING_DATA / source)', async () => {
-    const { services } = liveStack();
+  it('árfolyam FMP/EODHD kulcs nélkül: őszinte UNAVAILABLE / NOT_COVERED a kliensig, hívás nélkül', async () => {
+    const { services, upstream } = liveStack();
     expect(await services.getListingQuote('MSFT@XNAS')).toMatchObject({
       ok: false,
-      error: { kind: 'MISSING_DATA', missing: ['source'] },
+      error: { kind: 'UNAVAILABLE', reason: 'NOT_COVERED' },
     });
+    expect(upstream.calls).toHaveLength(0);
   });
 
-  it('nem US részvény kimutatása: UNSUPPORTED_MARKET → MISSING_DATA(market) a kliensen', async () => {
+  it('nem US részvény kimutatása: UNAVAILABLE / PLAN_LIMIT a kliensen (fizetős csomag kellene)', async () => {
     const { services, upstream } = liveStack();
     expect(await services.getFinancialStatements('SAP@XETR', 'annual')).toMatchObject({
       ok: false,
-      error: { kind: 'MISSING_DATA', missing: ['market'] },
+      error: { kind: 'UNAVAILABLE', reason: 'PLAN_LIMIT' },
     });
     expect(upstream.calls).toHaveLength(0);
+  });
+});
+
+/** PHASE 04B: FMP + EODHD kulccsal, valós fixture-ökkel (a kulcs a teszt saját értéke). */
+function marketStack() {
+  const upstream = fakeFetch((url) => {
+    const u = new URL(url);
+    if (u.hostname === 'financialmodelingprep.com') {
+      if (u.pathname === '/stable/profile')
+        return jsonResponse(loadFixture('fmp', 'profile-AAPL.json'));
+      if (u.pathname === '/stable/historical-price-eod/full')
+        return jsonResponse(loadFixture('fmp', 'historical-full-NVDA-2024-06.json'));
+      return new Response('Restricted Endpoint', { status: 402 });
+    }
+    if (u.pathname === '/api/search/ISF')
+      return jsonResponse(loadFixture('eodhd', 'search-IE0005042456.json'));
+    if (u.pathname === '/api/eod/ISF.LSE')
+      return jsonResponse(loadFixture('eodhd', 'eod-ISF.LSE.json'));
+    if (u.pathname === '/api/div/ISF.LSE')
+      return jsonResponse(loadFixture('eodhd', 'div-ISF.LSE.json'));
+    if (u.pathname === '/api/search/IE0005042456')
+      return jsonResponse(loadFixture('eodhd', 'search-IE0005042456.json'));
+    return new Response('Ticker Not Found.', { status: 404 });
+  });
+  const server = createServerContext({
+    rawEnv: { PROXY_DATA_MODE: 'live', FMP_API_KEY: 'teszt-fmp', EODHD_API_KEY: 'teszt-eodhd' },
+    fetchImpl: upstream,
+    now: clock.now,
+    logger: silentServerLogger,
+  });
+  return createAppServices(
+    { dataMode: 'live', apiBaseUrl: 'http://localhost:8081' },
+    { clock, fetchImpl: clientFetchFor(server) },
+  );
+}
+
+describe('kliens ↔ proxy ↔ FMP/EODHD (PHASE 04B, fixture-ökkel)', () => {
+  it('ISF@XLON ártörténet: GBX natív pénznem, EODHD, frissesség a saját óránkkal', async () => {
+    const result = await marketStack().getPriceHistory('ISF@XLON', {
+      from: '2026-10-20',
+      to: '2026-11-20',
+      adjustment: 'NONE',
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.currency).toBe('GBX');
+    expect(result.value.provenance).toMatchObject({ sourceId: 'eodhd', asOf: '2026-11-20' });
+    // Az utolsó árpont 2026-11-20, az óra 2026-11-21 → FRESH (4 napos szabály).
+    expect(result.value.provenance.freshness).toBe('FRESH');
+  });
+
+  it('NVDA split-korrigált ártörténet az FMP-től; régi adat → EXPIRED', async () => {
+    const result = await marketStack().getPriceHistory('NVDA@XNAS', {
+      from: '2024-06-06',
+      to: '2024-06-11',
+      adjustment: 'SPLIT',
+    });
+    expect(result.ok && result.value.points[1]).toEqual({ date: '2024-06-07', close: 120.89 });
+    expect(result.ok && result.value.provenance.freshness).toBe('EXPIRED');
+  });
+
+  it('profil (US, FMP), osztalék (GBP), ISIN-keresés (EODHD) domain-típusként', async () => {
+    const services = marketStack();
+    const profile = await services.getInstrumentProfile('AAPL@XNAS');
+    expect(profile).toMatchObject({ ok: true, value: { isin: 'US0378331005', kindHint: 'stock' } });
+    const dividends = await services.getDividendHistory('ISF@XLON', {
+      from: '2025-01-01',
+      to: '2026-11-21',
+    });
+    expect(dividends.ok && dividends.value.events[0]?.amount.currency).toBe('GBP');
+    const search = await services.searchInstruments('IE0005042456');
+    expect(search.ok && search.value.hits[0]).toMatchObject({
+      listingId: 'ISF@XLON',
+      tradingCurrency: 'GBX',
+    });
+  });
+
+  it('nem US profil: UNAVAILABLE / PLAN_LIMIT a kliensen (nem „nincs adat”, nem 0)', async () => {
+    expect(await marketStack().getInstrumentProfile('ISF@XLON')).toMatchObject({
+      ok: false,
+      error: { kind: 'UNAVAILABLE', reason: 'PLAN_LIMIT' },
+    });
   });
 });
 

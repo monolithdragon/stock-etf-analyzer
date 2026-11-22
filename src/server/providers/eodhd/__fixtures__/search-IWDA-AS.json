@@ -1,0 +1,22 @@
+{
+  "_fixture": {
+    "source": "EODHD",
+    "url": "https://eodhd.com/api/search/IWDA?exchange=AS&limit=50&fmt=json",
+    "recordedAt": "2026-11-21T16:45:00Z",
+    "note": "VALÓS válasz (élő próbahívás a tulajdonos free kulcsával), teszt-fixture-nek megvágva. A kulcs NEM szerepel benne."
+  },
+  "response": [
+    {
+      "Code": "IWDA",
+      "Exchange": "AS",
+      "Name": "iShares Core MSCI World UCITS ETF USD (Acc)",
+      "Type": "ETF",
+      "Country": "Netherlands",
+      "Currency": "EUR",
+      "ISIN": "IE00B4L5Y983",
+      "isPrimary": false,
+      "previousClose": 122.71,
+      "previousCloseDate": "2026-11-20"
+    }
+  ]
+}

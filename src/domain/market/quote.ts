@@ -62,7 +62,22 @@ export function createQuote(input: QuoteInput): Result<Quote> {
   });
 }
 
-/** Egy napi ár (split-korrigált vagy nem – a sorozat `adjusted` mezője jelzi). */
+/**
+ * Az ártörténet korrekciója (PHASE 04B, D-050). A szolgáltatók mást értenek „adjusted” alatt
+ * (élő próbával igazolva): az FMP `full` záróára csak split-korrigált, az EODHD
+ * `adjusted_close`-a split- ÉS osztalék-korrigált. Ezért nem bool, hanem explicit fajta.
+ */
+export const PRICE_ADJUSTMENTS = [
+  /** Nyers (a kereskedés napján ténylegesen jegyzett) záróár. */
+  'NONE',
+  /** Split-korrigált záróár, osztalék-korrekció NÉLKÜL. */
+  'SPLIT',
+  /** Split- és osztalék-korrigált („total return” jellegű) záróár. */
+  'SPLIT_DIVIDEND',
+] as const;
+export type PriceAdjustment = (typeof PRICE_ADJUSTMENTS)[number];
+
+/** Egy napi záróár (a korrekció fajtáját a sorozat `adjustment` mezője jelzi). */
 export interface PricePoint {
   readonly date: IsoDate;
   readonly close: number;
@@ -70,19 +85,25 @@ export interface PricePoint {
 
 export interface PriceSeries {
   readonly listingId: ListingId;
+  /** A jegyzés (instrumentum) EREDETI pénzneme – pl. `GBX` az LSE-n. Nem a kijelzési pénznem. */
   readonly currency: CurrencyCode;
-  /** `true` = split-korrigált záróárak (osztalék-korrekció NEM feltételezett). */
-  readonly adjusted: boolean;
-  /** Dátum szerint szigorúan növekvő, ismétlődés nélkül. */
+  readonly adjustment: PriceAdjustment;
+  /** Dátum szerint szigorúan növekvő, ismétlődés nélkül. Lehet üres (nincs kereskedési nap). */
   readonly points: readonly PricePoint[];
+  /**
+   * Átláthatósági megjegyzések, pl. „a free csomag csak 1 évet ad: a kért időszak eleje
+   * le van vágva”, vagy „a szolgáltató figyelmeztető sorát eldobtuk”.
+   */
+  readonly notes: readonly string[];
   readonly provenance: DataProvenance;
 }
 
 export interface PriceSeriesInput {
   readonly listingId: ListingId;
   readonly currency: CurrencyCode;
-  readonly adjusted: boolean;
+  readonly adjustment: PriceAdjustment;
   readonly points: readonly { readonly date: string; readonly close: number }[];
+  readonly notes?: readonly string[];
   readonly provenance: DataProvenance;
 }
 
@@ -103,8 +124,9 @@ export function createPriceSeries(input: PriceSeriesInput): Result<PriceSeries> 
   return ok({
     listingId: input.listingId,
     currency: input.currency,
-    adjusted: input.adjusted,
+    adjustment: input.adjustment,
     points,
+    notes: [...(input.notes ?? [])],
     provenance: input.provenance,
   });
 }

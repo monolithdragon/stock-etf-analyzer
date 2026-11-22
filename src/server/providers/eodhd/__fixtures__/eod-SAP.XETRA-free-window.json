@@ -1,0 +1,20 @@
+{
+  "_fixture": {
+    "source": "EODHD",
+    "url": "https://eodhd.com/api/eod/SAP.XETRA?fmt=json&from=2020-01-02&to=2020-01-10",
+    "recordedAt": "2026-11-21T16:00:00Z",
+    "note": "VALÓS válasz (élő próbahívás a tulajdonos free kulcsával), teszt-fixture-nek megvágva. A kulcs NEM szerepel benne. Free csomag, 1 évnél régebbi időszak: HTTP 200, EGYETLEN, a kért időszakon KÍVÜLI sor warning mezővel."
+  },
+  "response": [
+    {
+      "date": "2025-11-21",
+      "open": 204,
+      "high": 208.2,
+      "low": 203.35,
+      "close": 205,
+      "adjusted_close": 201.5788,
+      "volume": 1520744,
+      "warning": "Data is limited by one year as you have free subscription"
+    }
+  ]
+}

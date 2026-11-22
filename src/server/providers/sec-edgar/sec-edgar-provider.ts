@@ -140,6 +140,8 @@ export function createSecEdgarProvider(deps: SecEdgarProviderDeps): MarketDataPr
       name: SEC_SOURCE.sourceName,
       kind: 'live',
       configured: deps.userAgent !== null,
+      plan: null,
+      coverage: 'SEC-filerek (US); a routing csak US jegyzésre használja.',
       note:
         deps.userAgent === null
           ? 'Nincs konfigurálva: SEC_USER_AGENT hiányzik a proxy env-jéből.'

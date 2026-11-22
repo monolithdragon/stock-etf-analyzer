@@ -95,10 +95,10 @@ Hasznos billentyűk a futó `npm start` / `npm run android` terminálban: `r` = 
 - A `.env.local` (és minden `.env*`, kivéve a `.env.example`) a `.gitignore` miatt **nem kerül gitbe**.
 - Az `EXPO_PUBLIC_*` változók bekerülnek az appba, ezért **titkot soha nem tartalmazhatnak**.
 - API-kulcsot **soha ne illessz be chatbe**, és ne commitold.
-- **PHASE 04A-tól:** a SEC-adatokhoz a `.env.local`-ban kell: `SEC_USER_AGENT="AppNév kapcsolattartó@email"`. Az FMP/EODHD kulcs a PHASE 04B-ben kerül ide.
+- **PHASE 04A-tól:** a SEC-adatokhoz a `.env.local`-ban kell: `SEC_USER_AGENT="AppNév kapcsolattartó@email"`. **PHASE 04B-től:** `FMP_API_KEY`, `EODHD_API_KEY` (titkos!), valamint `FMP_PLAN`, `EODHD_PLAN` (alapértelmezés: `free`).
 - Env-változás után a futó dev szervert **újra kell indítani**.
 
-## A proxy (saját szerver) lokálisan – PHASE 04A
+## A proxy (saját szerver) lokálisan – PHASE 04
 
 A proxy az Expo Router API route-jaiban fut (`src/app/api/v1/**/+api.ts`), ugyanazon a dev szerveren, mint az app:
 
@@ -106,9 +106,12 @@ A proxy az Expo Router API route-jaiban fut (`src/app/api/v1/**/+api.ts`), ugyan
 npm start
 # másik terminálban:
 curl.exe -s http://localhost:8081/api/v1/health
+curl.exe -s http://localhost:8081/api/v1/providers/status   # csomag, kvóta, routing (kulcs nélkül)
+curl.exe -s http://localhost:8081/api/v1/instruments/AAPL@XNAS/quote
 ```
 
 - Végpontok és válaszok: [docs/DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md) 11. fejezet.
+- Az EODHD free napi **20 hívást** ad – az európai ár-lekérésekkel takarékosan (DATA_SOURCES 11.3).
 - `PROXY_DATA_MODE=mock` mellett a proxy csak demóadatot ad (alapértelmezés: `live`).
 - Az app élő módja: `EXPO_PUBLIC_DATA_MODE=live` és `EXPO_PUBLIC_API_BASE_URL=http://<géped-IP-je>:8081` (emulátorból a `localhost` nem a géped!).
 - SEC teszt-fixture-ök újrarögzítése: `node scripts/record-sec-fixtures.mjs` (a `.env.local` `SEC_USER_AGENT`-jét használja).

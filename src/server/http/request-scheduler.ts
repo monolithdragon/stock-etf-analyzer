@@ -50,3 +50,22 @@ export function createTtlMemo<T>(ttlMs: number, now: () => number = Date.now) {
     },
   };
 }
+
+/** Memóriabeli, időkorlátos kulcs → érték tár (pl. EODHD jegyzés-pénznem, 24 óra). */
+export function createTtlMap<K, V>(ttlMs: number, now: () => number = Date.now) {
+  const entries = new Map<K, { readonly value: V; readonly expiresAt: number }>();
+  return {
+    get(key: K): V | null {
+      const entry = entries.get(key);
+      if (entry === undefined) return null;
+      if (entry.expiresAt <= now()) {
+        entries.delete(key);
+        return null;
+      }
+      return entry.value;
+    },
+    set(key: K, value: V): void {
+      entries.set(key, { value, expiresAt: now() + ttlMs });
+    },
+  };
+}

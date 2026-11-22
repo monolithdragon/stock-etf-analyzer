@@ -4,11 +4,11 @@
 import type { z } from 'zod';
 
 import { API_VERSION, type ApiErrorCode } from '@/contracts';
-import type { AppError } from '@/domain';
+import type { AppError, UnavailableReason } from '@/domain';
 
 /**
- * Kézi frissítés és cache (PHASE 04 feladat 10.): a 04A-ban NINCS proxy cache, minden kérés
- * friss lekérés, ezért `no-store`. A TTL-alapú cache a PHASE 13 feladata (ARCHITECTURE 11.).
+ * Kézi frissítés és cache (PHASE 04 feladat 10.): a PHASE 04-ben NINCS proxy cache, minden
+ * kérés friss lekérés, ezért `no-store`. A TTL-alapú cache a PHASE 13 feladata (ARCHITECTURE 11.).
  */
 const BASE_HEADERS = {
   'Content-Type': 'application/json; charset=utf-8',
@@ -20,13 +20,15 @@ export function errorResponse(
   status: number,
   message: string,
   retryAfterSec: number | null = null,
+  unavailableReason: UnavailableReason | null = null,
 ): Response {
   const headers: Record<string, string> = { ...BASE_HEADERS };
   if (retryAfterSec !== null) headers['Retry-After'] = String(retryAfterSec);
-  return new Response(
-    JSON.stringify({ apiVersion: API_VERSION, error: { code, message, retryAfterSec } }),
-    { status, headers },
-  );
+  const error =
+    unavailableReason === null
+      ? { code, message, retryAfterSec }
+      : { code, message, retryAfterSec, unavailableReason };
+  return new Response(JSON.stringify({ apiVersion: API_VERSION, error }), { status, headers });
 }
 
 /** AppError → (HTTP státusz, API hibakód). A kliens `apiErrorToAppError`-ja a párja. */
@@ -60,6 +62,15 @@ export function appErrorToResponse(error: AppError): Response {
       if (error.missing.includes('source'))
         return errorResponse('CAPABILITY_UNAVAILABLE', 501, error.message);
       return errorResponse('INTERNAL', 500, error.message);
+    case 'UNAVAILABLE':
+      // Kvóta: átmeneti (503); csomagkorlát / lefedettség: a forrás-beállítás nem tudja (501).
+      return errorResponse(
+        'CAPABILITY_UNAVAILABLE',
+        error.reason === 'QUOTA_EXHAUSTED' ? 503 : 501,
+        error.message,
+        null,
+        error.reason,
+      );
     case 'CALCULATION_INVALID':
     case 'STORAGE':
     case 'AI':

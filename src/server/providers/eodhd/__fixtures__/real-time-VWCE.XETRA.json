@@ -1,0 +1,19 @@
+{
+  "_fixture": {
+    "source": "EODHD",
+    "url": "https://eodhd.com/api/real-time/VWCE.XETRA?fmt=json",
+    "recordedAt": "2026-11-21T16:00:00Z",
+    "note": "VALÓS válasz (élő próbahívás a tulajdonos free kulcsával), teszt-fixture-nek megvágva. A kulcs NEM szerepel benne."
+  },
+  "code": "VWCE.XETRA",
+  "timestamp": 1795192500,
+  "gmtoffset": 0,
+  "open": 161.6,
+  "high": 162.26,
+  "low": 159.34,
+  "close": 159.34,
+  "volume": 569647,
+  "previousClose": 164.86,
+  "change": -5.52,
+  "change_p": -3.3483
+}

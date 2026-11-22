@@ -1,0 +1,16 @@
+{
+  "_fixture": {
+    "source": "EODHD",
+    "url": "https://eodhd.com/api/user?fmt=json",
+    "recordedAt": "2026-11-21T16:00:00Z",
+    "note": "VALÓS válasz (élő próbahívás a tulajdonos free kulcsával), teszt-fixture-nek megvágva. A kulcs NEM szerepel benne. A name/email/inviteToken mezőket a rögzítés eldobta (személyes adat)."
+  },
+  "subscriptionType": "free",
+  "paymentMethod": "Not Available",
+  "apiRequests": 16,
+  "apiRequestsDate": "2026-11-21",
+  "dailyRateLimit": 20,
+  "extraLimit": 309,
+  "subscriptionMode": "free",
+  "canManageOrganizations": false
+}

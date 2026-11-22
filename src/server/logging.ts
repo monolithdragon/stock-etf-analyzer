@@ -8,6 +8,8 @@ export interface ServerLogEntry {
   readonly latencyMs: number;
   readonly provider?: string;
   readonly errorKind?: string;
+  /** Tartalékra váltás előtti sikertelen kísérletek, pl. `fmp:UNAVAILABLE` (PHASE 04B). */
+  readonly fallbackFrom?: string;
 }
 
 export interface ServerLogger {

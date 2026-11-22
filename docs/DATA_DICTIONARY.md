@@ -5,6 +5,7 @@
 > - Definíció csak dokumentált indokkal változtatható (DECISIONS.md-be bejegyzés kell).
 > - Az XBRL tag-nevek a 4.1–4.2-ben **jelöltek** (PHASE 01). A ténylegesen használt, 12 valós cégen igazolt prioritási lista: **4.4** és `src/server/providers/sec-edgar/sec-tags.ts` (PHASE 04A).
 > - PHASE 04A (2026-11-21): új fejezetek 3.3 (jegyzés-jelölt), 4.4 (SEC-normalizálás), 8. (FX, megvalósítva), 11. (API-szerződés v1).
+> - PHASE 04B (2026-11-21): új fejezetek 3.4 (profil), 3.5 (keresés), 3.6 (ár, ártörténet-korrekció), 3.7 (osztalék); a 11. fejezet bővítve (új végpontok, `unavailableReason`).
 
 ## 1. Általános konvenciók
 
@@ -113,12 +114,57 @@ Az azonosító-forrás (OpenFIGI) a jegyzés pénznemét nem közli, ezért a je
 | `listingId` | ListingId | `{symbol}@{üzemeltetői MIC}` (pl. `VWCE@XETR`, `AAPL@XNAS`) |
 | `securityId` | SecurityId | mindig az ISIN |
 | `symbol`, `mic`, `exchangeName` | | a MIC az igazolt `exchCode` táblából (DATA_SOURCES 10.3) |
-| `tradingCurrency` | CurrencyCode \| **null** | `null` = a forrás nem közölte; **nem találjuk ki** (PHASE 04B tölti) |
+| `tradingCurrency` | CurrencyCode \| **null** | `null` = a forrás nem közölte (OpenFIGI); **nem találjuk ki**. Az EODHD ISIN-keresése kitölti (PHASE 04B, KI-22) |
 | `figi`, `compositeFigi` | string \| null | listing- és ország-szintű FIGI |
 | `kindHint` | `'stock' \| 'etf' \| null` | a forrás besorolásából (`ETP` → etf, `Common Stock` → stock) |
 | `sourceName` | string \| null | a forrás (gyakran rövidített) neve, pl. „VANG FTSE AW USDA” |
 
 `SecurityListings = { isin, securityId, listings[], omitted: { unmappedVenue, composite, invalidSymbol }, provenance }`. Az `omitted` számlálók biztosítják, hogy a kihagyott sorok ne tűnjenek el szó nélkül.
+
+### 3.4 `InstrumentProfile` (PHASE 04B, D-054)
+
+Lapos, forrásközeli profil egy jegyzéshez. Free csomagban **csak US** (FMP); nem US → `UNAVAILABLE / PLAN_LIMIT`. Nem `Instrument`: az ETF-metaadat (TER, AUM…) a free forrásokban nem érhető el.
+
+| Mező | Típus | Leírás |
+|---|---|---|
+| `listingId` | ListingId | a kért jegyzés (az FMP `exchange` mezőjével ellenőrizve: eltérő tőzsde → `NOT_FOUND`) |
+| `name` | string | kötelező |
+| `kindHint` | `'stock' \| 'etf' \| null` | FMP `isEtf` → etf; `isFund` → null; egyébként stock |
+| `isin`, `cik` | Isin \| null, Cik \| null | nem szabványos forrásérték → `null` (nem hibás adat a domainben) |
+| `country` | string \| null | ISO 3166-1 alpha-2 |
+| `sector`, `industry`, `exchangeName`, `website` | string \| null | a forrás `""`-je `null` lesz |
+| `tradingCurrency` | CurrencyCode \| null | a profil-forrás szerint |
+| `description` | string \| null | megbízhatatlan szöveg, legfeljebb 4000 karakter |
+
+### 3.5 `InstrumentSearchResult` (PHASE 04B, D-054)
+
+`{ query, hits[], omitted: { unmappedVenue, invalidSymbol, unsupportedType, truncated }, provenance }`. Egy találat (`InstrumentSearchHit`): `listingId` (a domain számolja a `symbol` + `mic` párból), `symbol`, `mic`, `name`, `kindHint`, `isin` (EODHD adja, FMP nem), `tradingCurrency` (`GBp` → `GBX`), `exchangeName`. Csak igazolt tőzsdekód → MIC találat kerül be (DATA_SOURCES 11.1–11.2); legfeljebb 100 találat, a többi a `truncated` számlálóba. Keresőkifejezés: 1–64 karakter.
+
+### 3.6 Ár és ártörténet (PHASE 04B, D-050, D-052)
+
+| Mező | Típus | Leírás |
+|---|---|---|
+| `Quote.price` | Money | a jegyzés **natív** pénznemében (pl. `GBX`); a kijelzési pénznemre váltás a `convertMoney` dolga (8.) |
+| `Quote.asOf` | IsoTimestamp | az ár tényleges időpontja (FMP/EODHD Unix-időbélyegből) |
+| `Quote.delayMinutes` | number \| null | `null`: egyik forrás sem ad pontos számot (EODHD: „15–20 perc”, a provenance `reference` mezője jelzi) |
+| `PriceSeries.currency` | CurrencyCode | natív pénznem; forrása: helyszíni szabály (US → USD, Xetra → EUR) vagy az EODHD kereső – soha nem kitalált |
+| `PriceSeries.adjustment` | `NONE \| SPLIT \| SPLIT_DIVIDEND` | `NONE` = nyers; `SPLIT` = split-korrigált, osztalék nélkül (csak FMP); `SPLIT_DIVIDEND` = split + osztalék (FMP `dividend-adjusted`, EODHD `adjusted_close`). Alapértelmezés: `SPLIT_DIVIDEND` |
+| `PriceSeries.points` | `{ date, close }[]` | szigorúan növekvő dátum; `close > 0`; a hiányzó záróár kimarad (nem 0), és a `notes` jelzi |
+| `PriceSeries.notes` | string[] | pl. free ablak miatti levágás, eldobott szolgáltatói figyelmeztető sor |
+
+### 3.7 Osztalék (PHASE 04B, D-054)
+
+`DividendHistory = { listingId, events[], notes[], provenance }`, ex-dátum szerint növekvő (azonos nap megengedett).
+
+| Mező | Típus | Leírás |
+|---|---|---|
+| `exDate` | IsoDate | ex-dátum |
+| `paymentDate`, `recordDate`, `declarationDate` | IsoDate \| null | Európán kívül gyakran hiányzik (EODHD) |
+| `amount` | Money | részvényenként **ténylegesen fizetett, nem split-korrigált** összeg, az osztalék SAJÁT pénznemében (ISF@XLON: ár GBX, osztalék **GBP**) |
+| `splitAdjustedAmount` | number \| null | ugyanabban a pénznemben |
+| `frequency` | string \| null | a forrás szövege szó szerint (`Quarterly`, `Final`…) |
+
+Szabály: 0 vagy negatív összegű sor **nem esemény** – kihagyjuk és a `notes` megszámolja (nem tároljuk 0-ként). Pénznem nélküli sor szintén kimarad. Hozamszámításhoz (PHASE 05) az osztalék és az ár pénznemét explicit egyeztetni kell.
 
 ## 4. Fundamentális mezők (jelentett, `reported`)
 
@@ -341,7 +387,7 @@ Minden domain típus az `@/domain` modulból importálható. Ahol konstruktor va
 | Hibák | `AppError`, `Result<T, E>` | `AppErrors.*`, `ok`, `err`, `isRetryable` | `errors.ts`, `result.ts` |
 | Security (3.1) | `Instrument = Stock \| Etf` | `createStock`, `createEtf` | `src/domain/instrument/instrument.ts` |
 | Listing (3.2) | `Listing` | `createListing` | ugyanott |
-| Ár | `Quote`, `PriceSeries` | `createQuote`, `createPriceSeries` | `src/domain/market/quote.ts` |
+| Ár (3.6) | `Quote`, `PriceSeries`, `PriceAdjustment` | `createQuote`, `createPriceSeries` | `src/domain/market/quote.ts` |
 | Kimutatások (4.1–4.2) | `FinancialStatement = IncomeStatement \| BalanceSheet \| CashFlowStatement` | `createFinancialStatement` (a meg nem adott tétel → `MISSING`) | `src/domain/fundamentals/financial-statement.ts` |
 | Számított mutató (5.) | `FinancialMetric`, `FinancialMetricId` | `createFinancialMetric` | `src/domain/fundamentals/financial-metric.ts` |
 | FX (8.) | `FxRate` (1 `base` = `rate` `quote`) | `createFxRate` | `src/domain/fx/fx-rate.ts` |
@@ -352,6 +398,11 @@ Minden domain típus az `@/domain` modulból importálható. Ahol konstruktor va
 | Kimutatás-készlet (4.4) — 04A | `FinancialStatementSet`, `StatementFrequency` | `createFinancialStatementSet` (egy forrás, gyakoriság-egyezés) | `src/domain/fundamentals/financial-statement-set.ts` |
 | FX-átváltás (8.) — 04A | `FxRateSet`, `FxConversion`, `DisplayCurrency` | `createFxRateSet`, `deriveFxRate`, `convertMoney`, `toMajor` | `src/domain/fx/fx-conversion.ts` |
 | Contract v1 (11.) — 04A | `FxRateSetDto`, `SecurityListingsDto`, `FinancialStatementSetDto`, `HealthDto` | `withDomain`, `fiscalPeriodSchema`, `quoteToDto` | `src/contracts/{fx,listings,financials,health}.ts` |
+| Profil (3.4) — 04B | `InstrumentProfile` | `createInstrumentProfile` | `src/domain/instrument/instrument-profile.ts` |
+| Keresés (3.5) — 04B | `InstrumentSearchHit`, `InstrumentSearchResult` | `createInstrumentSearchHit`, `parseSearchQuery` | `src/domain/instrument/instrument-search.ts` |
+| Osztalék (3.7) — 04B | `DividendEvent`, `DividendHistory` | `createDividendEvent`, `createDividendHistory` | `src/domain/market/dividend.ts` |
+| Nem elérhető adat — 04B | `AppError` `UNAVAILABLE` (`reason: UnavailableReason`) | `AppErrors.unavailable` | `src/domain/shared/errors.ts` |
+| Contract v1 (11.) — 04B | `PriceSeriesDto`, `DividendHistoryDto`, `InstrumentProfileDto`, `InstrumentSearchResultDto`, `ProviderStatusDto` | `priceSeriesDtoSchema`, … | `src/contracts/{market,search,provider-status}.ts` |
 
 **Validációs józansági határok.** Ezek nem üzleti definíciók; a hibás bemenet kiszűrésére szolgálnak.
 
@@ -365,16 +416,23 @@ Minden domain típus az `@/domain` modulból importálható. Ahol konstruktor va
 | Pénznemkód | 3 nagybetű (csak formátum) | Teljes ISO-lista nincs; a `GBX` jegyzési kód is átmegy (1. fejezet). A kisbetűs `GBp` → `GBX` (PHASE 04A). |
 | FX-kérés devizái | 1 … 30 | Proxy-bemenet korlátja. |
 
-## 11. API-szerződés v1 (PHASE 04A)
+## 11. API-szerződés v1 (PHASE 04A + 04B)
 
-Boríték: siker `{ apiVersion: "1", data, warnings[] }`, hiba `{ apiVersion: "1", error: { code, message, retryAfterSec } }`. A szerver minden sikeres választ a kliensével közös zod-sémán is ellenőriz (D-044). Cache: `no-store` (PHASE 13-ig).
+Boríték: siker `{ apiVersion: "1", data, warnings[] }`, hiba `{ apiVersion: "1", error: { code, message, retryAfterSec, unavailableReason? } }`. A szerver minden sikeres választ a kliensével közös zod-sémán is ellenőriz (D-044). Cache: `no-store` (PHASE 13-ig). A `warnings` a PHASE 04B-től jelzi, ha tartalék forrás adott választ (pl. `fmp: … csomagkorlát`, `Az adat forrása: eodhd (tartalék forrás).`).
+
+**`CAPABILITY_UNAVAILABLE` + `unavailableReason`** (D-053): `PLAN_LIMIT` (csomagkorlát, HTTP 501), `NOT_COVERED` (a forrás/beállítás nem fedi le, pl. hiányzó kulcs, nem igazolt tőzsde; 501), `QUOTA_EXHAUSTED` (napi keret, 503). A kliensen `AppError { kind: 'UNAVAILABLE', reason }`.
 
 | Végpont | `data` séma | Hibakódok (HTTP) |
 |---|---|---|
-| `GET /api/v1/health` | `healthDtoSchema`: `status`, `serverTime`, `dataMode` (`live`\|`mock`), `providers[]` (`id`, `name`, `kind`, `capabilities[]`, `configured`, `note`), `unavailableCapabilities[]` | – |
-| `GET /api/v1/fx?base=EUR&quotes=…&date=` | `fxRateSetDtoSchema` (alap `quotes`: a 6 kijelzési deviza) | `VALIDATION_FAILED` (400: hibás deviza, >30 deviza, hibás/jövőbeli dátum), `RATE_LIMITED` (429), `TIMEOUT` (504), `UPSTREAM_*` (502) |
-| `GET /api/v1/securities/{isin}/listings` | `securityListingsDtoSchema` | 400 (hibás ISIN/ellenőrző jegy), `NOT_FOUND` (404), 429, 502, 504 |
-| `GET /api/v1/stocks/{listingId}/financials?period=annual\|quarterly` | `financialStatementSetDtoSchema` (minden sortétel-kulcs kötelező) | 400, 404 (ismeretlen ticker), `UNSUPPORTED_MARKET` (422: nem US), `CAPABILITY_UNAVAILABLE` (501: nincs `SEC_USER_AGENT`), 502, 504 |
-| `GET /api/v1/instruments/{listingId}/quote` | `quoteDtoSchema` (lapos `price` + `currency`; `quoteToDto`) | élőben a 04B-ig: `CAPABILITY_UNAVAILABLE` (501); mock módban demóár |
+| `GET /api/v1/health` | `healthDtoSchema`: `status`, `serverTime`, `dataMode`, `providers[]` (`id`, `name`, `kind`, `capabilities[]`, `configured`, `note`), `unavailableCapabilities[]` | – |
+| `GET /api/v1/providers/status` — 04B | `providerStatusDtoSchema`: `providers[]` (+ `plan`, `coverage`, `quota: { dailyLimit, usedToday, remainingToday, resetsAt, scope: "instance" } \| null`), `routing[]` (`capability`, `market`, `chain[]`, `unavailableReason`) – kulcs nélkül | – |
+| `GET /api/v1/fx?base=EUR&quotes=…&date=` | `fxRateSetDtoSchema` | 400, 429, 502, 504 |
+| `GET /api/v1/securities/{isin}/listings` | `securityListingsDtoSchema` (OpenFIGI → tartalék: EODHD, pénznemmel) | 400, 404, 429, 501/503, 502, 504 |
+| `GET /api/v1/search?q=` — 04B | `instrumentSearchResultDtoSchema` (szöveg: FMP → EODHD; ISIN: EODHD) | 400 (üres / >64 karakter), 501/503, 429, 502, 504 |
+| `GET /api/v1/stocks/{listingId}/financials?period=annual\|quarterly` | `financialStatementSetDtoSchema` | 400, 404, **501 `PLAN_LIMIT`: nem US** (04A-ban 422 volt), 501 `NOT_COVERED`: nincs `SEC_USER_AGENT`, 502, 504 |
+| `GET /api/v1/instruments/{listingId}/quote` | `quoteDtoSchema` (US: FMP → EODHD; EU: EODHD) | 400, 404, 501/503, 429, 502, 504 |
+| `GET /api/v1/instruments/{listingId}/prices?from&to&adjustment=none\|split\|split_dividend` — 04B | `priceSeriesDtoSchema`; alapértelmezés: `to` = ma, `from` = `to` − 365 nap, `split_dividend` | 400 (hibás dátum, `from > to`, jövő, > 40 év, hibás korrekció), 404, 501 (pl. EODHD + `split`; free ablak előtti időszak), 503, 502, 504 |
+| `GET /api/v1/instruments/{listingId}/profile` — 04B | `instrumentProfileDtoSchema` (csak US, FMP) | 400, 404, 501 `PLAN_LIMIT` (nem US), 502, 504 |
+| `GET /api/v1/instruments/{listingId}/dividends?from&to` — 04B | `dividendHistoryDtoSchema`; alapértelmezés: 5 év | 400, 404, 501/503, 502, 504 |
 
-Képességek (`PROVIDER_CAPABILITIES`): `quote`, `priceHistory`, `profile`, `financialStatements`, `dividends`, `etfMetadata`, `etfHoldings`, `listings`, `fxRates`. A 04A-ban élőben elérhető: `financialStatements` (SEC), `fxRates` (ECB), `listings` (OpenFIGI). A többi forrása: PHASE 04B (FMP, EODHD) és PHASE 08.
+Képességek (`PROVIDER_CAPABILITIES`): `quote`, `priceHistory`, `profile`, `financialStatements`, `dividends`, `etfMetadata`, `etfHoldings`, `listings`, `fxRates`, `search` (04B). Free csomagokkal élőben **nem elérhető**: `etfMetadata`, `etfHoldings` (PHASE 08), valamint nem US jegyzésre a `profile` és a `financialStatements`.

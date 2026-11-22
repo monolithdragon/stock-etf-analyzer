@@ -9,10 +9,14 @@
  * | időtúllépés                      | TIMEOUT (timeoutMs)              |
  * | nincs kapcsolat / DNS / TLS hiba | NETWORK                          |
  * | HTTP 429                         | RATE_LIMITED (Retry-After mp)    |
- * | HTTP 402 (kvóta elfogyott)       | RATE_LIMITED (retryAfter: null)  |
+ * | HTTP 402 (napi kvóta elfogyott)  | UNAVAILABLE / QUOTA_EXHAUSTED    |
  * | HTTP 404                         | NOT_FOUND (a hívó erőforrásával) |
  * | egyéb nem 2xx                    | UPSTREAM / HTTP_ERROR            |
  * | 2xx, de nem JSON                 | UPSTREAM / INVALID_RESPONSE      |
+ *
+ * PHASE 04B: a 402 alapértelmezése az EODHD dokumentált viselkedése (napi keret elfogyott,
+ * nem percenkénti limit → újrapróbálás aznap nem segít). Az FMP a 402-t CSOMAGKORLÁTRA
+ * használja – ezt az FMP adapter a saját `mapStatus`-ával PLAN_LIMIT-re képezi.
  */
 import { AppErrors, err, ok, type AppError, type Result } from '@/domain';
 
@@ -103,7 +107,7 @@ export async function requestJson(options: RequestJsonOptions): Promise<Result<u
     );
   }
   if (response.status === 402) {
-    return err(AppErrors.rateLimited(`A(z) ${sourceId} napi kerete elfogyott.`, null));
+    return err(AppErrors.unavailable('QUOTA_EXHAUSTED', `A(z) ${sourceId} napi kerete elfogyott.`));
   }
   if (response.status === 404) {
     const target = options.notFound ?? { resource: sourceId, id: '' };

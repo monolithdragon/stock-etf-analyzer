@@ -13,6 +13,8 @@ export const PROVIDER_CAPABILITIES = [
   'etfHoldings',
   'listings',
   'fxRates',
+  /** Instrumentum-keresés ticker, név vagy ISIN alapján (PHASE 04B). */
+  'search',
 ] as const;
 export type ProviderCapability = (typeof PROVIDER_CAPABILITIES)[number];
 
@@ -39,7 +41,7 @@ export const healthDtoSchema = z.object({
       }),
     )
     .max(20),
-  /** Képességek, amelyekhez jelenleg NINCS bekötött forrás (pl. árfolyam a PHASE 04B-ig). */
+  /** Képességek, amelyekhez jelenleg NINCS konfigurált forrás (pl. ETF-metaadat a free csomagokban). */
   unavailableCapabilities: z.array(z.enum(PROVIDER_CAPABILITIES)),
 });
 

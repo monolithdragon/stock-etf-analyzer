@@ -23,6 +23,18 @@ export const notImplementedMarketDataGateway: MarketDataGateway = {
   async getFinancialStatements() {
     return err(unconfigured());
   },
+  async getPriceHistory() {
+    return err(unconfigured());
+  },
+  async getInstrumentProfile() {
+    return err(unconfigured());
+  },
+  async getDividends() {
+    return err(unconfigured());
+  },
+  async searchInstruments() {
+    return err(unconfigured());
+  },
 };
 
 export const notImplementedFxGateway: FxGateway = {
