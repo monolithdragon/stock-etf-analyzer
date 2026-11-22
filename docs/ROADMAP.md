@@ -1,6 +1,6 @@
 # Roadmap – Stock & ETF Analyzer
 
-> Frissítve: 2026-11-22 (PHASE 05 vége). Minden fázis külön chatben fut, a `stock_etf_analyzer_prompts` csomag `NN_*.md` promptja alapján.
+> Frissítve: 2026-11-22 (PHASE 06 vége). Minden fázis külön chatben fut, a `stock_etf_analyzer_prompts` csomag `NN_*.md` promptja alapján.
 > **Fázisszabály:** a következő fázis csak akkor indul, ha az előző befejezési feltételei teljesültek, vagy a hiányok a KNOWN_ISSUES-ban dokumentálva vannak.
 > **Verzió:** a promptok egy része SDK 57-et említ. Mindenhol **SDK 58** értendő (D-020).
 
@@ -13,8 +13,8 @@
 | 03 | Architektúra és domain modell | **KÉSZ** (2026-11-21) | |
 | 04 | Adatforrások, proxy és deviza – **két chatben: 04A + 04B** (D-028) | **KÉSZ** (04A és 04B, 2026-11-21) | **M2 Adat a csövön ✅** |
 | 05 | Pénzügyi calculation engine | **KÉSZ** (2026-11-22) | |
-| 06 | Részvény fundamentális elemzés | **KÖVETKEZIK** | |
-| 07 | Értékelés és DCF | NEM KEZDŐDÖTT | |
+| 06 | Részvény fundamentális elemzés | **KÉSZ** (2026-11-22) | |
+| 07 | Értékelés és DCF | **KÖVETKEZIK** | |
 | 08 | ETF-elemzés | NEM KEZDŐDÖTT | |
 | 09 | Portfólió és kockázat | NEM KEZDŐDÖTT | |
 | 10 | Score és döntési engine | NEM KEZDŐDÖTT | M3 Elemzőmotor kész |
@@ -243,6 +243,17 @@ Minden fázis közös lezárása (CLAUDE.md):
   - Tesztek: hiányos történet, negatív EPS, hiányzó mező, eltérő pénzügyi év.
   - Nincs fiktív pótlás.
   - Az elavultság és a hiány tesztelt.
+- **Eredmény (2026-11-22): KÉSZ.**
+  - Use case: `analyzeStockFundamentals` (`AppServices`), a meglévő use case-ekre építve, részleges hibatűréssel (D-063/5).
+  - `totalDebt` összerakva a SEC-adapterben (D-059, KI-42 megoldva); a fixture-ök csak új tagekkel bővítve (`--add-new-tags`).
+  - Kimutatás-nézetek (éves/negyedéves), Q4-származtatás, TTM (D-060); időszaki mutatók; 1/3/5/10 éves CAGR összehasonlíthatósági ellenőrzéssel, split-gyanúval (D-061); értékelés aktuális ár + legutóbbi FY alapon, szolgáltatói béta, 52 hetes tartomány (D-062); minőségi modell pontszám nélkül, MOAT/MANAGEMENT csak forrásolt lelettel (D-063); `MetricOrigin` eredet-címke.
+  - Ellenőrzés: `npm run check` exit 0; **661/661 teszt** (48 suite; +108); az új modulok lefedettsége ~97% sor.
+  - **Nem készült el:** Q2/Q3 YTD cash flow különbségképzés (KI-18, a normalizáló bővítését igényli); FX-átváltás a szorzókhoz (KI-50).
+  - Új döntések: D-059…D-063. Új ismert problémák: KI-50…KI-57.
+- **A PHASE 07 kapcsolódási pontjai (PHASE 06-ból):**
+  - DCF-bemenetek: `analysis.periodMetrics.annual` (FCF, `totalDebt`, `cashAndEquivalents`, `sharesOutstanding`, növekedés), `analysis.overview.price`, `analysis.trends` (FCF/árbevétel CAGR – csak `OK` esetén). A becsült (`estimated`) adósság eredete öröklődjön a DCF-be.
+  - Szorzók: a `valuation` FY-alapú (D-062); TTM-alapú szorzó és FX-átváltás (KI-50, KI-52) a PHASE 07 döntése.
+  - Minden feltevés `user_input`/`estimated` eredettel, a `createFundamentalMetric` mintájára.
 
 ### PHASE 07 – Értékelés és DCF
 - **Cél:** külön valuation/DCF modul forgatókönyvekkel és érzékenységi táblával.

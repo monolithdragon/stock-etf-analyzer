@@ -1,23 +1,36 @@
 # Ismert problémák, kockázatok, ismeretlenek – Stock & ETF Analyzer
 
-> Frissítve: 2026-11-22 (PHASE 05 vége). Valószínűség (V) és hatás (H) skálája: **A** = Alacsony, **K** = Közepes, **M** = Magas.
+> Frissítve: 2026-11-22 (PHASE 06 vége). Valószínűség (V) és hatás (H) skálája: **A** = Alacsony, **K** = Közepes, **M** = Magas.
 
 ## Blokkolók
 
-**Nincs blokkoló a PHASE 06 indításához.** A PHASE 06 a meglévő SEC-adatokra (fixture + élő `sec-edgar`) és a PHASE 05 képleteire épül. Figyelem: a `totalDebt` összerakása (KI-42) a PHASE 06 első feladatai közé tartozik.
+**Nincs blokkoló a PHASE 07 indításához.** A PHASE 07 a PHASE 06 `analyzeStockFundamentals` kimenetére (legutóbbi FY, FCF, adósság, részvényszám, ár) és a PHASE 05 DCF-konvencióira épül.
+
+## PHASE 06 – ismert problémák és leletek (2026-11-22)
+
+| ID | Probléma / lelet | Hatás | Állapot / teendő | Felelős fázis |
+|---|---|---|---|---|
+| KI-50 | **Eltérő jegyzési és beszámolói pénznem** (ADR, pl. TSM: TWD kimutatás, USD ár) esetén az ár-alapú szorzók (P/E, P/S, P/B, P/FCF, FCF-hozam, EV/EBITDA, PEG) `MISSING`. | K | Tudatos (D-062/4): nincs csendes FX. **Teendő:** a `convertMoney` bekötése a beszámolói értékek jegyzési pénznemre váltásához (FX dátum + forrás rögzítve). | 07 |
+| KI-51 | **Becsült `totalDebt`:** ha egy rövid lejáratú komponensnek nincs ténye, 0-nak vesszük (`estimated`, megnevezve) – pl. MSFT FY2026, KO Q3 2026. **Bankoknál, biztosítóknál és IFRS-filereknél** (JPM, BRK-B, TSM) a `totalDebt` `MISSING`. | K | Dokumentált (D-059). Bővítés: további tagek (pl. `NotesPayable`, `LongTermDebtAndFinanceLeaseObligations`, IFRS `Bonds…`) valós fixture-rel igazolva. | 07, 15 |
+| KI-52 | **TTM EPS** gyakorlatilag mindig `MISSING`: a származtatott Q4 EPS nem additív (D-060/2), és a 10-K nem ad Q4 EPS-t. | K | Tudatos. A szorzók ezért a legutóbbi FY EPS-ével számolnak (D-062/1). Lehetőség: TTM EPS = TTM NI / utolsó negyedév hígított részvényszáma, `estimated` címkével – PHASE 07 döntés. | 07 |
+| KI-53 | A **split-gyanú heurisztika** (részvényszám > 1,5× változás, D-061/2) nagy akvizíciós kibocsátásnál téves riasztást adhat (az EPS-növekedés / CAGR ekkor `NOT_MEANINGFUL`, nem hibás szám). | A | Elfogadva (konzervatív: inkább nincs érték, mint vegyes bázisú). Javítás: split-események forrásból (FMP `splits`) – PHASE 07/13. | 07, 13 |
+| KI-54 | A jegyzés frissességi szabálya (15 perc FRESH, `QUOTE_FRESHNESS_POLICY`) miatt az ár – és minden belőle számolt szorzó – a kereskedési időn kívül szinte mindig `stale` eredetű. | A | Őszinte, de zajos. A piaci naptárt figyelembe vevő szabály a PHASE 13 feladata (ARCHITECTURE 11.). | 13 |
+| KI-55 | **Osztalékhozam nem fizető cégnél `MISSING`, nem 0%:** a free források osztaléktörténetének lefedettsége nem ismert, ezért esemény nélkül nem mondhatjuk, hogy 0 (D-062/5). | A | Tudatos. Javítás: a forrás lefedettségének igazolása, vagy a SEC `PaymentsOfDividends` jelentett 0-ja alapján – PHASE 07/08. | 07 |
+| KI-56 | A **Q4 származtatás restatement-kockázata:** az FY és a Q1–Q3 eltérő filingből jöhet; utólagos korrekciónál a Q4 torzulhat (nemnegatív tételnél a negatív Q4 `INVALID_INPUT`-ot ad, de a kisebb torzulás nem látszik). | A | Dokumentált (a tábla megjegyzése kimondja). | – |
+| KI-57 | A SEC-fixture-ök csak a **2021 óta beadott** filingeket tartalmazzák (megvágás) → a fixture-ökön a 10 éves CAGR mindig `INSUFFICIENT_DATA`. Élő adattal (max. 15 év) a 10 éves CAGR számolható. | A | Tesztelési korlát, nem termékhiba. | – |
 
 ## PHASE 05 – ismert problémák és leletek (2026-11-22)
 
 | ID | Probléma / lelet | Hatás | Állapot / teendő | Felelős fázis |
 |---|---|---|---|---|
-| KI-42 | A **`totalDebt` forrásoldalon `MISSING`** (D-043), így a nettó adósság, nettó készpénz, EV, D/E, Invested Capital, ROIC és EV/EBITDA élő adattal ma mindig `MISSING`. A képletek készen és tesztelve állnak. | M (06–07) | **Teendő:** a PHASE 06 rakja össze a `totalDebt`-et (`ShortTermBorrowings` + `LongTermDebtCurrent` + `LongTermDebtNoncurrent`, a dupla számolás elkerülésével, valós fixture-rel igazolva). | 06 |
+| KI-42 | A **`totalDebt` forrásoldalon `MISSING`** (D-043), így a nettó adósság, nettó készpénz, EV, D/E, Invested Capital, ROIC és EV/EBITDA élő adattal ma mindig `MISSING`. A képletek készen és tesztelve állnak. | M (06–07) | **MEGOLDVA (PHASE 06, D-059):** lejárat szerinti bontásból összerakva, valós fixture-rel igazolva (a naiv összeadás a JNJ-nél dupla számolás lett volna). Maradék: KI-51. | 06 |
 | KI-43 | A **saját EPS** (`netIncome / weightedSharesDiluted`) az elsőbbségi osztalék levonása nélkül számol → elsőbbségi részvényes cégnél felülbecsülhet. | A | Kezelve: a jelentett EPS az elsődleges; a saját számítás csak tartalék, megjegyzéssel (D-056/4). | 06 |
 | KI-44 | Az **EV egyszerűsített**: kisebbségi részesedés, elsőbbségi részvény és lízing nélkül → nagy lízingállományú vagy kisebbségi részesedésű cégnél alulbecsülhet. | K | Dokumentált (D-056/10). A PHASE 07 dönthet a bővítésről (a forrásban elérhető tagekkel). | 07 |
-| KI-45 | A **TTM osztalék** 365 napos ex-dátum-ablaka szabálytalan ütemezésnél (eltolódó félévi/éves kifizetés) a határon egy kifizetést kihagyhat vagy kettőt számolhat. | K | Elfogadva az MVP-ben (D-056/12). Javítási lehetőség: a forrás `frequency` mezője alapján évesítés – PHASE 06/08. | 06, 08 |
+| KI-45 | A **TTM osztalék** 365 napos ex-dátum-ablaka szabálytalan ütemezésnél (eltolódó félévi/éves kifizetés) a határon egy kifizetést kihagyhat vagy kettőt számolhat. | K | Elfogadva az MVP-ben (D-056/12). Javítási lehetőség: a forrás `frequency` mezője alapján évesítés. PHASE 06: változatlan (az osztalékhozam ezt a függvényt használja). | 07, 08 |
 | KI-46 | A **TER hosszú távú hatása** a `(1 + r − TER)^n` közelítéssel számol (DATA_DICTIONARY 5.5); a pontosabb `(1 + r)(1 − TER)` alaktól `r × TER` nagyságrendben tér el (7% hozam, 0,2% TER mellett évente ~0,014 százalékpont). | A | Dokumentált (D-058). A PHASE 08 válthat, ha a megjelenítés pontosabbat igényel. | 08 |
 | KI-47 | A **tracking error** egyforma hosszú, dátum szerint igazított hozamsorokat vár; a dátum-igazítás (hiányzó kereskedési napok, eltérő tőzsdei naptár) a hívó dolga. | K (08) | Tudatos: a PHASE 08 végzi az igazítást (indexadat is kell). | 08 |
 | KI-48 | A `src/__tests__/calculations-purity.test.ts` a Node-típusokat a Jest tranzitív függőségeként telepített `@types/node`-ból kapja (`/// <reference types="node" />`); közvetlen függőség nincs. | A | Elfogadva (új csomag nem kellett). Ha egy Jest-frissítés elhagyná, a `@types/node` közvetlen dev-függőségként felvehető. | – |
-| KI-49 | A számítási motort **még nem hívja use case** és UI; élő adaton még nem futott. | A | Várt állapot: az első fogyasztó a PHASE 06 `analyzeStock`. | 06 |
+| KI-49 | A számítási motort **még nem hívja use case** és UI; élő adaton még nem futott. | A | **MEGOLDVA (PHASE 06):** az `analyzeStockFundamentals` use case használja; valós SEC/FMP fixture-ön integrációs teszttel igazolva. Élő hálózati futás a UI-val (PHASE 12) jön. | 06 |
 
 ## PHASE 04B – ismert problémák és leletek (2026-11-21)
 
@@ -41,8 +54,8 @@
 | ID | Probléma / lelet | Hatás | Állapot / teendő | Felelős fázis |
 |---|---|---|---|---|
 | KI-17 | A spike idején a **8081-es porton már futott egy Expo dev szerver** (valószínűleg a tulajdonosé), amely a `.env.local` létrehozása előtt indult, ezért nem látta a `SEC_USER_AGENT`-et (health: `sec-edgar configured: false`). A saját ellenőrzés a 8082-es porton futott. | A | **Teendő:** env-változás után a dev szervert újra kell indítani (Ctrl+C, majd `npm start`). A futó folyamatot nem állítottuk le. | tulajdonos |
-| KI-18 | Negyedéves SEC-adatnál a **Q2/Q3 cash flow tételek hiányoznak**: a 10-Q halmozott (YTD) cash flow-t ad, és a 3 hónapos időszak csak különbségképzéssel állna elő (`calculated`). | K (06) | **Tudatos (D-043):** `MISSING` + megjegyzés. A YTD-különbség a PHASE 06 feladata (D-021). | 06 |
-| KI-19 | **Q4 nincs** a negyedéves készletben (a 10-K nem ad 3 hónapos Q4-et). | K (06) | **Tudatos (D-021):** `Q4 = FY − (Q1+Q2+Q3)` számítás a PHASE 06-ban. | 06 |
+| KI-18 | Negyedéves SEC-adatnál a **Q2/Q3 cash flow tételek hiányoznak**: a 10-Q halmozott (YTD) cash flow-t ad, és a 3 hónapos időszak csak különbségképzéssel állna elő (`calculated`). | K (06) | **Tudatos (D-043):** `MISSING` + megjegyzés. **PHASE 06: NEM készült el** (D-060/4): a normalizáló eldobja a 6/9 hónapos tényeket, a különbségképzés a SEC-adapter bővítését igényli. Következmény: negyedéves FCF és TTM cash flow jellemzően `MISSING`; a szorzók ezért FY-alapúak (D-062). | 13, 15 |
+| KI-19 | **Q4 nincs** a negyedéves készletben (a 10-K nem ad 3 hónapos Q4-et). | K (06) | **MEGOLDVA (PHASE 06, D-060/2):** az elemző réteg származtatja (`deriveQ4`), additív tételre, hézagmentes negyedévekkel; EPS a Q4-ben `MISSING`. Maradék: KI-52, KI-56. | 06 |
 | KI-20 | Tag-lefedettség: a **JPM negyedéves árbevétele** és a **BRK-B EPS-e** `MISSING` (a cégek más tageket használnak, pl. bankoknál „RevenuesNetOfInterestExpense”). | A | **Őszintén `MISSING`.** Új tag felvétele csak valós fixture-rel igazolva (R-05), a PHASE 06-ban. | 06 |
 | KI-21 | **US részvény tőzsdéje ISIN-ből nem határozható meg** az OpenFIGI-vel: ISIN-kérésre csak a kompozit `US` sor jön. | K | **04B: továbbra is nyitott.** Az EODHD is csak ország-szintű `US`-t ad, az FMP ISIN-keresése free-ben 402. Megkerülés: ticker-keresés (`/search?q=AAPL` → `AAPL@XNAS`) vagy FMP-profil. | 12 / DP-05 |
 | KI-22 | Az OpenFIGI **nem ad jegyzési pénznemet** → `ListingCandidate.tradingCurrency: null`. | K | **04B: részben megoldva.** Az EODHD ISIN-keresése pénznemmel adja a jegyzéseket (`/search?q=ISIN`, és a `listings` tartaléka). A `listings` végpont elsődlegesen továbbra is az ingyenes OpenFIGI (pénznem nélkül), hogy ne fogyassza az EODHD 20/nap keretét. Az ár-végpontok mindig ismert pénznemet adnak (D-052). | 12 |

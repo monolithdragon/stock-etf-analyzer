@@ -315,3 +315,20 @@ Minden tény saját próbahívásból származik, a tulajdonos **free** kulcsaiv
 1. Ellenőrizd a mai EODHD-felhasználást: `GET https://eodhd.com/api/user?api_token=…&fmt=json` (0 hívás).
 2. A kulcsot csak a `.env.local`-ból olvasó szkripttel kérj le (soha ne írd parancssorba vagy chatbe), a válaszból töröld a `name`/`email` mezőt, és értékvak szkennerrel ellenőrizd, hogy a kulcs nincs a fájlban.
 3. Mentsd `{ "_fixture": { source, url, recordedAt, note }, "response": … }` alakban a `__fixtures__` mappába (D-047).
+
+## 12. PHASE 06 – ténylegesen felhasznált mezők a fundamentális elemzéshez (2026-11-22)
+
+| Mező az elemzésben | Forrás (free) | Státusz |
+|---|---|---|
+| Ticker, tőzsde (MIC) | a listing-azonosító | mindig |
+| Név, szektor, iparág, ország, tőzsdenév | FMP `/stable/profile` (csak US) | nem US: `UNAVAILABLE / PLAN_LIMIT` |
+| **Béta** | FMP `/stable/profile` `beta` (élő fixture-ön igazolva: AAPL 1,089) | `reported`, tájékoztató; módszertan nem közölt |
+| Ár | FMP / EODHD `quote` (D-049) | `reported`, saját frissesség |
+| Piaci érték | **saját számítás**: ár × SEC részvényszám (az FMP `marketCap` nem kerül be; AAPL-en egyezik) | `calculated` |
+| Kint lévő részvények | SEC `CommonStockSharesOutstanding` / dei címlap | `reported` |
+| 52 hetes csúcs/mélypont | **saját számítás** az 1 éves ártörténet záróáraiból (az FMP `yearHigh/yearLow` intraday, nem kerül be) | `calculated` |
+| Kimutatások (IS/BS/CF) | SEC companyfacts (csak US; nem US: `PLAN_LIMIT`) | `reported` |
+| **`totalDebt`** | SEC: `LongTermDebtNoncurrent` / `LongTermDebtAndCapitalLeaseObligations` + `DebtCurrent` vagy (`LongTermDebtCurrent` / `…CapitalLeaseObligationsCurrent` + `ShortTermBorrowings` vagy `CommercialPaper` + `OtherShortTermBorrowings`) – élő próbával, 12 cégen kiválasztva (D-059) | `calculated` / `estimated`; bank, biztosító, IFRS: `MISSING` |
+| Osztalék (TTM) | FMP / EODHD osztaléktörténet, 2 év | `calculated`; lefedettség ismeretlen → esemény nélkül `MISSING` |
+
+**Fixture-bővítés (2026-11-22):** `node scripts/record-sec-fixtures.mjs --add-new-tags` – a meglévő SEC-fixture-ökbe csak a `sec-tags.ts`-be újonnan felvett tagek kerülnek, az eredeti rögzítés napjáig (`filed <= recordedAt`) beadott tényekkel; a régi tények változatlanok. 12 SEC-hívás (nincs napi keret, 10 kérés/mp limit; a szkript 250 ms-ot vár).

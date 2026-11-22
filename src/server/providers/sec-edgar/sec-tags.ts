@@ -5,8 +5,9 @@
  * - A lista sorrendje = prioritás. Egy időszakra az ELSŐ olyan tag értéke számít, amelyiknek
  *   van pontosan arra az időszakra szóló ténye. Tagek értékeit SOHA nem adjuk össze és nem keverjük.
  * - A provenance `reference` mezője mindig a ténylegesen használt taget és az accession számot mutatja.
- * - Ami itt nem szerepel (pl. `totalDebt`), az a normalizálás után `MISSING` – szándékosan:
- *   összetett tételnél a komponensek összeadása dupla számoláshoz vezethet (PHASE 05/06 dönt).
+ * - Ami itt nem szerepel, az a normalizálás után `MISSING`. Kivétel a `totalDebt`: összetett
+ *   tétel, amelyet a normalizáló a `SEC_DEBT_COMPONENT_TAGS` komponenseiből, explicit
+ *   szabállyal rak össze (`sec-debt.ts`, D-059) – sosem a tagek vak összeadásával.
  *
  * FONTOS: ez a fájl szándékosan függőség nélküli (csak törölhető TS-szintaxis), mert a
  * `scripts/record-sec-fixtures.mjs` közvetlenül, Node-dal importálja a fixture-ök megvágásához.
@@ -213,6 +214,59 @@ export const SEC_CASH_FLOW_TAGS = {
   },
 } as const satisfies Record<string, SecLineItemMapping>;
 
+/**
+ * A `totalDebt` KOMPONENSEI (PHASE 06, D-059). Ezek nem domain-sortételek: a normalizáló
+ * a `sec-debt.ts` szabályai szerint rakja össze belőlük a `totalDebt`-et, LEJÁRAT SZERINTI
+ * bontásból (nem rövid rész + rövid lejáratú rész), hogy ne legyen dupla számolás.
+ *
+ * Valós leletek (2026-11-22, 12 cég): a `LongTermDebt` a rövid lejáratú részt IS tartalmazza;
+ * a JNJ `ShortTermBorrowings`-a ≈ `DebtCurrent` (benne a hosszú lejáratú adósság rövid része),
+ * ezért `LongTermDebt + ShortTermBorrowings` dupla számolás lenne. A KO és az XOM 2023 után a
+ * `LongTermDebtAndCapitalLeaseObligations…` tageket használja (pénzügyi lízinggel együtt).
+ * IFRS-tagek szándékosan nincsenek: a TSM kötvényei külön tagben vannak, a „borrowings” csak
+ * részösszeg lenne.
+ */
+export const SEC_DEBT_COMPONENT_TAGS = {
+  /** Hosszú lejáratú adósság, a rövid lejáratú rész NÉLKÜL. Kötelező komponens. */
+  noncurrent: {
+    shape: 'instant',
+    unit: 'currency',
+    candidates: [g('LongTermDebtNoncurrent'), g('LongTermDebtAndCapitalLeaseObligations')],
+  },
+  /** Teljes rövid lejáratú adósság (rövid hitel + hosszú lejáratú adósság rövid része). */
+  currentTotal: {
+    shape: 'instant',
+    unit: 'currency',
+    candidates: [g('DebtCurrent')],
+  },
+  /** Hosszú lejáratú adósság rövid lejáratú része (csak `DebtCurrent` hiányában). */
+  currentMaturities: {
+    shape: 'instant',
+    unit: 'currency',
+    candidates: [g('LongTermDebtCurrent'), g('LongTermDebtAndCapitalLeaseObligationsCurrent')],
+  },
+  /** Rövid lejáratú hitelek összesen (jellemzően a kereskedelmi papírt is tartalmazza). */
+  shortTermBorrowings: {
+    shape: 'instant',
+    unit: 'currency',
+    candidates: [g('ShortTermBorrowings')],
+  },
+  /** Kereskedelmi papír – csak `ShortTermBorrowings` hiányában (különben dupla számolás). */
+  commercialPaper: {
+    shape: 'instant',
+    unit: 'currency',
+    candidates: [g('CommercialPaper')],
+  },
+  /** Egyéb rövid lejáratú hitel – csak `ShortTermBorrowings` hiányában. */
+  otherShortTermBorrowings: {
+    shape: 'instant',
+    unit: 'currency',
+    candidates: [g('OtherShortTermBorrowings')],
+  },
+} as const satisfies Record<string, SecLineItemMapping>;
+
+export type SecDebtComponent = keyof typeof SEC_DEBT_COMPONENT_TAGS;
+
 /** Éves jelentés űrlapjai (10-K: hazai, 20-F/40-F: külföldi filer). */
 export const SEC_ANNUAL_FORMS: readonly string[] = [
   '10-K',
@@ -231,6 +285,7 @@ export function allSecTags(): readonly SecTagCandidate[] {
     ...Object.values(SEC_INCOME_TAGS),
     ...Object.values(SEC_BALANCE_TAGS),
     ...Object.values(SEC_CASH_FLOW_TAGS),
+    ...Object.values(SEC_DEBT_COMPONENT_TAGS),
   ];
   const tags: SecTagCandidate[] = [];
   for (const mapping of mappings) {

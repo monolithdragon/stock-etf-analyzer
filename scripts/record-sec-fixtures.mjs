@@ -9,7 +9,10 @@
  *   3. Kiírja: src/server/providers/sec-edgar/__fixtures__/
  *
  * Futtatás (a projekt gyökérmappájában, PowerShellben vagy Git Bash-ben):
- *   node scripts/record-sec-fixtures.mjs
+ *   node scripts/record-sec-fixtures.mjs                 – teljes újrarögzítés (FELÜLÍR!)
+ *   node scripts/record-sec-fixtures.mjs --add-new-tags  – PHASE 06: csak a sec-tags.ts-be
+ *     újonnan felvett tageket teszi a meglévő fixture-ökbe, az eredeti rögzítés napjáig beadott
+ *     tényekkel; a régi tények (és így a golden tesztek) változatlanok maradnak.
  *
  * Előfeltétel: a `.env.local` fájlban legyen `SEC_USER_AGENT="AppNév kapcsolattartó@email"`.
  * A SEC ezt kötelezően kéri (Fair Access), különben HTTP 403-at ad. Az értéket a script
@@ -17,7 +20,7 @@
  *
  * Udvariasság: a kérések között 250 ms szünet (a SEC limitje 10 kérés/mp).
  */
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -78,17 +81,25 @@ function fixtureHeader(url) {
   };
 }
 
-function trimCompanyFacts(raw, url) {
+const ADD_NEW_TAGS = process.argv.includes('--add-new-tags');
+
+function trimCompanyFacts(raw, url, { skip = new Set(), filedUntil = null } = {}) {
   const wanted = new Set(allSecTags().map((t) => `${t.taxonomy}:${t.tag}`));
   const facts = {};
   let kept = 0;
   for (const [taxonomy, tags] of Object.entries(raw.facts ?? {})) {
     for (const [tag, concept] of Object.entries(tags)) {
-      if (!wanted.has(`${taxonomy}:${tag}`)) continue;
+      const key = `${taxonomy}:${tag}`;
+      if (!wanted.has(key) || skip.has(key)) continue;
       const units = {};
       for (const [unit, list] of Object.entries(concept.units ?? {})) {
         const recent = list
-          .filter((f) => typeof f.filed === 'string' && f.filed >= FILED_SINCE)
+          .filter(
+            (f) =>
+              typeof f.filed === 'string' &&
+              f.filed >= FILED_SINCE &&
+              (filedUntil === null || f.filed <= filedUntil),
+          )
           .map(({ start, end, val, accn, fy, fp, form, filed, frame }) =>
             Object.fromEntries(
               Object.entries({ start, end, val, accn, fy, fp, form, filed, frame }).filter(
@@ -113,6 +124,39 @@ function trimCompanyFacts(raw, url) {
   };
 }
 
+/**
+ * --add-new-tags: a meglévő fixture kiegészítése. A régi tények változatlanok; csak a fixture-ben
+ * még nem szereplő tagek kerülnek be, és csak az eredeti rögzítés napjáig beadott tényekkel.
+ */
+async function addNewTags(ticker, url) {
+  const file = join(OUT_DIR, `companyfacts-${ticker}.json`);
+  if (!existsSync(file)) {
+    console.warn(`  ${ticker}: nincs meglévő fixture – kihagyva (előbb teljes rögzítés kell).`);
+    return;
+  }
+  const existing = JSON.parse(readFileSync(file, 'utf8'));
+  const present = new Set();
+  for (const [taxonomy, tags] of Object.entries(existing.facts ?? {})) {
+    for (const tag of Object.keys(tags)) present.add(`${taxonomy}:${tag}`);
+  }
+  const filedUntil = existing._fixture.recordedAt.slice(0, 10);
+  const { fixture, kept } = trimCompanyFacts(await getJson(url), url, {
+    skip: present,
+    filedUntil,
+  });
+  const added = [];
+  for (const [taxonomy, tags] of Object.entries(fixture.facts)) {
+    existing.facts[taxonomy] ??= {};
+    Object.assign(existing.facts[taxonomy], tags);
+    added.push(...Object.keys(tags));
+  }
+  if (added.length > 0) {
+    existing._fixture.note = `${existing._fixture.note} Kiegészítve (${new Date().toISOString().slice(0, 10)}, filed <= ${filedUntil}): ${added.join(', ')}.`;
+  }
+  writeFileSync(file, `${JSON.stringify(existing)}\n`);
+  console.log(`  ${ticker}: +${kept} tény (${added.length} új tag) → ${file}`);
+}
+
 mkdirSync(OUT_DIR, { recursive: true });
 
 const tickersUrl = 'https://www.sec.gov/files/company_tickers.json';
@@ -121,15 +165,17 @@ const rows = Object.values(allTickers);
 console.log(`Ticker-lista: ${rows.length} sor.`);
 
 // A ticker-fixture csak a kiválasztott cégek sorait tartalmazza (méret), az eredeti alakban.
-const subset = {};
-let index = 0;
-for (const row of rows) {
-  if (TICKERS.includes(row.ticker)) subset[String(index++)] = row;
+if (!ADD_NEW_TAGS) {
+  const subset = {};
+  let index = 0;
+  for (const row of rows) {
+    if (TICKERS.includes(row.ticker)) subset[String(index++)] = row;
+  }
+  writeFileSync(
+    join(OUT_DIR, 'company-tickers.json'),
+    `${JSON.stringify({ _fixture: fixtureHeader(tickersUrl), ...subset }, null, 2)}\n`,
+  );
 }
-writeFileSync(
-  join(OUT_DIR, 'company-tickers.json'),
-  `${JSON.stringify({ _fixture: fixtureHeader(tickersUrl), ...subset }, null, 2)}\n`,
-);
 
 for (const ticker of TICKERS) {
   const row = rows.find((r) => r.ticker === ticker);
@@ -141,6 +187,10 @@ for (const ticker of TICKERS) {
   const url = `https://data.sec.gov/api/xbrl/companyfacts/CIK${cik}.json`;
   await sleep(DELAY_MS);
   try {
+    if (ADD_NEW_TAGS) {
+      await addNewTags(ticker, url);
+      continue;
+    }
     const { fixture, kept } = trimCompanyFacts(await getJson(url), url);
     const file = join(OUT_DIR, `companyfacts-${ticker}.json`);
     writeFileSync(file, `${JSON.stringify(fixture)}\n`);

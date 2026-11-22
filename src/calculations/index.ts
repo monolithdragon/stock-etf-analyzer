@@ -16,6 +16,7 @@ export * from './valuation/multiples';
 export * from './valuation/dcf-conventions';
 export * from './returns/returns';
 export * from './returns/drawdown';
+export * from './returns/price-range';
 export * from './returns/future-value';
 export * from './etf/costs-tracking';
 export * from './portfolio/portfolio-basics';

@@ -10,6 +10,7 @@
  * építhető fel. Az ETF-metaadat a PHASE 08 feladata.
  */
 import {
+  invalid,
   ok,
   parseCik,
   parseCurrencyCode,
@@ -43,6 +44,11 @@ export interface InstrumentProfile {
   readonly website: string | null;
   /** A forrás leírása (megbízhatatlan szöveg: csak megjelenítésre, méretkorláttal). */
   readonly description: string | null;
+  /**
+   * Szolgáltató által JELENTETT béta (PHASE 06). A számítási módszert (időtáv, index) a forrás
+   * nem közli, ezért csak tájékoztató; saját béta a PHASE 08-ban. `null`, ha nincs.
+   */
+  readonly beta: number | null;
   readonly provenance: DataProvenance;
 }
 
@@ -59,6 +65,8 @@ export interface InstrumentProfileInput {
   readonly tradingCurrency: string | null;
   readonly website: string | null;
   readonly description: string | null;
+  /** Opcionális: a béta-mezőt nem ismerő források (mock, régi proxy) elhagyhatják → `null`. */
+  readonly beta?: number | null;
   readonly provenance: DataProvenance;
 }
 
@@ -86,12 +94,17 @@ export function createInstrumentProfile(input: InstrumentProfileInput): Result<I
     'Érvénytelen instrumentum-profil.',
   );
   if (!fields.ok) return fields;
+  const beta = input.beta ?? null;
+  if (beta !== null && !Number.isFinite(beta)) {
+    return invalid('Érvénytelen instrumentum-profil: a béta nem véges szám.');
+  }
   const description = blankToNull(input.description);
   return ok({
     ...fields.value,
     listingId: input.listingId,
     kindHint: input.kindHint,
     description: description === null ? null : description.slice(0, PROFILE_DESCRIPTION_MAX_LENGTH),
+    beta,
     provenance: input.provenance,
   });
 }

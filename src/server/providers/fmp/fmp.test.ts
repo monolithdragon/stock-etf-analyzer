@@ -170,6 +170,8 @@ describe('fmp osztalék, profil, keresés', () => {
         country: 'US',
         tradingCurrency: 'USD',
         exchangeName: 'NASDAQ Global Select',
+        // PHASE 06: a szolgáltatói béta átjön (jelentett, tájékoztató).
+        beta: 1.089,
       },
     });
     const spy = await setup(fixture('profile-SPY.json')).provider.getProfile?.(id('SPY@ARCX'));

@@ -99,6 +99,8 @@ export const fmpProfileSchema = z
       description: optionalText,
       isEtf: z.boolean().nullish(),
       isFund: z.boolean().nullish(),
+      /** PHASE 06: szolgáltatói béta (módszertanát az FMP nem közli). Nem szám → `null`. */
+      beta: z.number().nullish().catch(null),
     }),
   )
   .max(10);
@@ -304,6 +306,7 @@ export function normalizeFmpProfile(
     tradingCurrency: blank(row.currency),
     website: blank(row.website),
     description: blank(row.description),
+    beta: typeof row.beta === 'number' && Number.isFinite(row.beta) ? row.beta : null,
     provenance: fmpProvenance(fetchedAt, { reference: 'FMP /stable/profile' }),
   });
   return profile.ok ? profile : invalid({ path: [0], message: profile.error.message });
