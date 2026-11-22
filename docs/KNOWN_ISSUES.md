@@ -1,10 +1,26 @@
 # Ismert problémák, kockázatok, ismeretlenek – Stock & ETF Analyzer
 
-> Frissítve: 2026-11-22 (PHASE 07 vége). Valószínűség (V) és hatás (H) skálája: **A** = Alacsony, **K** = Közepes, **M** = Magas.
+> Frissítve: 2026-11-22 (PHASE 08 vége). Valószínűség (V) és hatás (H) skálája: **A** = Alacsony, **K** = Közepes, **M** = Magas.
 
 ## Blokkolók
 
-**Nincs blokkoló a PHASE 08 indításához.** A PHASE 08 (ETF-elemzés) a PHASE 04 adapterekre és a PHASE 05 hozam-/ETF-képleteire épül; a PHASE 07 értékelési modulja részvény-specifikus, az ETF-elemzést nem érinti.
+**Nincs blokkoló a PHASE 09 indításához.** A PHASE 09 (portfólió) a PHASE 05 portfólió-képleteire, a 04A FX-rétegére és a PHASE 08 kockázati függvényeire (`risk.ts`) építhet; az ETF-holdings-alapú look-through csak holdings-forrással működik (KI-65, KI-66).
+
+## PHASE 08 – ismert problémák és leletek (2026-11-22)
+
+| ID | Leírás | Hatás | Állapot / teendő | Fázis |
+|---|---|---|---|---|
+| KI-65 | **Nincs ETF-metaadat forrás a free csomagban** (TER, AUM, replikáció, benchmark, acc/dist, UCITS, fedezés, kategóriák): az ETF-elemzés ezeket csak kézi bevitelből (`user_input`) kapja; nélküle a mezők `UNAVAILABLE / PLAN_LIMIT`. | M | Tudatos (D-069/3). Bővítés: fizetős EODHD Fundamentals (ETF) – holdings és metaadat `[NEM IGAZOLT]`; DP-05. A kézi bevitel UI-ja a PHASE 12. | 12, 15 |
+| KI-66 | **SEC N-PORT adapter nincs** (alacsony prioritás, D-071): a forrás igazoltan ad teljes holdings-listát (súly %, ország, ISIN, deviza) US-regisztrált alapokra, de negyedévente, ~60 napos késleltetéssel, szektor nélkül, UCITS-ra nem. | K | D-069/9. Teendő: XML-feldolgozó (kompatibilitás-ellenőrzéssel) vagy saját szűk parser a szerveren, ticker → CIK/series leképezés (`company_tickers_mf.json`; a SPY UIT nincs benne), valós megvágott fixture, súly = `pctVal / 100`. **D-071: nem készül** – US-only, az EU-s lakossági befektető jellemzően nem vehet US székhelyű ETF-et; helyette KI-74. | – |
+| KI-67 | **A likviditás-feature mindig `MISSING`**, hacsak kézzel meg nem adják: a normalizált ártörténet (`PricePoint`) nem tartalmaz volument, pedig az EODHD `eod` válasza igen. | K | Teendő: `volume` mező a `PricePoint`-ba (szerződés + normalizálók + fixture-ök), majd medián napi forgalom. Bid-ask spread free forrásból nem elérhető. | 13 |
+| KI-68 | **Kvótaköltség:** egy ETF-elemzés 4–5 szolgáltatói hívás (árfolyam, 2–3 ártörténet, osztalék, profil); a free EODHD napi 20 hívásából ~4 ETF-elemzés fér ki. | K | Elfogadva az MVP-ben; a proxy-cache a PHASE 13 feladata. Az EODHD `SPLIT` kérés hívás nélkül `NOT_COVERED`. | 13 |
+| KI-69 | **Indexsor nincs:** a tracking difference, a tracking error és a béta csak a hívó által adott total return indexsorral számol; free forrásból TR index nem igazolt. | K | Tudatos (D-069/5). Lehetőség: egy azonos indexet követő összehasonlító ETF sora – ez NEM tracking, ezért külön mutató kellene. | 15 |
+| KI-70 | A **free EODHD 1 éves ártörténete** miatt nem US ETF-nél a kockázati mutatók legfeljebb ~1 éves ablakon készülnek (a szokásos összevetés 3 év); a 3 éves mutatók ma nem számolhatók. | K | Jelölve (megjegyzés + `coverage.limitations` + D-070 `reliability` címke). Fizetős EODHD-vel 30+ év (DP-05). | 13, 15 |
+| KI-71 | A **disztribúciós total return** (korrigált sor hiányában) újrabefektetés nélküli közelítés; hosszú ablakon kissé alulbecsül. Az EODHD `adjusted_close` (korrigált sor) elérhető, így ez csak tartalék-út. | A | Dokumentált (D-069/4, megjegyzés a kimenetben). | – |
+| KI-72 | A **régió-levezetés** heurisztika (80% / 5% / 3 régió, MSCI EM lista); határesetben (pl. fejlett ex-US) `OTHER`. A fedezett osztály devizakockázata a teljes fedezés feltevésével 0. | A | Dokumentált (D-067/5, D-068/3); a megadott régió elsőbbséget élvez. | – |
+| KI-74 | **Kibocsátói holdings-fájl import még nincs** (D-071): a UCITS ETF-ek holdingsa ma csak kézi `EtfHoldingsSnapshot`-ként adható meg. | K | Tervezett: kibocsátónként formátum-adapter (iShares, Vanguard, Xtrackers), valós megvágott fixture, a meglévő `createEtfHoldingsSnapshot` validáció; ismeretlen formátum → hiba. | 13 |
+| KI-75 | A **rövid ablakos kockázati mutatók** (126–239 napi hozam) elkészülnek, de zajosabbak; a free EODHD-vel nem US ETF-nél jellemzően ez az eset. | A | Kezelve (D-070): `reliability = 'short_window'` címke + megjegyzés; a PHASE 10 ennek alapján súlyozhat. | 09, 10 |
+| KI-73 | A **kategória-validáció** (régió, méret, stílus, súlyozás) csak enum-tagságot ellenőriz; azt, hogy a kategória illik-e a benchmarkhoz, forrás nélkül nem lehet ellenőrizni. | A | Elfogadva; a forrás és a dátum a provenance-ben látszik. | 12 |
 
 ## PHASE 07 – ismert problémák és leletek (2026-11-22)
 
@@ -38,8 +54,8 @@
 | KI-42 | A **`totalDebt` forrásoldalon `MISSING`** (D-043), így a nettó adósság, nettó készpénz, EV, D/E, Invested Capital, ROIC és EV/EBITDA élő adattal ma mindig `MISSING`. A képletek készen és tesztelve állnak. | M (06–07) | **MEGOLDVA (PHASE 06, D-059):** lejárat szerinti bontásból összerakva, valós fixture-rel igazolva (a naiv összeadás a JNJ-nél dupla számolás lett volna). Maradék: KI-51. | 06 |
 | KI-43 | A **saját EPS** (`netIncome / weightedSharesDiluted`) az elsőbbségi osztalék levonása nélkül számol → elsőbbségi részvényes cégnél felülbecsülhet. | A | Kezelve: a jelentett EPS az elsődleges; a saját számítás csak tartalék, megjegyzéssel (D-056/4). | 06 |
 | KI-44 | Az **EV egyszerűsített**: kisebbségi részesedés, elsőbbségi részvény és lízing nélkül → nagy lízingállományú vagy kisebbségi részesedésű cégnél alulbecsülhet. | K | Dokumentált (D-056/10). **PHASE 07 (D-065/5):** változatlan; a DCF EV → equity hídja is csak adósság és pénz (a konvenciók kimondják). Bővítés valós fixture-rel igazolt tagekkel. | 15 |
-| KI-45 | A **TTM osztalék** 365 napos ex-dátum-ablaka szabálytalan ütemezésnél (eltolódó félévi/éves kifizetés) a határon egy kifizetést kihagyhat vagy kettőt számolhat. | K | Elfogadva az MVP-ben (D-056/12). Javítási lehetőség: a forrás `frequency` mezője alapján évesítés. PHASE 06: változatlan (az osztalékhozam ezt a függvényt használja). | 07, 08 |
-| KI-46 | A **TER hosszú távú hatása** a `(1 + r − TER)^n` közelítéssel számol (DATA_DICTIONARY 5.5); a pontosabb `(1 + r)(1 − TER)` alaktól `r × TER` nagyságrendben tér el (7% hozam, 0,2% TER mellett évente ~0,014 százalékpont). | A | Dokumentált (D-058). A PHASE 08 válthat, ha a megjelenítés pontosabbat igényel. | 08 |
+| KI-45 | A **TTM osztalék** 365 napos ex-dátum-ablaka szabálytalan ütemezésnél (eltolódó félévi/éves kifizetés) a határon egy kifizetést kihagyhat vagy kettőt számolhat. | K | Elfogadva az MVP-ben (D-056/12). Javítási lehetőség: a forrás `frequency` mezője alapján évesítés. PHASE 06: változatlan (az osztalékhozam ezt a függvényt használja). PHASE 08: az ETF TTM osztalékhozama is ezt használja – változatlan. | 13 |
+| KI-46 | A **TER hosszú távú hatása** a `(1 + r − TER)^n` közelítéssel számol (DATA_DICTIONARY 5.5); a pontosabb `(1 + r)(1 − TER)` alaktól `r × TER` nagyságrendben tér el (7% hozam, 0,2% TER mellett évente ~0,014 százalékpont). | A | Dokumentált (D-058). PHASE 08: megtartva (a hatás `estimated`, a feltevések a kimenetben); pontosabb alakra a PHASE 12 megjelenítésénél lehet váltani. | 12 |
 | KI-47 | A **tracking error** egyforma hosszú, dátum szerint igazított hozamsorokat vár; a dátum-igazítás (hiányzó kereskedési napok, eltérő tőzsdei naptár) a hívó dolga. | K (08) | Tudatos: a PHASE 08 végzi az igazítást (indexadat is kell). | 08 |
 | KI-48 | A `src/__tests__/calculations-purity.test.ts` a Node-típusokat a Jest tranzitív függőségeként telepített `@types/node`-ból kapja (`/// <reference types="node" />`); közvetlen függőség nincs. | A | Elfogadva (új csomag nem kellett). Ha egy Jest-frissítés elhagyná, a `@types/node` közvetlen dev-függőségként felvehető. | – |
 | KI-49 | A számítási motort **még nem hívja use case** és UI; élő adaton még nem futott. | A | **MEGOLDVA (PHASE 06):** az `analyzeStockFundamentals` use case használja; valós SEC/FMP fixture-ön integrációs teszttel igazolva. Élő hálózati futás a UI-val (PHASE 12) jön. | 06 |
@@ -162,7 +178,7 @@ A DP-01…DP-04 döntési pontokra 2026-11-21-én megjött a válasz. A DP-05 tu
 | U-05 | ~~Alpha Vantage ToS~~ – nem releváns, nincs adapter (D-024) | – |
 | U-06 | ~~Tiingo lefedettség~~ – nem releváns, amíg nincs Tiingo adapter (D-024) | – |
 | U-07 | SEC `company_tickers.json` (ticker → CIK) elérhetősége és formátuma | **Lezárva (04A):** elérhető, `{ "0": { cik_str, ticker, title } }`, 10 399 sor; User-Agent nélkül 403. |
-| U-08 | A SEC N-PORT használhatósága US ETF holdingsra (gyakoriság, késleltetés) | PHASE 08 |
+| ~~U-08~~ | A SEC N-PORT használhatósága US ETF holdingsra | **Megválaszolva (PHASE 08, élő próba):** használható; negyedéves (nyilvános a negyedév-végi hónap), ~60 nap késleltetés, teljes lista súllyal, országgal, ISIN-nel, devizával; szektor nincs; UCITS nincs (DATA_SOURCES 13.) |
 | U-09 | A `@anthropic-ai/sdk` futása az EAS Hosting runtime-on | PHASE 11 |
 | U-10 | `Intl` (hu-HU) támogatás Hermesen mindkét platformon | PHASE 12 |
 | U-11 | Grafikonkönyvtár kompatibilitása SDK 58 / RN 0.88 / New Architecture mellett | PHASE 12 |

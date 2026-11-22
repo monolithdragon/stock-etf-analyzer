@@ -1,6 +1,6 @@
 # Adatforrások – Stock & ETF Analyzer
 
-> Ellenőrzés dátuma: **2026-11-21** (PHASE 01; a SEC, az ECB/Frankfurter és az OpenFIGI a **PHASE 04A-ban**, az **FMP és az EODHD a PHASE 04B-ben** élő próbahívásokkal ellenőrizve, lásd 10. és 11. fejezet). Az ingyenes keretek és feltételek gyakran változnak.
+> Ellenőrzés dátuma: **2026-11-21** (PHASE 01; a SEC, az ECB/Frankfurter és az OpenFIGI a **PHASE 04A-ban**, az **FMP és az EODHD a PHASE 04B-ben** élő próbahívásokkal ellenőrizve, lásd 10. és 11. fejezet; a **SEC N-PORT a PHASE 08-ban, 2026-11-22**, lásd 13. fejezet). Az ingyenes keretek és feltételek gyakran változnak.
 > Kapcsolódó döntések: D-023 (lefedettség), D-024 (adapterek, routing), D-025 (Security/Listing), D-027 (fizetős bővítés nyitva), D-008 (csak saját használat).
 
 ## 1. Jelölések
@@ -45,7 +45,7 @@ A célpiacok: **US, Európa (UCITS ETF-ek és részvények), globális ETF-ek é
 | Alpha Vantage | kell | **25 kérés/nap** | – | `[NEM IGAZOLT]` | – | `[NEM IGAZOLT]` | – | – | ToS `[NEM IGAZOLT]`; prémium $49.99/hó-tól | `[IGAZOLT]` (keret) | nem |
 | Massive | kell | free stocks csomag az oldalon **nem látszott** | – | „Financials & Ratios” $29/hó | Stocks Advanced $199/hó | – | – | – | „Individual use only” | `[IGAZOLT]` | nem |
 | MNB árfolyamok | – | – | hivatalos HUF árfolyamok | – | – | – | igen | – | – | `[NEM IGAZOLT]` | később opcionális |
-| SEC N-PORT | nem kell | SEC fair access | US-regisztrált alapok (UCITS NEM) | – | – | negyedéves, késleltetett `[NEM IGAZOLT]` | – | – | – | `[NEM IGAZOLT]` | PHASE 08 vizsgálja |
+| SEC N-PORT | nem kell (User-Agent) | SEC fair access | US-regisztrált alapok (UCITS NEM) | – | – | **teljes lista, negyedéves, ~60 nap késés; súly, ország, ISIN, deviza – szektor nincs** | – | – | nyilvános SEC-adat | `[IGAZOLT]` (PHASE 08 élő, 13.2) | adapter nem készül (D-071); helyette kibocsátói fájl-import (KI-74) |
 
 ### 3.1 EODHD hívásköltségek és korlátok `[IGAZOLT]` (https://eodhd.com/financial-apis/api-limits)
 
@@ -118,8 +118,8 @@ További tények:
 | Split | **nincs bekötve** (az FMP `splits` végpontja free-ben működik – későbbi bővítés) | – | – |
 | Profil | `fmp` | **`UNAVAILABLE` (PLAN_LIMIT)** | ua. |
 | Pénzügyi kimutatások | `sec-edgar` (csak US: ticker-ütközés elleni védelem) | **`UNAVAILABLE` (PLAN_LIMIT)**; fizetős EODHD Fundamentals kellene | ua. |
-| ETF metaadat | **`UNAVAILABLE` (PLAN_LIMIT)** – FMP `etf/info` 402, EODHD fundamentals 403; kézi bevitel: PHASE 08 | ua. | ua. |
-| ETF holdings | **`UNAVAILABLE` (PLAN_LIMIT)** | ua. | ua. |
+| ETF metaadat | **`UNAVAILABLE` (PLAN_LIMIT)** – FMP `etf/info` 402, EODHD fundamentals 403; **kézi bevitel kész (PHASE 08, `EtfMetadataInput`)** | ua. | ua. |
+| ETF holdings | **`UNAVAILABLE` (PLAN_LIMIT)**; kézi pillanatkép kész (PHASE 08); SEC N-PORT igazolt, adapter nincs (KI-66) | ua. (N-PORT: UCITS-ra nem) | ua. |
 | FX | `ecb-fx` | `ecb-fx` | `ecb-fx`; ami nincs az ECB listán → `MISSING` |
 
 ### 5.3 Routing-szabályok
@@ -152,11 +152,11 @@ További tények:
 | UCITS ETF és nem US részvény árfolyama | **MVP, korlátozott** (EODHD free: 20 hívás/nap, 1 év történet) | EODHD EOD ($19.99/hó): 100 000 hívás/nap, 30+ év |
 | Hosszú távú (>1 év) kockázati mutatók nem US-re | `INSUFFICIENT_DATA` a free 1 éves történet miatt | fizetős EODHD |
 | ETF metaadat (TER, AUM…) | részleges + kézi bevitel (`user_input`) | EODHD Fundamentals (ETF) – holdings `[NEM IGAZOLT]` |
-| ETF holdings, ország-, szektorsúly, overlap | **Később** | csak ha a fizetős forrás igazoltan adja (PHASE 08) |
+| ETF holdings, ország-, szektorsúly, overlap | **Kézi pillanatkép** (PHASE 08 motor kész); US: SEC N-PORT adapterrel (KI-66; szektor nélkül) | fizetős forrás csak igazolás után |
 | Forward P/E, elemzői becslések | Nem | csak igazolt forrásból, `estimated` jelöléssel |
 | Valós idejű ár | Nem cél | – |
-| Tracking difference/error | Feltételes / később | indexadat kell |
-| Sharpe/Sortino | Feltételes; az `rf` felhasználói beállítás | – |
+| Tracking difference/error | Motor kész (PHASE 08); **total return indexsor kell** – free forrásból nincs (KI-69) | indexadat kell |
+| Sharpe/Sortino | Kész (PHASE 08, D-066); az `rf` felhasználói beállítás, nélküle `MISSING` | – |
 
 ## 7. Szabályok (minden adatforrásra)
 
@@ -332,3 +332,36 @@ Minden tény saját próbahívásból származik, a tulajdonos **free** kulcsaiv
 | Osztalék (TTM) | FMP / EODHD osztaléktörténet, 2 év | `calculated`; lefedettség ismeretlen → esemény nélkül `MISSING` |
 
 **Fixture-bővítés (2026-11-22):** `node scripts/record-sec-fixtures.mjs --add-new-tags` – a meglévő SEC-fixture-ökbe csak a `sec-tags.ts`-be újonnan felvett tagek kerülnek, az eredeti rögzítés napjáig (`filed <= recordedAt`) beadott tényekkel; a régi tények változatlanok. 12 SEC-hívás (nincs napi keret, 10 kérés/mp limit; a szkript 250 ms-ot vár).
+
+## 13. PHASE 08 – ETF-adatok: tényleges lefedettség és a SEC N-PORT próba (2026-11-22)
+
+### 13.1 Mit kap ma az ETF-elemzés, és honnan
+
+| Adat | Forrás (free) | Státusz az elemzésben |
+|---|---|---|
+| Ticker, tőzsde (MIC) | a listing-azonosító | mindig |
+| Jegyzési deviza | árfolyam → ártörténet → profil (ebben a sorrendben) | `reported`; GBX megmarad (pl. ISF@XLON) |
+| Név, ISIN, domicil | FMP profil (csak US) | nem US: kézi bevitel vagy `UNAVAILABLE / PLAN_LIMIT` |
+| TER, AUM, kibocsátó, indulás, replikáció, benchmark, acc/dist, UCITS, fedezés, alapdeviza, kategóriák | **nincs free forrás** (FMP `etf/info` 402, EODHD fundamentals 403) | csak `EtfMetadataInput` (kézi, `user_input`); nélküle `UNAVAILABLE / PLAN_LIMIT` (KI-65) |
+| Holdings (súly, ország, szektor, deviza) | **nincs free adapter**; SEC N-PORT igazolt (13.2), adapter nincs (KI-66) | kézi pillanatkép, vagy `UNAVAILABLE / PLAN_LIMIT` |
+| Ártörténet (total return) | EODHD `adjusted_close` / FMP `dividend-adjusted` (`SPLIT_DIVIDEND`) | `reported`; free EODHD: 1 év (KI-70) |
+| Ártörténet (árhozam) | FMP split-korrigált (`SPLIT`); EODHD-nél nincs ilyen → nyers `close` (`NONE`) tartalék | `reported` |
+| Osztalék | FMP / EODHD (az ISF GBP-ben, az ára GBX-ben – a motor normalizál) | `reported` |
+| Indexsor (tracking, béta) | **nincs** (TR index free forrásból nem igazolt) | a hívó adja; nélküle `MISSING` (KI-69) |
+| Forgalom (volume) | az EODHD `eod` válaszában van, de a normalizált `PricePoint` nem tárolja | kézi bevitel, különben `MISSING` (KI-67) |
+
+### 13.2 SEC N-PORT – élő próba (2026-11-22, 3 kérés, a `.env.local` User-Agentjével)
+
+| Kérdés | Eredmény `[IGAZOLT]` |
+|---|---|
+| Elérhetőség | `https://data.sec.gov/submissions/CIK##########.json` → a `filings.recent` listában `NPORT-P` (iShares Trust: 1449 db; SPDR S&P 500 ETF Trust: 28 db). A dokumentum: `https://www.sec.gov/Archives/edgar/data/{cik}/{accession}/primary_doc.xml` (XML, iShares-sorozat: ~1,5 MB, SPY: ~0,45 MB). |
+| Gyakoriság, késleltetés | Negyedéves nyilvános kitettség (a negyedév-végi hónap). Példa: iShares Morningstar Small-Cap – időszak vége 2026-08-31, beadva 2026-10-26; SPY – 2026-06-30, beadva 2026-08-28 → **~60 nap késés**. |
+| Mezők | `seriesName`, `seriesId`, `repPdEnd`, `repPdDate`, `totAssets`, `netAssets`; tételenként (`invstOrSec`): `name`, `cusip`, `<isin value="…">` (attribútum!), `balance`, `curCd`, **`pctVal` (százalék, pl. 0.0833 = 0,0833%)**, `invCountry`, `issuerCat`, `assetCat`. Negatív `pctVal` is előfordul (derivatíva). |
+| Ami NINCS | **szektor** (GICS); UCITS alapok (csak US-regisztrált alapok adnak N-PORT-ot). |
+| Ticker → sorozat | `https://www.sec.gov/files/company_tickers_mf.json` (mezők: `cik`, `seriesId`, `classId`, `symbol`; 28 670 sor): IVV, VOO, IJR benne van; **SPY (UIT) nincs** – CIK-kel közvetlenül érhető el; VWCE (UCITS) nincs. |
+| Egy CIK – sok alap | A trust-CIK alatt minden sorozat külön `NPORT-P`; a megfelelőt a `seriesId` alapján kell kiválasztani. |
+| Licenc | Nyilvános SEC-adat; a SEC fair-access szabályai (≤ 10 kérés/mp, User-Agent) érvényesek. |
+
+**Következtetés (D-069/9):** a N-PORT US ETF-ekre alkalmas holdings-forrás (súly, ország, ISIN, deviza), de szektorsúlyt nem ad, UCITS-ra nem jó, és ~2–5 hónapos. Az adapterhez XML-feldolgozás (függőség kompatibilitás-ellenőrzéssel), sorozat-kiválasztás és valós, megvágott fixture kell – ez külön lépés (KI-66).
+
+**D-071 (2026-11-22):** a N-PORT adapter nem készül. Ok: csak US-regisztrált alapokat fed le, az EU-s lakossági befektető a PRIIPs miatt jellemzően nem vehet KID nélküli US ETF-et `[ÁLTALÁNOS – brókerenként ellenőrizendő]`. Helyette a kibocsátói holdings-fájl import a terv (PHASE 13, KI-74): a felhasználó maga tölti le a fájlt (iShares, Vanguard, Xtrackers), az app csak beolvassa – nincs scraping, nincs automatikus letöltés a kibocsátói oldalakról.

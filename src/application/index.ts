@@ -2,6 +2,7 @@
  * Alkalmazási réteg: use case-ek és portok. A UI csak ezen keresztül ér el adatot
  * (soha nem hív közvetlenül szolgáltatói API-t vagy `fetch`-et).
  */
+import type { AnalyzeEtf } from './use-cases/analyze-etf';
 import type { AnalyzeStockFundamentals } from './use-cases/analyze-stock-fundamentals';
 import type {
   AnalyzeStockValuation,
@@ -28,6 +29,15 @@ export * from './valuation/types';
 export { buildStockValuation } from './valuation/stock-valuation';
 export { buildDcfInputModel, DCF_INPUT_LABELS } from './valuation/dcf-inputs';
 export * from './valuation/defaults';
+export * from './use-cases/analyze-etf';
+export * from './etf-analysis/types';
+export {
+  buildEtfAnalysis,
+  ETF_ANALYSIS_DISCLAIMER,
+  ETF_NOT_APPLICABLE,
+} from './etf-analysis/etf-analysis';
+export { DEFAULT_TER_IMPACT } from './etf-analysis/etf-costs';
+export { DEFAULT_MIN_RISK_OBSERVATIONS } from './etf-analysis/etf-risk';
 export * from './use-cases/convert-money';
 export * from './use-cases/get-listing-quote';
 export * from './use-cases/get-market-data';
@@ -51,4 +61,6 @@ export interface AppServices {
   readonly analyzeStockValuation: AnalyzeStockValuation;
   /** PHASE 07: értékelés újraszámolása meglévő elemzésből, új feltevésekkel (hálózat nélkül). */
   readonly recalculateStockValuation: RecalculateStockValuation;
+  /** PHASE 08: ETF-elemzés (a részvénylogikától különválasztva; UI a PHASE 12-ben). */
+  readonly analyzeEtf: AnalyzeEtf;
 }

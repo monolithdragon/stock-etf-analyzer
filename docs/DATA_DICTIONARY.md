@@ -8,6 +8,8 @@
 > - PHASE 04B (2026-11-21): új fejezetek 3.4 (profil), 3.5 (keresés), 3.6 (ár, ártörténet-korrekció), 3.7 (osztalék); a 11. fejezet bővítve (új végpontok, `unavailableReason`).
 > - **PHASE 05 (2026-11-22): az 5. fejezet képletdefiníciói VÉGLEGESEK** (D-056…D-058), mindegyik mellett a megvalósító függvény (`src/calculations`). Új 12. fejezet: a számítási motor konvenciói (`CalcResult`, `Metric`-adapter). A 10. fejezet bővítve.
 > - **PHASE 06 (2026-11-22):** a `totalDebt` összerakva (4.2, 4.4, 5.2; D-059); `InstrumentProfile.beta` (3.4); új **13. fejezet**: a részvény fundamentális elemzés eredmény-modellje (eredet-címke, kimutatás-nézetek, Q4/TTM, időszaki mutatók, trend/CAGR, értékelés, minőségi modell; D-060…D-063).
+> - **PHASE 07 (2026-11-22):** DCF véglegesítve (5.4), új 14. fejezet (értékelés és DCF kimenete).
+> - **PHASE 08 (2026-11-22):** az 5.5 kockázati sorai véglegesek (D-066); a 6. fejezet a 15.-re mutat; új **15. fejezet**: ETF-elemzés (profil, kategóriák, holdings, deviza, hozam, kockázat, költség, tracking, feature-modell; D-066…D-069).
 
 ## 1. Általános konvenciók
 
@@ -367,8 +369,17 @@ Megjegyzések (`notes`, nem érvénytelenítenek): TV-arány > 75%; `g > 4%`; `r
 | Évesített hozam | `annualizeReturn` | `(1 + R)^(1/évek) − 1` | R < −1 vagy évek ≤ 0 → `INVALID_INPUT`; < 1 év → `OK` + figyelmeztetés |
 | Drawdown | `drawdownSeries`, `maxDrawdown` | `DD_t = P_t / max(P_0..P_t) − 1` (≤ 0); Max DD = min(DD_t) + csúcs, mélypont és helyreállás dátuma (`recoveryDate: null`, ha még nincs) | < 2 pont → `INSUFFICIENT_DATA`; ár ≤ 0 → `INVALID_INPUT`; ±1e-12 alatti zaj → 0 |
 | Szükséges recovery | `requiredRecovery` | `1 / (1 + DD) − 1` (pl. −50% → +100%) | DD > 0 → `INVALID_INPUT`; DD ≤ −1 → `NOT_MEANINGFUL` |
-| Évesített volatilitás | – (PHASE 08) | `stdev(napi egyszerű hozam, minta) × √252` | konvenció: PHASE 08 |
-| Sharpe / Sortino | – (PHASE 08) | `(évesített hozam − rf) / volatilitás`; Sortino: downside deviation | az `rf` felhasználói beállítás |
+| Periódushozamok | `periodicReturns` | `r_t = P_t / P_{t−1} − 1` (egyszerű, nem log) | < 2 ár → `INSUFFICIENT_DATA`; ár ≤ 0 → `INVALID_INPUT` |
+| Dátum-igazítás | `alignByDate` | két sor közös dátumai (metszet) | eltérő ünnepnapok kimaradnak |
+| Évesített volatilitás | `annualizedVolatility` | `stdev(napi egyszerű hozam, minta) × √252` (`TRADING_DAYS_PER_YEAR`, D-066) | < `minObservations` → `INSUFFICIENT_DATA` (alkalmazás: 126) |
+| Downside deviation | `downsideDeviation` | `√(Σ min(0, r_t − MAR_p)² / N) × √m`, N = összes megfigyelés, `MAR_p = (1 + MAR)^(1/m) − 1` | MAR ≤ −1 → `INVALID_INPUT` |
+| Sharpe / Sortino | `sharpeRatio`, `sortinoRatio` | `(évesített hozam − rf) / volatilitás`; Sortino: `/ downside deviation` | az `rf` felhasználói beállítás (hiány → `MISSING`); kockázat = 0 → `NOT_MEANINGFUL` |
+| Béta | `beta` | `cov_minta(r_a, r_b) / var_minta(r_b)` + korreláció | eltérő hossz → `INVALID_INPUT`; var_b = 0 → `NOT_MEANINGFUL` |
+| Top N súly | `topNWeight` | a legnagyobb N pozitív súly összege | részleges lista < N → `INSUFFICIENT_DATA` (15.4) |
+| Koncentráció | `holdingsConcentration` | HHI = Σ (wᵢ/Σw⁺)²; effektív N = 1/HHI | csak teljes lista |
+| Kitettség-bontás | `exposureBreakdown` | Σ súly kulcsonként + `unclassifiedWeight` + `uncoveredWeight` | üres → `INSUFFICIENT_DATA` |
+| Régió | `deriveRegion` | domináns ≥ 80%; `GLOBAL`: USA ≥ 5% és ≥ 3 régió ≥ 5% (D-067) | ismert súly < 50% → `INSUFFICIENT_DATA` |
+| Devizakockázat | `currencyRisk` | fedezetlen idegen mögöttes kitettség aránya (D-068) | nincs ismert kitettség → `INSUFFICIENT_DATA` |
 | TER költség | `annualTerCost` | `befektetett összeg × TER` / év | TER ∉ [0, 0.10] → `INVALID_INPUT` (pl. 0.22 = 22%!) |
 | TER hosszú távú hatás | `terLongTermImpact` | FV `P(1 + r − TER)^n` vs `P(1 + r)^n`; kimenet: mindkét FV, `costAmount`, `costShare` | közelítés: a `(1 + r)(1 − TER)` alaktól `r × TER` nagyságrendben tér el; `1 + r − TER ≤ 0` → `INVALID_INPUT` |
 | Tracking difference | `trackingDifference` | `ETF total return − index total return`, azonos időszakra | hozam < −1 → `INVALID_INPUT`; indexadat kell |
@@ -380,6 +391,8 @@ Megjegyzések (`notes`, nem érvénytelenítenek): TV-arány > 75%; `g > 4%`; `r
 ## 6. ETF-mezők
 
 `issuer`, `isin`, `domicile`, `ter` (tört, pl. 0.0007), `aum` (Money + asOf), `inceptionDate`, `replication` (`physical_full` \| `physical_sampling` \| `synthetic`), `benchmark`, `distribution` (`accumulating` \| `distributing`), `ucits` (bool?), `currencyHedged` (bool?), `tradingCurrency`, `holdings[]` (`{ name, isin?, weight, country?, sector? }` + `holdingsAsOf`), `holdingsCount`, `topNWeight`. Minden mező `Metric<T>`, mert a forrás gyakran hiányos. Kézi bevitel esetén `user_input`.
+
+**PHASE 08:** a megvalósított, végleges modell és a mutatók a **[15. fejezetben](#15-etf-elemzés-phase-08-d-066d-069)** vannak (`EtfProfile`, `EtfHoldingsSnapshot`, `EtfClassification`, `EtfAnalysis`). A `domain/instrument` `Etf` entitás az értékpapír-szintű metaadat; az `EtfProfile` a jegyzés-szintű elemzési bemenet.
 
 ## 7. Portfólió-mezők
 
@@ -662,3 +675,123 @@ Kiinduló feltevések (`DEFAULT_DCF_SCENARIOS`, **nem a cégre kalibrált**): Be
 ### 14.5 Teljes kimenet (`StockValuationAnalysis`)
 
 `generatedAt` (a számítás ideje), `fundamentalsGeneratedAt` (a forrásadatok elemzésének ideje), `listingId`, `multiples` (`metrics`: a 13.6 mutatói; `bands`), `dcf` (`provenanceKind: 'estimated'`, `inputs`, `scenarios`, `scenarioNotes`, `sensitivity`), `thresholds`, `explanation` (`formulas[]`, `conventions[]`, `context[]`: FCF CAGR 3/5, árbevétel CAGR 3/5, FCF-árrés, béta – csak viszonyítás, automatikusan nem kerül be), `warnings[]`, `disclaimer` (`DCF_DISCLAIMER`).
+
+## 15. ETF-elemzés (PHASE 08, D-066…D-069)
+
+Kód: `src/domain/etf/` (modellek), `src/calculations/returns/risk.ts`, `src/calculations/etf/{holdings,exposure}.ts` (képletek), `src/application/etf-analysis/` (összerakás), use case: `AppServices.analyzeEtf(listingId, options)`. Az ETF-elemzés a részvénylogikától külön van (őrteszt).
+
+### 15.1 `EtfProfile` (jegyzés-szintű bemeneti modell)
+
+| Mező | Típus | Forrás / szabály |
+|---|---|---|
+| `listingId`, `ticker`, `exchange` | string | a listing-azonosítóból (TICKER@MIC) |
+| `name`, `isin`, `domicile` | `Metric` | szolgáltatói profil (reported) az elsődleges; különben kézi |
+| `issuer`, `benchmark` | `Metric<string>` | kézi / későbbi forrás |
+| `tradingCurrency` | `Metric<CurrencyCode>` | árfolyam → ártörténet → profil; GBX megmarad |
+| `fundBaseCurrency` | `Metric<CurrencyCode>` | az alap könyvelési devizája (≠ jegyzési, ≠ kitettség – D-068) |
+| `aum` | `Metric<Money>` | összeg ≥ 0, ISO pénznem, saját `asOf` |
+| `inceptionDate` | `Metric<IsoDate>` | |
+| `ter` | `Metric<number>` | tizedes tört, 0 … 0.10 (0.22 → `VALIDATION`: „százalék?”) |
+| `replication` | `physical_full` \| `physical_sampling` \| `synthetic` | |
+| `distribution` | `accumulating` \| `distributing` | |
+| `ucits` | `Metric<boolean>` | nem európai domicilnél `NOT_APPLICABLE` |
+| `currencyHedged`, `hedgeCurrency` | `Metric` | fedezetlen → `hedgeCurrency` `NOT_APPLICABLE`; fedezett, deviza nélkül → `MISSING` |
+| `classification` | 15.2 | |
+| `holdings` | `Metric<EtfHoldingsSnapshot>` | 15.3 |
+
+Metaadat (`EtfMetadataInput`) nélkül az ETF-mezők `UNAVAILABLE / PLAN_LIMIT`; metaadattal, de hiányzó mezővel `MISSING`. Frissesség: metaadat 1 évig friss, 3 év után lejárt; holdings 120 napig friss, 400 nap után lejárt `[FELTÉTELEZÉS]`.
+
+### 15.2 Kategóriák (`EtfClassification`)
+
+| Dimenzió | Értékek | Levezethető? |
+|---|---|---|
+| `region` | `US`, `EUROPE`, `JAPAN`, `EMERGING`, `GLOBAL`, `OTHER` | igen, holdings-országsúlyból (D-067/5), ha nincs megadva |
+| `assetClass` | `equity`, `bond`, `commodity`, `multi_asset`, `other` | nem |
+| `sizeSegment` | `large`, `mid`, `small`, `large_mid`, `all_cap` | nem (pozíciónkénti piaci érték kellene) |
+| `style` | `growth`, `value`, `quality`, `momentum`, `blend` | nem |
+| `dividendFocus` | `none`, `dividend`, `dividend_growth` (az index szabálya, NEM a kifizetési mód) | nem |
+| `weighting` | `market_cap`, `equal`, `factor`, `fundamental` | nem |
+
+### 15.3 Holdings (`EtfHoldingsSnapshot`, D-067)
+
+`asOf`, `holdings[]` (`name`, `isin?`, `weight` – tört, −1…1, nem normalizált –, `country?`, `sector?`, `currency?`), `declaredComplete`, `reportedHoldingsCount?`, `listedWeight` (Σ súly), `completeness` (`complete`, ha a forrás teljesnek mondja ÉS Σ ≥ 95%), `notes`, `provenance`. Validáció: üres lista, Σ pozitív súly > 150%, jelentett szám < tételszám → `VALIDATION`.
+
+### 15.4 Holdings-mutatók
+
+| Mutató | Képlet | Feltétel / érvénytelen eset |
+|---|---|---|
+| `holdingsCount` | jelentett pozíciószám; teljes listánál a tételek száma | részleges lista jelentett szám nélkül → `INSUFFICIENT_DATA` |
+| `coveredWeight` | Σ súly | – |
+| `top5/10/20Weight`, `largestHoldingWeight` | a legnagyobb N pozitív súly összege | részleges listán < N tétel → `INSUFFICIENT_DATA`; ≥ N: `OK` + „a forrás a legnagyobbakat adja” feltevés |
+| `herfindahl` | Σ (wᵢ / Σw⁺)² a pozitív súlyokra | csak teljes listán, különben `INSUFFICIENT_DATA` |
+| `effectiveHoldings` | 1 / HHI | ua. |
+| `countryWeights`, `sectorWeights` | Σ súly kulcsonként, csökkenő | ismeretlen kulcs → `unclassifiedWeight`; le nem fedett → `uncoveredWeight`; szektor egyáltalán nincs → `MISSING` |
+| `largestCountryWeight`, `largestSectorWeight` | a legnagyobb csoport súlya | részleges listán alsó becslés (megjegyzés) |
+
+### 15.5 Deviza (`EtfCurrencyAnalysis`, D-068)
+
+| Mező | Jelentés |
+|---|---|
+| `tradingCurrency`, `fundBaseCurrency`, `hedged`, `hedgeCurrency` | a profilból |
+| `underlyingExposure` | holdings-deviza szerinti súlyok (GBX → GBP); holdings-deviza nélkül `MISSING` |
+| `unhedgedForeignShare` | a kijelzési devizától eltérő, fedezés utáni mögöttes kitettség aránya; fedezett osztálynál: 0, ha a fedezési deviza = kijelzési, különben 1 (teljes fedezés feltevése) |
+| `displayCurrency` | HUF / EUR / USD / GBP / CHF / JPY vagy `null` |
+| `aumInDisplayCurrency` | `convertMoney` eredménye (ráta + dátum a provenance-ben); kijelzési deviza nélkül `NOT_APPLICABLE` |
+
+### 15.6 Hozamok (`EtfReturnAnalysis`, D-069/4)
+
+| Mutató | Képlet | Feltétel |
+|---|---|---|
+| `priceReturn` | `P_vég / P_kezdő − 1` (split-korrigált vagy nyers záróár) | ≥ 2 pont |
+| `totalReturn` + `totalReturnMethod` | `adjusted_series`: korrigált záróár hozama; `accumulating_price`: = árhozam; `price_plus_distributions`: `(P_vég + Σ kifizetés) / P_kezdő − 1`, ex-dátum ∈ (kezdő, vég], újrabefektetés nélkül, azonos fő pénznemben | különben `MISSING` |
+| `annualizedTotalReturn` | `(1 + R)^(1/évek) − 1`, évek = napok / 365,25 | csak ≥ 1 éves ablak (7 nap tűrés), különben `INSUFFICIENT_DATA` |
+| `distributionYieldTtm` | utolsó 12 havi kifizetés / utolsó záróár (GBX → GBP) | akkumulálónál `NOT_APPLICABLE`; esemény nélkül, ismeretlen lefedettséggel `MISSING` |
+| `comparisonBasis` | `total_return` \| `price_return_only` \| `none` | két ETF csak `total_return` alapon hasonlítható össze |
+
+### 15.7 Kockázat (`EtfRiskAnalysis`, D-066)
+
+| Mutató | Függvény | Képlet | Feltétel |
+|---|---|---|---|
+| Évesített volatilitás | `annualizedVolatility` | `stdev_minta(r_napi) × √252` | ≥ 126 napi hozam (felülírható) |
+| Max drawdown | `maxDrawdown` | `min_t(P_t / max(P_0..P_t) − 1)` + csúcs/mélypont/helyreállás | ua. |
+| Downside deviation | `downsideDeviation` | `√(Σ min(0, r_t − MAR_napi)² / N) × √252`; MAR = rf vagy 0 | ua. |
+| Sharpe | `sharpeRatio` | `(évesített hozam − rf) / volatilitás` | rf kell (nincs alapérték); vol = 0 → `NOT_MEANINGFUL` |
+| Sortino | `sortinoRatio` | `(évesített hozam − rf) / downside deviation` | rf kell; DD = 0 → `NOT_MEANINGFUL` |
+| Béta | `beta` (+ `alignByDate`) | `cov_minta(r_ETF, r_index) / var_minta(r_index)`, közös dátumokon | indexsor kell; eltérő fő pénznem → `INVALID_INPUT`; ≥ 126 közös hozam |
+
+**Megbízhatóság (`EtfMetric.reliability`, D-070):** minden kiszámolt kockázati és követési mutató (a 15.8 TD/TE is) címkét kap a periódushozamok száma (`window.observations`) alapján: `standard` ≥ 240 (`RISK_STANDARD_OBSERVATIONS`, ≈ 1 év ünnepnapokkal), `short_window` 126–239. A 126 (`RISK_MIN_OBSERVATIONS`) alatt nincs címke, a státusz `INSUFFICIENT_DATA`. Nem-OK és nem kockázati mutatónál `null`. Függvény: `riskReliability` (`src/calculations/returns/risk.ts`); a PHASE 09 portfólió-kockázat is ezt használja.
+
+### 15.8 Költség és tracking (`EtfCostAnalysis`, `EtfTrackingAnalysis`)
+
+| Mutató | Képlet | Feltétel |
+|---|---|---|
+| `ter` | jelentett / kézi érték | 0 … 0.10 |
+| `annualCostPer10k` | `10 000 × TER` | TER kell |
+| `longTermCostShare` | `1 − (1 + r − TER)^n / (1 + r)^n` | `estimated`; kiinduló r = 6%, n = 10 év (felülírható, jelölve) |
+| `trackingDifference` | ETF total return − index total return, a **közös** ablakon | TR index kell (`net_total_return` vagy `gross_total_return`); árindex → `NOT_MEANINGFUL`; eltérő fő pénznem → `INVALID_INPUT`; eltérő ablak → közös ablak + megjegyzés |
+| `annualizedTrackingDifference` | évesített ETF-hozam − évesített indexhozam | ≥ 1 éves közös ablak |
+| `trackingError` | `stdev_minta(r_ETF,t − r_index,t) × √252` | ≥ 126 közös napi hozam |
+
+UCITS ETF-nél a szokásos viszonyítás a nettó total return index. A TD tipikusan negatív, nagyságrendje ≈ −TER (± értékpapír-kölcsönzési bevétel, adóhatás); a TE a követés egyenletessége, nem a költsége.
+
+### 15.9 Feature-modell (`EtfFeatureModel`, D-069/7)
+
+Súly és pontszám NÉLKÜL. Feature-ök csoportonként (irány: `higher_is_better` / `lower_is_better` / `context`):
+
+| Csoport | Feature-ök |
+|---|---|
+| diversification | `holdingsCount` ↑, `effectiveHoldings` ↑ |
+| concentration | `top10Weight` ↓, `largestHoldingWeight` ↓, `largestCountryWeight` ↓, `largestSectorWeight` ↓ |
+| cost | `ter` ↓ |
+| tracking | `annualizedTrackingDifference` ↑, `trackingError` ↓ |
+| liquidity | `averageDailyTradedValue` ↑ (ma csak kézi, KI-67) |
+| size | `aum` ↑, `fundAgeYears` ↑ |
+| structure | `replication`, `synthetic`, `distribution`, `ucits`, `domicile` (kategorikus) |
+| risk | `volatility` (context), `maxDrawdown` ↑ |
+| currency | `unhedgedForeignShare` ↓, `hedged` (kategorikus) |
+
+`groupCoverage`: csoportonként hány feature-nek van értéke (adatteljesség, nem pontszám).
+
+### 15.10 Teljes kimenet (`EtfAnalysis`)
+
+`listingId`, `generatedAt`, `profile`, `coverage` (mezőnkénti státusz + eredet + ok, `available/total`, `limitations`), `currency`, `returns`, `risk`, `costs`, `tracking`, `holdings`, `features`, `notApplicable` (P/E, Forward P/E, DCF, vállalati minőség – indokkal), `warnings`, `disclaimer`. Minden `EtfMetric`: `id`, `label`, `unit`, `formula`, `value` (`Metric`), `origin`, `window` (`start`, `end`, `observations`), `notes`.

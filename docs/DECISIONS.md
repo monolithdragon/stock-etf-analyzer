@@ -743,3 +743,67 @@ A tulajdonos válaszai:
   3. **TTM-alapú szorzók (KI-52):** nem vezetjük be; a szorzók FY-alapúak maradnak (D-062). A „TTM NI / utolsó negyedéves részvényszám” becsült EPS nem kerül be, mert a TTM cash flow is hiányos (KI-18) és vegyes alapú szorzókat adna.
   4. **FX a szorzókhoz és a MOS-hoz (KI-50):** nem került be ebben a fázisban; a DCF a beszámolói pénznemben számol, eltérő jegyzési pénznemnél a MOS `MISSING` (az ár felülírással megadható). A `convertMoney` bekötése aszinkron FX-lekérést igényel → PHASE 09 (többdevizás értékelés).
   5. **EV-egyszerűsítés (KI-44):** változatlan; a DCF EV → equity hídja is csak adósság és pénz. A konvenciók kimondják.
+
+## PHASE 08 – ETF-elemzés (2026-11-22)
+
+### D-066 – Kockázati mutatók konvenciói (véglegesíti a D-058 nyitott pontját)
+- **Dátum:** 2026-11-22 · **Státusz:** Elfogadva
+- **Döntés:**
+  1. **Hozam:** egyszerű napi hozam a kereskedési napok záróárából (`periodicReturns`), nem log-hozam.
+  2. **Évesítés:** √252 (`TRADING_DAYS_PER_YEAR`), mert az EOD-sor csak kereskedési napokat tartalmaz; a dátum-alapú hozamévesítés marad 365,25 nap (D-058).
+  3. **Szórás:** minta (n − 1). **Downside deviation:** `√(Σ min(0, r_t − MAR_napi)² / N) × √252`, N = összes megfigyelés (Sortino–Price); `MAR_napi = (1 + MAR)^(1/252) − 1`; MAR = rf, ha meg van adva, különben 0 (megjegyzéssel).
+  4. **Sharpe / Sortino:** `(évesített hozam − rf) / kockázat`; az **rf felhasználói beállítás, alapérték nincs** → nélküle `MISSING`. Nulla kockázat → `NOT_MEANINGFUL`.
+  5. **Béta:** minta-kovariancia / minta-variancia a két sor **közös dátumain** (`alignByDate`, az eltérő ünnepnapok kimaradnak); eltérő (fő) pénznem → `INVALID_INPUT` (FX-hatás keveredne). A korreláció a megjegyzésben.
+  6. **Minimális adat:** az alkalmazás alapértéke **126 napi hozam** (≈ fél év; `DEFAULT_MIN_RISK_OBSERVATIONS`, felülírható); kevesebb → `INSUFFICIENT_DATA` indokkal. 126–251 között `OK`, „1 évnél rövidebb ablak” megjegyzéssel. A max drawdown is csak e minimum fölött.
+  7. **Sor:** a kockázat a total return (`SPLIT_DIVIDEND`) sorból készül; ha az nincs, az árfolyamsorból (megjegyzéssel; nyers árnál split-figyelmeztetés).
+- **Miért:** a D-058 a 252-es évesítést a PHASE 08-ra hagyta; a 126-os minimum kompromisszum a free EODHD 1 éves korlátja és a statisztikai értelmezhetőség között.
+
+### D-067 – Holdings-modell, koncentráció és régió-levezetés
+- **Dátum:** 2026-11-22 · **Státusz:** Elfogadva
+- **Döntés:**
+  1. **`EtfHoldingsSnapshot`** forrásfüggetlen (kézi, N-PORT, fizetős): a súly tizedes tört a nettó eszközértékhez képest, **nem normalizálva**; negatív súly (short/derivatíva) −1…1 között megengedett; a pozitív súlyok összege ≤ 150% (fölötte szinte biztos a „százalék a tört helyett” hiba); hiányzó ország/szektor/deviza `null`. `complete` csak akkor, ha a forrás teljesnek mondja **és** a súlyok összege ≥ 95%.
+  2. **Top N:** részleges listán csak akkor `OK`, ha legalább N tétel van (feltevés: a forrás a legnagyobbakat adja – megjegyzéssel); teljes listán N-nél kevesebb tétel is `OK`.
+  3. **HHI / effektív N:** a pozitív súlyokra, 1-re normalizálva; **csak teljes listán** (részleges listán alulbecsült volna) → különben `INSUFFICIENT_DATA`.
+  4. **Csoportosítás** (ország, szektor, deviza): ismeretlen kulcs → `unclassifiedWeight`, a le nem fedett rész → `uncoveredWeight`; nem kerül kitalált csoportba.
+  5. **Régió-levezetés** (`deriveRegion`): domináns régió ≥ 80%; különben `GLOBAL`, ha USA ≥ 5% és legalább 3 régió ≥ 5%; egyébként `OTHER`; ismert súly < 50% → `INSUFFICIENT_DATA`. Feltörekvő lista: MSCI EM (Korea és Lengyelország EM). A küszöböket 1e-9 tűréssel vetjük össze (lebegőpontos összeg: 8 × 0,1 = 0,7999…). A **megadott (forrás/kézi) régió az elsődleges**, eltérésnél figyelmeztetés.
+  6. Méret- és stílus-kategória holdingsból NEM vezethető le (nincs pozíciónkénti piaci kapitalizáció) → csak forrásból / kézi bevitelből.
+
+### D-068 – Deviza-fogalmak és devizafedezés
+- **Dátum:** 2026-11-22 · **Státusz:** Elfogadva
+- **Döntés:**
+  1. Három külön fogalom: **jegyzési deviza** (`tradingCurrency`, pl. VWCE@XETR: EUR; ISF@XLON: GBX), **alapdeviza** (`fundBaseCurrency`), **mögöttes kitettség** (a holdings devizái). A devizakockázatot a mögöttes kitettség adja, nem a jegyzés; ha a kettő eltér, a kimenet ezt kimondja.
+  2. **Fedezetlen idegen kitettség** = a kijelzési (befektetői) devizától eltérő mögöttes súly, az ismert devizasúlyra normalizálva (GBX → GBP). Holdings-deviza nélkül `MISSING` – a jegyzési devizából nem találjuk ki.
+  3. **Fedezett osztály:** a teljes kitettséget a fedezési devizába soroljuk (feltevés: teljes, folyamatos fedezés; megjegyzés: kis maradék nyitott kitettség lehet). Fedezett, de fedezési deviza nélkül → `MISSING`; fedezetlen + megadott fedezési deviza → figyelmeztetés, `NOT_APPLICABLE`.
+  4. **Kijelzési deviza** (HUF/EUR/USD/GBP/CHF/JPY, `DISPLAY_CURRENCIES`): csak megjelenítés; az AUM-ot a meglévő `convertMoney` váltja (ráta + dátum a provenance-ben); a kitettséget nem változtatja.
+
+### D-069 – ETF-elemzési use case szerkezete
+- **Dátum:** 2026-11-22 · **Státusz:** Elfogadva
+- **Döntés:**
+  1. **Különválasztás:** `src/application/etf-analysis/` + `analyzeEtf` use case; nem importál részvény-modult (`stock-analysis`, `valuation`, `analyze-stock-*`), és a részvényoldal sem az ETF-et – őrteszt (`etf-stock-separation.test.ts`). Közös: domain, számítási motor, `application/shared` (`appErrorToMetric`, a PHASE 06-ból kiemelve). Ha a szolgáltató szerint a jegyzés részvény (`kindHint: 'stock'`) → `VALIDATION`.
+  2. **Részvény-mutatók ETF-en:** P/E, Forward P/E, DCF, vállalati minőségi modell `notApplicable` indokkal (a holdings-súlyozott P/E forrás nélkül nem számolható).
+  3. **ETF-metaadat forrása:** a free csomagban nincs → `EtfMetadataInput` (`user_input` a factsheet/KID alapján, vagy később `reported`), futásidőben validálva. Metaadat nélkül a mezők `UNAVAILABLE / PLAN_LIMIT`; metaadattal, de hiányzó mezővel `MISSING`. A szolgáltatói (reported) név/ISIN/domicil az elsődleges, eltérésnél figyelmeztetés. A lefedettség mezőnként látható (`coverage`).
+  4. **Total return sorrend:** korrigált sor (`adjusted_series`) → akkumuláló árhozam (`accumulating_price`) → disztribúciós ár + kifizetések, újrabefektetés nélkül (`price_plus_distributions`, az időszak `(kezdő, vég]` ex-dátumaival) → különben `MISSING` és `comparisonBasis: price_return_only`, figyelmeztetéssel. Évesítés csak ≥ 1 éves ablakra (7 nap tűrés). Akkumulálónál az osztalékhozam `NOT_APPLICABLE`.
+  5. **Tracking:** csak total return indexsorral (`net_total_return` | `gross_total_return`), közös ablakon, azonos fő pénznemben; árindex → `NOT_MEANINGFUL`; eltérő ablak → a közös ablakra, megjegyzéssel; évesített TD csak ≥ 1 év; TE ≥ 126 közös napi hozam. Indexforrás ma nincs → a hívó adja (`EtfBenchmarkInput`).
+  6. **Költség:** TER (validált 0…10%), éves költség 10 000 egységre, a TER hosszú távú hatása `estimated` (kiinduló feltevés: 10 év, 6% – felülírható, jelölve).
+  7. **Feature-modell** súly és pontszám NÉLKÜL, kilenc csoporttal (diverzifikáció, költség, tracking, likviditás, méret, struktúra, kockázat, koncentráció, deviza), „kedvező iránnyal” és csoportonkénti adatteljességgel. A súlyozás a PHASE 10 feladata.
+  8. **Ártörténet-kérés:** 3 év, `SPLIT_DIVIDEND` + `SPLIT` (ha a forrás nem adja – EODHD `NOT_COVERED`, hívás nélkül –, tartalék a `NONE`).
+  9. **SEC N-PORT:** élő próbával igazolt (DATA_SOURCES 13.), de **adapter ebben a fázisban nem készül**: XML-feldolgozó függőség kompatibilitás-ellenőrzése, sorozat-leképezés és fixture kell hozzá, és szektort nem ad. A holdings-modell kész a fogadására (KI-66).
+
+### D-070 – Kockázati mutatók megbízhatósági címkéje (kiegészíti: D-066/6)
+- **Dátum:** 2026-11-22 (a PHASE 08 lezárása után, tulajdonosi jóváhagyással).
+- **Döntés:**
+  1. A számítási minimum **marad 126** periódushozam (`RISK_MIN_OBSERVATIONS`); alatta `INSUFFICIENT_DATA`.
+  2. Új, közös szabály a `src/calculations/returns/risk.ts`-ben: `riskReliability(observations)` → `standard` (≥ **240**, `RISK_STANDARD_OBSERVATIONS`) vagy `short_window` (126–239).
+  3. Az `EtfMetric.reliability` mezőt minden **kiszámolt** kockázati és követési mutató megkapja (volatilitás, max drawdown, downside deviation, Sharpe, Sortino, béta, TD, évesített TD, TE). Nem-OK mutatónál és nem kockázati mutatónál `null`. Rövid ablaknál a max drawdown külön megjegyzést kap (nem tartalmaz korábbi válságidőszakot).
+  4. A PHASE 09 portfólió-kockázata ugyanezt a függvényt használja; a PHASE 10 a címke alapján csökkentheti a mutató bizonyosságát/súlyát.
+- **Indok:** a szigorú 252 a free EODHD 1 éves korlátja mellett a nem US ETF-eknél többnyire `INSUFFICIENT_DATA`-t adna, ráadásul egy naptári év az ünnepnapok miatt 250–253 kereskedési nap, így 252-es határnál egy teljes év is kieshetne – ezért 240 a standard küszöb. A mutatók zajossága eltér: a volatilitás relatív hibája ≈ 1/√(2n) (126 → ~6%, 252 → ~4,5%), az évesített Sharpe hibája 1 év adatból is ≈ ±1, ezért a megfigyelésszám és a címke mindig látszik.
+- **Elvetett alternatívák:** szigorú 252 (adatvesztés, határeset-hibák); változatlan 126 címke nélkül (a gyenge megbízhatóság csak szövegben látszott, a PHASE 10 nem tud vele számolni).
+
+### D-071 – SEC N-PORT adapter helyett kibocsátói holdings-fájl import (módosítja: D-069/9)
+- **Dátum:** 2026-11-22 (tulajdonosi jóváhagyással).
+- **Döntés:**
+  1. A SEC N-PORT adapter **nem készül** a tervezett fázisokban; a KI-66 alacsony prioritásra kerül.
+  2. Helyette a holdings forrása a **kibocsátói holdings-fájl importja** lesz (KI-74): a felhasználó maga tölti le a kibocsátó honlapjáról a holdings CSV/XLSX-et (első kör: iShares, Vanguard, Xtrackers), az app kibocsátónként egy formátum-adapterrel `EtfHoldingsSnapshot`-tá alakítja (a meglévő validációval), `user_input` jellegű provenance-szel, a fájl dátumával és a kibocsátó nevével.
+  3. Ütemezés: **PHASE 13** (fájlválasztó és tárolás kell hozzá, a PHASE 12 UI után). Fizetős forrás (DP-05) esetén a döntés felülvizsgálandó.
+- **Indok:** a N-PORT csak US-regisztrált alapokra ad adatot, az EU-s lakossági befektetők viszont a PRIIPs-szabály miatt jellemzően nem vásárolhatnak KID nélküli, US székhelyű ETF-et `[ÁLTALÁNOS – brókerenként ellenőrizendő]`, így a tulajdonos portfóliójában várhatóan UCITS ETF-ek lesznek, amelyekre a N-PORT nem ad semmit. A kibocsátói fájl lefedi a UCITS-alapokat, frissebb (jellemzően napi, szemben a N-PORT ~60 napos késésével), az iShares-fájl szektort is tartalmaz, és mivel a felhasználó maga tölti le, nincs scraping és nincs ToS-kockázat.
+- **Kockázat:** a kibocsátók fájlformátuma bejelentés nélkül változhat → formátum-adapterenként valós (megvágott) fixture és szigorú futásidejű validáció; ismeretlen formátum → hibaüzenet, nem találgatás.

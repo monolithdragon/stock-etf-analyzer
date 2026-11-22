@@ -5,6 +5,7 @@
  * A UI a kész `AppServices`-t kapja (React Contexten át), az adaptereket nem ismeri.
  */
 import {
+  createAnalyzeEtf,
   createAnalyzeStockFundamentals,
   createAnalyzeStockValuation,
   createRecalculateStockValuation,
@@ -107,6 +108,7 @@ export function createAppServices(
   const getPriceHistory = createGetPriceHistory(market);
   const getInstrumentProfile = createGetInstrumentProfile(market);
   const getDividendHistory = createGetDividendHistory(market);
+  const convertMoney = createConvertMoney({ fxGateway: deps.fx, clock: deps.clock });
   const analyzeStockFundamentals = createAnalyzeStockFundamentals({
     getFinancialStatements,
     getListingQuote,
@@ -123,7 +125,7 @@ export function createAppServices(
     getInstrumentProfile,
     getDividendHistory,
     searchInstruments: createSearchInstruments(market),
-    convertMoney: createConvertMoney({ fxGateway: deps.fx, clock: deps.clock }),
+    convertMoney,
     recordTransaction: createRecordTransaction({
       portfolioRepository: deps.portfolioRepository,
       clock: deps.clock,
@@ -135,5 +137,13 @@ export function createAppServices(
       clock: deps.clock,
     }),
     recalculateStockValuation: createRecalculateStockValuation({ clock: deps.clock }),
+    analyzeEtf: createAnalyzeEtf({
+      getListingQuote,
+      getPriceHistory,
+      getDividendHistory,
+      getInstrumentProfile,
+      convertMoney,
+      clock: deps.clock,
+    }),
   };
 }
