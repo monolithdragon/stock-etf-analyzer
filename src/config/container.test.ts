@@ -161,4 +161,19 @@ describe('createAppServices', () => {
     expect(analysis.warnings.join(' ')).toContain('DEMO');
     expect(analysis.fxRatesUsed.every((r) => r.provenance.kind === 'mock')).toBe(true);
   });
+
+  it('PHASE 10: evaluateStock és evaluateEtf a composition rooton át (mock mód)', async () => {
+    const services = createAppServices({ dataMode: 'mock', apiBaseUrl: null }, { clock });
+    const stock = await services.evaluateStock('DEMO@XNAS');
+    if (!stock.ok) throw new Error(stock.error.message);
+    expect(stock.value.evaluation.subjectKind).toBe('stock');
+    expect(stock.value.evaluation.aiInvolvement).toBe('none');
+    // Demóadat soha nem „mosódik tisztára”: a confidence legfeljebb LOW (vagy nincs elég adat).
+    expect(['LOW', 'INSUFFICIENT']).toContain(stock.value.evaluation.confidence.level);
+    expect(['STRONG_BUY', 'BUY']).not.toContain(stock.value.evaluation.decision.label);
+    const etf = await services.evaluateEtf('DEMOETF@XETR');
+    if (!etf.ok) throw new Error(etf.error.message);
+    expect(etf.value.evaluation.subjectKind).toBe('etf');
+    expect(etf.value.evaluation.configs.score.id).toBe('etf-default');
+  });
 });

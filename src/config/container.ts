@@ -6,6 +6,8 @@
  */
 import {
   createAnalyzeEtf,
+  createEvaluateEtf,
+  createEvaluateStock,
   createAnalyzePortfolio,
   createAnalyzeStockFundamentals,
   createAnalyzeStockValuation,
@@ -118,6 +120,18 @@ export function createAppServices(
     getDividendHistory,
     clock: deps.clock,
   });
+  const analyzeStockValuation = createAnalyzeStockValuation({
+    analyzeStockFundamentals,
+    clock: deps.clock,
+  });
+  const analyzeEtf = createAnalyzeEtf({
+    getListingQuote,
+    getPriceHistory,
+    getDividendHistory,
+    getInstrumentProfile,
+    convertMoney,
+    clock: deps.clock,
+  });
   return {
     getListingQuote,
     getSecurityListings: createGetSecurityListings(market),
@@ -133,19 +147,9 @@ export function createAppServices(
       ids: deps.ids,
     }),
     analyzeStockFundamentals,
-    analyzeStockValuation: createAnalyzeStockValuation({
-      analyzeStockFundamentals,
-      clock: deps.clock,
-    }),
+    analyzeStockValuation,
     recalculateStockValuation: createRecalculateStockValuation({ clock: deps.clock }),
-    analyzeEtf: createAnalyzeEtf({
-      getListingQuote,
-      getPriceHistory,
-      getDividendHistory,
-      getInstrumentProfile,
-      convertMoney,
-      clock: deps.clock,
-    }),
+    analyzeEtf,
     analyzePortfolio: createAnalyzePortfolio({
       portfolioRepository: deps.portfolioRepository,
       getListingQuote,
@@ -154,5 +158,7 @@ export function createAppServices(
       convertMoney,
       clock: deps.clock,
     }),
+    evaluateStock: createEvaluateStock({ analyzeStockValuation }),
+    evaluateEtf: createEvaluateEtf({ analyzeEtf }),
   };
 }

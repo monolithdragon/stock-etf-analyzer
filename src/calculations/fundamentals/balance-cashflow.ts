@@ -149,3 +149,23 @@ export function ebitda(input: {
     return bad ?? calcOk(operatingIncome + depreciationAmortization);
   });
 }
+
+/**
+ * Nettó adósság / EBITDA (PHASE 10, D-073) – eladósodottság a működési eredménytermelő képességhez
+ * mérve. Negatív érték = nettó készpénz (kedvező). EBITDA ≤ 0 → `NOT_MEANINGFUL` (a hányados
+ * előjele és nagysága ilyenkor félrevezető).
+ */
+export function netDebtToEbitda(input: {
+  readonly netDebt: NumericInput;
+  readonly ebitda: NumericInput;
+}): CalcResult<number> {
+  return chainCalc(requireInputs(input), ({ netDebt: debt, ebitda: earnings }) => {
+    const bad = mustBePositive(
+      'ebitda',
+      earnings,
+      'NOT_MEANINGFUL',
+      'Nem pozitív EBITDA mellett a nettó adósság / EBITDA félrevezető.',
+    );
+    return bad ?? calcOk(debt / earnings);
+  });
+}

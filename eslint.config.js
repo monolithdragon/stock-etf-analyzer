@@ -57,6 +57,13 @@ const layerZones = [
     message: 'A calculations csak a domaint importálhatja (tiszta képletek, ARCHITECTURE 3.).',
   },
   {
+    // PHASE 10 (D-073): a score-/döntési engine tiszta szabálymotor – domain + calculations.
+    target: './src/scoring',
+    from: './src',
+    except: ['./scoring', './domain', './calculations'],
+    message: 'A scoring csak a domaint és a calculations-t importálhatja (ARCHITECTURE 3.).',
+  },
+  {
     target: './src/application',
     from: './src',
     except: ['./application', './domain', './contracts', './calculations', './scoring'],
@@ -185,6 +192,24 @@ module.exports = defineConfig([
     },
   },
   {
+    // Scoring (PHASE 10): semmilyen külső csomag – csak relatív, `@/domain`, `@/calculations`.
+    files: ['src/scoring/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '^(?!\\.{1,2}/|@/domain(?:/|$)|@/calculations(?:/|$)|@/scoring(?:/|$))',
+              message:
+                'A scoring nem importálhat külső csomagot (React, Expo, zod…) – tiszta TypeScript.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: [
       'src/contracts/**/*.{ts,tsx}',
       'src/application/**/*.{ts,tsx}',
@@ -204,6 +229,7 @@ module.exports = defineConfig([
     files: [
       'src/domain/**/*.{ts,tsx}',
       'src/calculations/**/*.{ts,tsx}',
+      'src/scoring/**/*.{ts,tsx}',
       'src/contracts/**/*.{ts,tsx}',
       'src/application/**/*.{ts,tsx}',
       'src/presentation/**/*.{ts,tsx}',

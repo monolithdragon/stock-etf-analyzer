@@ -1,7 +1,7 @@
 # Adatszótár – Stock & ETF Analyzer
 
 > Állapot: **kiinduló definíciók** (PHASE 01) + **domain típusok a kódban** (PHASE 03, 2026-11-21). A mezők és a kód közti leképezés: [10. fejezet](#10-kód-leképezés-phase-03).
-> - A képletdefiníciókat a **PHASE 05** véglegesíti, a DCF-et a **PHASE 07**, az ETF-mutatókat a **PHASE 08**, a portfóliót a **PHASE 09**.
+> - A képletdefiníciókat a **PHASE 05** véglegesíti, a DCF-et a **PHASE 07**, az ETF-mutatókat a **PHASE 08**, a portfóliót a **PHASE 09**, a score-t és a döntést a **PHASE 10** (16. fejezet).
 > - Definíció csak dokumentált indokkal változtatható (DECISIONS.md-be bejegyzés kell).
 > - Az XBRL tag-nevek a 4.1–4.2-ben **jelöltek** (PHASE 01). A ténylegesen használt, 12 valós cégen igazolt prioritási lista: **4.4** és `src/server/providers/sec-edgar/sec-tags.ts` (PHASE 04A).
 > - PHASE 04A (2026-11-21): új fejezetek 3.3 (jegyzés-jelölt), 4.4 (SEC-normalizálás), 8. (FX, megvalósítva), 11. (API-szerződés v1).
@@ -501,8 +501,8 @@ Példa (valós ECB 2026-11-20, számítással ellenőrizve): 100 USD → HUF = 1
 
 | Entitás | Mezők |
 |---|---|
-| `ScoreBreakdown` | `category`, `score` (Metric), `weight`, `appliedMetrics[]`, `rule`, `missingInputs[]`, `dataQuality`, `freshness` |
-| `Decision` | `label` (konfigurálható: Strong Buy … Strong Sell / Watch / Insufficient Data), `drivers[]`, `thesisRisks[]`, `invalidationConditions[]`, `confidence` (AnalysisConfidence = adatteljesség, NEM valószínűség) |
+| `ScoreBreakdown` | **PHASE 10: megvalósítva** `CategoryScore`-ként (16.3): `score` (0–100 vagy `null`), `weight`, `effectiveWeight`, `metrics[]`, `rule`, `rationale[]`, `missing[]`, `dataQuality`, `freshness` |
+| `Decision` | **PHASE 10: megvalósítva** `DecisionResult` (16.5) + `ThesisAssessment` (16.6) + `AnalysisConfidence` (16.4): konfigurálható címke (Strong Buy … Strong Sell / Watch / Nem értékelhető), `drivers[]`, `ruleTrace[]`, `thesis.risks[]`, `thesis.invalidation[]`; a confidence adatteljesség, NEM valószínűség |
 | `AiInputDto` | csak számított metrikák (érték + státusz + provenance kivonat), feltevések, score, döntés, időbélyegek. **Nincs** benne szabad szöveg a felhasználótól; a szolgáltatói szöveg hosszkorlátos |
 | `AnalysisResult` (PHASE 03 váz) | `subject` (`stock`/`etf`: `securityId` + `listingId`; `portfolio`: `portfolioId`), `generatedAt`, `metrics[]` (`FinancialMetric`), `completeness` (`COMPLETE` \| `PARTIAL` \| `INSUFFICIENT` – adatteljesség, NEM valószínűség; a `NOT_APPLICABLE` nem hiány), `dataGaps[]` (`metricId`, `status`, `reason`). A score és a döntés a PHASE 10-ben, a magyarázat a PHASE 11-ben kerül mellé. |
 | `FinancialMetric` (PHASE 03) | `id` (a 5. fejezet mutatói, `FINANCIAL_METRIC_IDS`), `unit`, `value` (`Metric<number>`), `formula` (olvasható képlet), `period` (vagy `null` piaci mutatónál), `inputs[]`. **Szabály:** `OK` értékű mutató provenance-e nem lehet `ai_interpretation`. |
@@ -551,6 +551,7 @@ Minden domain típus az `@/domain` modulból importálható. Ahol konstruktor va
 | ETF-költség, követés (5.5) — 05 | `TerImpact` | `annualTerCost`, `terLongTermImpact`, `trackingDifference`, `trackingError` | `src/calculations/etf/costs-tracking.ts` |
 | Portfólió-alapok (5.5) — 05 | `PortfolioWeights` | `portfolioWeights`, `weightedReturn` | `src/calculations/portfolio/portfolio-basics.ts` |
 | Portfólió-motor (5.5) — 09 | `AverageCostLedger`, `TimeWeightedReturn`, `HoldingsOverlap` | `averageCostLedger`, `timeWeightedReturn`, `holdingsOverlap` | `src/calculations/portfolio/`, `src/calculations/etf/overlap.ts` |
+| Score és döntés — 10 | `ScoringFeature`, `ScoreConfig`, `DecisionConfig`, `ScoreCard`, `CategoryScore`, `AnalysisConfidence`, `DecisionResult`, `ThesisAssessment`, `InstrumentEvaluation` | `evaluateScoring`, `buildStockEvaluation`, `buildEtfEvaluation`, `evaluateStock`, `evaluateEtf`; képletek: `netDebtToEbitda`, `priceAtMarginOfSafety` | `src/scoring/`, `src/application/scoring/`, `src/application/use-cases/evaluate-instrument.ts` |
 
 **Validációs józansági határok.** Ezek nem üzleti definíciók; a hibás bemenet kiszűrésére szolgálnak.
 
@@ -870,3 +871,78 @@ Súly és pontszám NÉLKÜL. Feature-ök csoportonként (irány: `higher_is_bet
 ### 15.10 Teljes kimenet (`EtfAnalysis`)
 
 `listingId`, `generatedAt`, `profile`, `coverage` (mezőnkénti státusz + eredet + ok, `available/total`, `limitations`), `currency`, `returns`, `risk`, `costs`, `tracking`, `holdings`, `features`, `notApplicable` (P/E, Forward P/E, DCF, vállalati minőség – indokkal), `warnings`, `disclaimer`. Minden `EtfMetric`: `id`, `label`, `unit`, `formula`, `value` (`Metric`), `origin`, `window` (`start`, `end`, `observations`), `notes`.
+
+## 16. Score és döntés (PHASE 10, D-073…D-075)
+
+Kód: `src/scoring/` (tiszta motor + kiinduló konfigurációk), `src/application/scoring/` (leképezők), use case-ek: `src/application/use-cases/evaluate-instrument.ts`. Minden pont 0–100, egy tizedesre kerekítve; a felső szint a kerekített alsóból számol. A címkék elemzési kategóriák, nem előrejelzések.
+
+### 16.1 Bemenet (`ScoringInput`)
+
+| Mező | Jelentés |
+|---|---|
+| `subjectKind` | `stock` \| `etf` – csak azonos fajtájú konfigurációval futhat (különben `VALIDATION`) |
+| `features[]` | `ScoringFeature`: `id`, `label`, `kind` (`numeric` \| `categorical`), `unit`, `value` (`Metric` – érték + provenance VAGY a hiány oka), `reliability` (D-070). Duplikált `id` → `VALIDATION` |
+| `flags` | külső igen/nem jelzések; `null` = nem ismert (a rá épülő feltétel `UNKNOWN`) |
+
+**Részvény-feature-ök** (a PHASE 06–07 kimenetéből): éves (legutóbbi FY) `roic`, `grossMargin`, `revenueGrowth`, `operatingMargin`, `netMargin`, `roe`, `debtToEquity`, `fcfMargin`, `fcfConversion`; származtatott `netDebtToEbitda` (calculations); CAGR: `revenueCagr3y`, `revenueCagr5y`, `epsCagr3y`, `fcfCagr3y`, `sharesCagr3y`; értékelés: `pe`, `pfcf`, `evToEbitda`, `fcfYield`, `ps`; `beta` (szolgáltatói); DCF: `mosBase`, `mosBear`, `mosBull` (`estimated`); opcionálisan `portfolioWeight` (PHASE 09). Külső jelzések: `mosDiscount`, `mosPremium` (Base MOS-kategória, D-065 küszöb), `bearMosNegative`.
+
+**ETF-feature-ök:** a PHASE 08 `EtfAnalysis.features` 1:1 (15.9) + opcionálisan `portfolioWeight`.
+
+### 16.2 Konfiguráció (`ScoreConfig`, `DecisionConfig`)
+
+| Elem | Szabály |
+|---|---|
+| Kategóriasúly | Σ = `totalWeight` (100); 0 súly csak mutató nélkül, `notScoredReason`-nel |
+| Mutatósúly (kategórián belül) | Σ = 1 (tűrés 1e-9) |
+| `linear` | `worst` → 0, `best` → 100, köztük arányos, kívül levágva; `worst ≠ best` |
+| `linear_money` | pénznemenként külön horgony; más pénznem → nem pontozott |
+| `categorical` | kategória → pont (0–100); ismeretlen kategória → nem pontozott |
+| `minCoverage` / `minTotalCoverage` | a pontozott súlyarány minimuma (D-074) |
+| Döntési szabályok | sorrendben, az első teljesülő nyer, az utolsó kötelezően fallback |
+| Plafon (`cap`) | ha minden feltétele `PASS`: a címke legfeljebb `maxLabel` |
+| Címkék | `STRONG_BUY`, `BUY`, `WATCH`, `HOLD`, `REDUCE`, `SELL`, `STRONG_SELL`, `NOT_RATED`; szöveg és leírás konfigurálható |
+
+A kiinduló súlyok és horgonyok: D-073/6–7, `src/scoring/config/stock-config.ts`, `etf-config.ts`. Ezek iparág-független konvenciók, nem kalibrált értékek (KI-85, KI-86).
+
+### 16.3 Kimenet: `MetricScore` és `CategoryScore` (= a 9. fejezet `ScoreBreakdown`-ja)
+
+| Mező | Jelentés |
+|---|---|
+| `MetricScore.score` | 0–100 vagy `null` (hiány / nem alkalmazható szabály – soha nem 0 helyett) |
+| `MetricScore.inputStatus`, `reason` | a bemenet státusza (`NO_FEATURE`, ha nem érkezett) és az ok |
+| `MetricScore.rule`, `rationale` | a szabály emberi nyelven (pl. „lineáris: 5% → 0 pont, 20% → 100 pont”) és a horgony indoka |
+| `MetricScore.origin`, `provenanceKind`, `freshness`, `asOf`, `currency`, `reliability`, `qualityFactor` | eredet, frissesség, dátum; minőségi szorzó = fajta × frissesség × ablak (D-073/11) |
+| `CategoryScore.status` | `SCORED` \| `PARTIAL` \| `INSUFFICIENT_DATA` \| `NOT_SCORED` |
+| `CategoryScore.score`, `weight`, `effectiveWeight`, `coverage` | kategóriapont, konfigurált súly, az összpontszámban használt újranormalizált súly, a pontozott mutatósúly aránya |
+| `CategoryScore.metrics`, `rule`, `rationale`, `missing` | alkalmazott mutatók, képlet, mutatónkénti indoklás, hiányzó adatok okkal |
+| `CategoryScore.dataQuality` | `factor` (0–1), `level` (`HIGH` ≥ 0,9, `MEDIUM` ≥ 0,7, `LOW`), `issues` |
+| `CategoryScore.freshness` | `worst` (EXPIRED > STALE > UNKNOWN > FRESH), `oldestAsOf` |
+| `ScoreCard` | `totalScore`, `totalStatus`, `scoredWeightShare`, `dataCoverage`, `missingDataPolicy`, `formula`, konfiguráció-azonosító és -verzió |
+
+### 16.4 `AnalysisConfidence` (adatteljesség és -minőség – NEM hozam-valószínűség)
+
+`score = 100 × dataCoverage × dataQuality` (egy tizedes). `dataCoverage = Σ(kategóriasúly × lefedettség) / Σ súly`; `dataQuality` = a pontozott mutatók minőségi szorzóinak súlyozott átlaga. Szint: `HIGH` ≥ 80, `MEDIUM` ≥ 45, `LOW` alatta; nincs összpontszám → `INSUFFICIENT`; demóadat → legfeljebb `LOW`. Mezők: `level`, `score`, `dataCompleteness`, `dataQuality`, `reasons[]`, `meaning`.
+
+### 16.5 Döntés (`DecisionResult` = a 9. fejezet `Decision`-je)
+
+| Mező | Jelentés |
+|---|---|
+| `label`, `labelText`, `labelDescription` | a végső címke (plafonok után) |
+| `baseLabel`, `matchedRuleId` | az illeszkedő szabály címkéje a plafonok előtt |
+| `ruleTrace[]` | minden kiértékelt szabály az illeszkedőig; feltételenként `description`, `actual`, `outcome` (`PASS` \| `FAIL` \| `UNKNOWN`) |
+| `appliedCaps[]` | `capId`, `from` → `to`, feltételek |
+| `dimensions[]` | `id`, `label`, `score` (vagy `null` + `reason`), `sources` (kategóriák/mutató újranormalizált súllyal) |
+| `flags[]` | `id`, `value` (`true`/`false`/`null`), `source` (`rule` \| `external`) |
+| `drivers[]`, `disclaimer` | olvasható indoklás; kötelező nyilatkozat |
+
+### 16.6 Thesis (`ThesisAssessment`)
+
+| Mező | Jelentés |
+|---|---|
+| `stance` | `positive` (Strong Buy/Buy/Watch), `neutral` (Hold), `negative` (Reduce/Sell/Strong Sell), `not_rated` |
+| `risks[]` (`ThesisRisk`) | `id`, `kind` (`fundamental` \| `valuation` \| `risk` \| `portfolio` \| `data`), `severity` (`HIGH` \| `MEDIUM` \| `LOW`), `dimension`, `statement`, `evidence` (`featureId`/`flag`, `value`, `comparator`, `threshold`), `ruleId` |
+| `invalidation[]` (`InvalidationCondition`) | `kind` (`dimension` \| `total` \| `feature` \| `flag` \| `price`), `statement`, `target`, `comparator`, `threshold`, `currentValue`, `ruleId`. Források: a szabály feltételeinek megfordítása, plafon megszűnése, kockázati szabályok, DCF-árszint (`priceAtMarginOfSafety`) |
+
+### 16.7 Teljes kimenet (`InstrumentEvaluation`)
+
+`subjectKind`, `listingId`, `evaluatedAt` (a bemeneti elemzés időbélyege – a motor nem olvas órát), `configs` (score és döntés: `id`, `version`), `features` (a motor ténylegesen kapott bemenetei), `score`, `confidence`, `decision`, `thesis`, `aiInvolvement: 'none'`, `warnings`, `disclaimer`.

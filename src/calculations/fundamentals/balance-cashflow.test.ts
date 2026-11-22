@@ -8,6 +8,7 @@ import {
   freeCashFlow,
   netCash,
   netDebt,
+  netDebtToEbitda,
 } from './balance-cashflow';
 import { failureReason, okValue } from '../core/testing';
 
@@ -101,5 +102,18 @@ describe('EBITDA', () => {
     expect(ebitda({ operatingIncome: 250, depreciationAmortization: -1 }).status).toBe(
       'INVALID_INPUT',
     );
+  });
+});
+
+describe('nettó adósság / EBITDA (PHASE 10, D-073)', () => {
+  it('hányados; nettó készpénznél negatív', () => {
+    expect(okValue(netDebtToEbitda({ netDebt: 300, ebitda: 100 }))).toBe(3);
+    expect(okValue(netDebtToEbitda({ netDebt: -50, ebitda: 100 }))).toBe(-0.5);
+  });
+  it('EBITDA ≤ 0 → NOT_MEANINGFUL; hiányzó bemenet → MISSING (nem 0)', () => {
+    const zero = netDebtToEbitda({ netDebt: 100, ebitda: 0 });
+    expect(zero.status).toBe('NOT_MEANINGFUL');
+    expect(failureReason(netDebtToEbitda({ netDebt: 100, ebitda: -5 }))).toContain('EBITDA');
+    expect(netDebtToEbitda({ netDebt: null, ebitda: 100 }).status).toBe('MISSING');
   });
 });

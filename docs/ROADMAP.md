@@ -1,6 +1,6 @@
 # Roadmap – Stock & ETF Analyzer
 
-> Frissítve: 2026-11-22 (PHASE 09 vége). Minden fázis külön chatben fut, a `stock_etf_analyzer_prompts` csomag `NN_*.md` promptja alapján.
+> Frissítve: 2026-11-22 (PHASE 10 vége). Minden fázis külön chatben fut, a `stock_etf_analyzer_prompts` csomag `NN_*.md` promptja alapján.
 > **Fázisszabály:** a következő fázis csak akkor indul, ha az előző befejezési feltételei teljesültek, vagy a hiányok a KNOWN_ISSUES-ban dokumentálva vannak.
 > **Verzió:** a promptok egy része SDK 57-et említ. Mindenhol **SDK 58** értendő (D-020).
 
@@ -17,8 +17,8 @@
 | 07 | Értékelés és DCF | **KÉSZ** (2026-11-22) | |
 | 08 | ETF-elemzés | **KÉSZ** (2026-11-22) | |
 | 09 | Portfólió és kockázat | **KÉSZ** (2026-11-22) | |
-| 10 | Score és döntési engine | **KÖVETKEZIK** | M3 Elemzőmotor kész |
-| 11 | AI-magyarázó engine | NEM KEZDŐDÖTT | |
+| 10 | Score és döntési engine | **KÉSZ** (2026-11-22) | **M3 Elemzőmotor kész ✅** |
+| 11 | AI-magyarázó engine | **KÖVETKEZIK** | |
 | 12 | UI/UX és navigáció | NEM KEZDŐDÖTT | |
 | 13 | Tárolás, cache, offline | NEM KEZDŐDÖTT | **M4 MVP** |
 | 14 | Compare, watchlist, screener, alerts | NEM KEZDŐDÖTT | |
@@ -364,6 +364,24 @@ Minden fázis közös lezárása (CLAUDE.md):
   - Ugyanarra a bemenetre ugyanaz a kimenet (teszttel bizonyítva).
   - Hiányzó adat nem ad csendes pontot.
   - A DECISIONS frissítve a súlyokkal.
+- **Eredmény (2026-11-22): KÉSZ.**
+  - Új réteg: `src/scoring` (tiszta szabálymotor, csak `domain` + `calculations`; ESLint-zóna + őrteszt) – D-073.
+  - Két elkülönített rendszer egy motorral: részvény-score (8 kategória; MOAT 0 súllyal, indokkal) és ETF-score (9 kategória); a keverés `VALIDATION` hibát ad.
+  - Súlyok és horgonyok konfigurációban (`src/scoring/config/`), automatikus súlyösszeg- és szabályellenőrzéssel minden futáskor.
+  - Kategóriánként: pont, súly, effektív súly, lefedettség, alkalmazott mutatók, szabály, indoklás, hiányok, adatminőség, frissesség.
+  - Hiányzó adat: kimarad + újranormalizálás minimális lefedettséggel + confidence-csökkentés (D-074); soha nem 0 pont.
+  - Determinisztikus, többdimenziós döntés: kapu → sorrendezett szabályok → plafonok, teljes szabálynyommal; konfigurálható címkék; DCF/MOS és portfólió-túlsúly jelzésként (D-075).
+  - `AnalysisConfidence` (lefedettség × minőség; nem hozam-valószínűség); strukturált thesis risks és érvénytelenítő feltételek (DCF-árszinttel).
+  - Use case-ek: `evaluateStock`, `evaluateEtf` (`AppServices`); tiszta változatok: `buildStockEvaluation`, `buildEtfEvaluation`.
+  - Két új képlet: `netDebtToEbitda`, `priceAtMarginOfSafety`.
+  - Ellenőrzés: `npm run check` exit 0; **1186/1186 teszt** (72 suite; +175). Lefedettség: `src/scoring` 98,9% sor / 91,1% ág, a konfiguráció 100%.
+  - **Nem készült el (tudatosan):** UI (12), AI (11), iparági konfigurációk (KI-85), MOAT-pontozás (KI-84), look-through túlsúly (KI-83), részvény-szorzók FX-e (KI-50).
+  - Új döntések: D-073…D-075. Új ismert problémák: KI-83…KI-88.
+- **A későbbi fázisok kapcsolódási pontjai (PHASE 10-ből):**
+  - PHASE 11 (AI): bemenet az `InstrumentEvaluation` (`score.categories[].rationale/missing`, `decision.drivers/ruleTrace/appliedCaps`, `confidence.reasons`, `thesis`); az AI nem módosíthatja a pontot, a címkét vagy a confidence-t, és nem tehet hozzá saját döntést. A `template` provider a `drivers` és a `rationale` mezőkből építhet.
+  - PHASE 12 (UI): a pont mellett mindig a `missing`, a `coverage`, a confidence `reasons` és a `disclaimer`; súly-/küszöbszerkesztés `EvaluationOptions.scoreConfig/decisionConfig` felülírással (a validációs hibák mezőútvonallal jönnek); a `NOT_RATED` nem negatív ítélet.
+  - PHASE 13 (tárolás): a felhasználói konfigurációk tárolása (azonosító + verzió már a kimenetben).
+  - PHASE 14 (screener/compare): ugyanaz a motor listára futtatható; a determinisztikus kimenet cache-elhető (bemenet + konfiguráció-verzió).
 
 ### PHASE 11 – AI-magyarázó engine
 - **Cél:** ingyenes, szabályalapú magyarázat alapértelmezésként (D-026), valamint validált, strukturált, opcionális LLM-magyarázat a proxyn keresztül. Az app LLM nélkül is teljes.

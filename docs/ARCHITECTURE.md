@@ -1,6 +1,6 @@
 # Architektúra – Stock & ETF Analyzer
 
-> Állapot: **részben megvalósítva** (PHASE 04B, 2026-11-21; az 5.1 a PHASE 09-ig frissítve, 2026-11-22). A 3., 4.4–4.5, 5., 6.3 (a 10 végpont), 6.4 (ProviderRouter, kvóta, csomagmátrix) és 7. fejezet a **tényleges kódot** írja le; a cache (11.) és az offline működés (12.) még terv.
+> Állapot: **részben megvalósítva** (PHASE 04B, 2026-11-21; az 5.1 a PHASE 10-ig frissítve, 2026-11-22). A 3., 4.4–4.5, 5., 6.3 (a 10 végpont), 6.4 (ProviderRouter, kvóta, csomagmátrix) és 7. fejezet a **tényleges kódot** írja le; a cache (11.) és az offline működés (12.) még terv.
 > Kapcsolódó dokumentumok: [DECISIONS.md](DECISIONS.md), [DATA_SOURCES.md](DATA_SOURCES.md), [DATA_DICTIONARY.md](DATA_DICTIONARY.md), [REQUIREMENTS.md](REQUIREMENTS.md).
 
 ## 1. Alapelvek
@@ -363,7 +363,27 @@ src/application/use-cases/analyze-portfolio.ts analyzePortfolio (AppServices); r
 
 Adatút: `analyzePortfolio` → `PortfolioRepository` (portfólió + tranzakciók) → napló-validáció (blokkoló hiba → `VALIDATION`) → párhuzamosan `getListingQuote` (nyitott pozíciók), `getInstrumentProfile` (opcionális), `getPriceHistory` (csak `history.enabled`), `convertMoney` (ügyleti napok + ma, duplikátum nélkül) → `buildPortfolioAnalysis` (tiszta) → `PortfolioAnalysis`. Tárolás: továbbra is `InMemoryPortfolioRepository` (PHASE 13).
 
-**Még nem létező mappák** (a saját fázisuk hozza létre): `scoring/` (10), `explanation/` (11), `server/cache/` (13), `infrastructure/storage/` (13), `presentation/{hooks,formatters,view-models}` (12).
+**PHASE 10 (2026-11-22):** score és döntési engine (D-073…D-075) – új réteg: `src/scoring` (csak `domain` + `calculations`; ESLint-zóna és őrteszt):
+
+```
+src/scoring/types.ts                           ScoringFeature/Input, ScoreConfig, DecisionConfig, kimeneti típusok
+src/scoring/score-math.ts                      lineáris pont, kerekítés, súlyozott átlag, összehasonlítás
+src/scoring/config-validation.ts               súlyösszegek, horgonyok, szabályok automatikus ellenőrzése
+src/scoring/score-engine.ts                    mutató → kategória → összpontszám (hiány: D-074)
+src/scoring/confidence.ts                      AnalysisConfidence (lefedettség × minőség)
+src/scoring/decision-engine.ts                 dimenziók, jelzések, kapu → szabályok → plafonok, szabálynyom
+src/scoring/thesis.ts                          thesis risks + érvénytelenítő feltételek
+src/scoring/evaluate.ts                        a teljes lánc egy tiszta hívásban
+src/scoring/config/                            kiinduló konfigurációk: shared-defaults, stock-config, etf-config
+src/application/scoring/                       leképezők: stock-evaluation (06+07[+09]), etf-evaluation (08[+09]),
+                                               portfolio-context, types (InstrumentEvaluation)
+src/application/use-cases/evaluate-instrument.ts  evaluateStock, evaluateEtf (AppServices)
+src/calculations/…                             + netDebtToEbitda (balance-cashflow), priceAtMarginOfSafety (multiples)
+```
+
+Adatút: `evaluateStock` → `analyzeStockValuation` (06 + 07) → `buildStockFeatures` + `buildStockFlags` → `evaluateScoring` (validáció → `buildScoreCard` → `assessConfidence` → `decide` → `assessThesis`) → `InstrumentEvaluation`. ETF: `evaluateEtf` → `analyzeEtf` → `buildEtfFeatures` → ugyanaz a motor, `etf-default` konfigurációval. A UI nem pontoz (őrteszt); az AI nem vesz részt.
+
+**Még nem létező mappák** (a saját fázisuk hozza létre): `explanation/` (11), `server/cache/` (13), `infrastructure/storage/` (13), `presentation/{hooks,formatters,view-models}` (12).
 
 ### 5.2 Tervezett teljes struktúra (PHASE 01 terv)
 
