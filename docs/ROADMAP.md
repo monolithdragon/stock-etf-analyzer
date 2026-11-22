@@ -1,6 +1,6 @@
 # Roadmap – Stock & ETF Analyzer
 
-> Frissítve: 2026-11-22 (PHASE 06 vége). Minden fázis külön chatben fut, a `stock_etf_analyzer_prompts` csomag `NN_*.md` promptja alapján.
+> Frissítve: 2026-11-22 (PHASE 08 vége). Minden fázis külön chatben fut, a `stock_etf_analyzer_prompts` csomag `NN_*.md` promptja alapján.
 > **Fázisszabály:** a következő fázis csak akkor indul, ha az előző befejezési feltételei teljesültek, vagy a hiányok a KNOWN_ISSUES-ban dokumentálva vannak.
 > **Verzió:** a promptok egy része SDK 57-et említ. Mindenhol **SDK 58** értendő (D-020).
 
@@ -15,8 +15,8 @@
 | 05 | Pénzügyi calculation engine | **KÉSZ** (2026-11-22) | |
 | 06 | Részvény fundamentális elemzés | **KÉSZ** (2026-11-22) | |
 | 07 | Értékelés és DCF | **KÉSZ** (2026-11-22) | |
-| 08 | ETF-elemzés | **KÖVETKEZIK** | |
-| 09 | Portfólió és kockázat | NEM KEZDŐDÖTT | |
+| 08 | ETF-elemzés | **KÉSZ** (2026-11-22) | |
+| 09 | Portfólió és kockázat | **KÖVETKEZIK** | |
 | 10 | Score és döntési engine | NEM KEZDŐDÖTT | M3 Elemzőmotor kész |
 | 11 | AI-magyarázó engine | NEM KEZDŐDÖTT | |
 | 12 | UI/UX és navigáció | NEM KEZDŐDÖTT | |
@@ -300,6 +300,21 @@ Minden fázis közös lezárása (CLAUDE.md):
 - **Befejezési feltétel:**
   - Tesztek: részleges holdings, hiányzó TER, eltérő időszak, dist/acc, hedged.
   - A lefedettségi korlátok láthatók.
+- **Eredmény (2026-11-22): KÉSZ.**
+  - Domain (`src/domain/etf/`): `EtfProfile` (jegyzés-szintű, minden forrásfüggő mező `Metric`), `EtfClassification` (régió, eszközosztály, méret, stílus, osztalékfókusz, súlyozás), `EtfHoldingsSnapshot` (validált, részleges/teljes).
+  - Motor: `risk.ts` (volatilitás, downside deviation, Sharpe, Sortino, béta, dátum-igazítás – D-066), `etf/holdings.ts` (top N, HHI, effektív N, kitettség-bontás), `etf/exposure.ts` (régió-levezetés, devizakockázat) – D-067, D-068.
+  - Alkalmazás (`src/application/etf-analysis/`): validált kézi metaadat, hozam (price vs total return, acc/dist módszer, összehasonlítási alap), kockázat, tracking (csak TR indexszel, közös ablakon), költség, holdings, deviza (jegyzési vs. mögöttes, hedged), feature-modell súlyozás nélkül, mezőnkénti lefedettség, P/E/DCF `notApplicable` – D-069.
+  - Use case: `analyzeEtf` (`AppServices`). Őrteszt: az ETF- és a részvénylogika külön.
+  - SEC N-PORT: élő próbával igazolva (DATA_SOURCES 13.2); adapter nem készült (KI-66).
+  - Ellenőrzés: `npm run check` exit 0; **927/927 teszt** (59 suite; +144, a D-070 címkével együtt); az új modulok ~99% sor.
+  - **Nem készült el (tudatosan):** N-PORT adapter (KI-66), volumen/likviditás (KI-67), indexforrás (KI-69), ETF-metaadat forrás (KI-65), végleges ETF-score (10), overlap (14), UI (12).
+  - Új döntések: D-066…D-069. Új ismert problémák: KI-65…KI-73.
+- **A későbbi fázisok kapcsolódási pontjai (PHASE 08-ból):**
+  - PHASE 09 (portfólió): a `risk.ts` függvényei (volatilitás, drawdown, béta, `alignByDate`) portfólió-idősorra is használhatók; az ETF look-through a `EtfHoldingsSnapshot`-ból (csak forrással).
+  - PHASE 10 (score): `EtfAnalysis.features` (csoport, irány, érték vagy hiány oka, `groupCoverage`) – súlyozás és küszöb ott készül; a hiányzó feature ne számítson 0-nak.
+  - PHASE 12 (UI): ETF-metaadat kézi beviteli űrlap (`EtfMetadataInput`, a validációs hibák mezőútvonallal jönnek); a `coverage.limitations` és a `returns.comparisonBasis` mindig látható legyen.
+  - PHASE 13 (cache/adat): proxy-cache (KI-68), volumen a `PricePoint`-ba (KI-67), kibocsátói holdings-fájl import (KI-74, D-071 – a N-PORT adapter helyett).
+  - Lezárás utáni döntések (2026-11-22, tulajdonosi jóváhagyás): D-070 kockázati megbízhatósági címke (a 126-os minimum marad, ≥ 240 standard) – **megvalósítva**; D-071 N-PORT helyett holdings-fájl import – tervezve (PHASE 13).
 
 ### PHASE 09 – Portfólió és kockázat
 - **Cél:** tranzakcióalapú portfólió, többdevizás értékelés, kitettség és koncentráció.
@@ -383,6 +398,7 @@ Minden fázis közös lezárása (CLAUDE.md):
   - Cache TTL-ek (ARCHITECTURE 11.).
   - Offline viselkedés (ARCHITECTURE 12.).
   - Kézi frissítés vs invalidálás vs háttérfrissítés.
+  - Kibocsátói ETF holdings-fájl import (iShares, Vanguard, Xtrackers CSV/XLSX → `EtfHoldingsSnapshot`; D-071, KI-74).
   - Adatmegőrzési, törlési és exportálási terv.
 - **Nincs benne:** felhős szinkron (O-02), SQLCipher (O-05, csak ha dev build-döntés születik).
 - **Függ:** 12.

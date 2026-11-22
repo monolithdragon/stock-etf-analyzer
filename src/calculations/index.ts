@@ -21,5 +21,8 @@ export * from './returns/returns';
 export * from './returns/drawdown';
 export * from './returns/price-range';
 export * from './returns/future-value';
+export * from './returns/risk';
 export * from './etf/costs-tracking';
+export * from './etf/holdings';
+export * from './etf/exposure';
 export * from './portfolio/portfolio-basics';

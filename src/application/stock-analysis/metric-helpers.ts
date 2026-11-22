@@ -5,10 +5,6 @@
 import { METRIC_DEFINITIONS, type MetricCalculation } from '@/calculations';
 import {
   createFundamentalMetric,
-  metricError,
-  metricMissing,
-  metricUnavailable,
-  type AppError,
   type FinancialMetricId,
   type FiscalPeriod,
   type Freshness,
@@ -70,24 +66,8 @@ export function calculatedMetric(
   });
 }
 
-/**
- * Sikertelen lekérés → mutató-státusz (a többi rész ettől még elkészül):
- * - `UNAVAILABLE` (csomag, kvóta, lefedettség) → `UNAVAILABLE` az ok-kóddal;
- * - `NOT_FOUND`, `MISSING_DATA` → `MISSING`;
- * - minden más (hálózat, időtúllépés, szolgáltatói hiba) → `ERROR` (újrapróbálható).
- */
-export function appErrorToMetric<T>(error: AppError, resource: string): Metric<T> {
-  const reason = `${resource}: ${error.message}`;
-  switch (error.kind) {
-    case 'UNAVAILABLE':
-      return metricUnavailable(error.reason, reason);
-    case 'NOT_FOUND':
-    case 'MISSING_DATA':
-      return metricMissing(reason);
-    default:
-      return metricError(reason);
-  }
-}
+/** Közös segéd (PHASE 08-ban kiemelve, hogy az ETF-elemzés is használhassa). */
+export { appErrorToMetric } from '../shared/app-error-metric';
 
 /**
  * A készlet-szintű frissességet (a use case számolja a saját órájával) ráírja azokra a

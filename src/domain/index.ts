@@ -17,3 +17,6 @@ export * from './fx/fx-conversion';
 export * from './portfolio/portfolio';
 export * from './analysis/analysis-result';
 export * from './analysis/stock-fundamentals';
+export * from './etf/etf-classification';
+export * from './etf/etf-holdings';
+export * from './etf/etf-profile';

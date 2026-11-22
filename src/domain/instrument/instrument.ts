@@ -40,8 +40,10 @@ import {
 export const INSTRUMENT_KINDS = ['stock', 'etf'] as const;
 export type InstrumentKind = (typeof INSTRUMENT_KINDS)[number];
 
-export type EtfReplication = 'physical_full' | 'physical_sampling' | 'synthetic';
-export type EtfDistribution = 'accumulating' | 'distributing';
+export const ETF_REPLICATIONS = ['physical_full', 'physical_sampling', 'synthetic'] as const;
+export type EtfReplication = (typeof ETF_REPLICATIONS)[number];
+export const ETF_DISTRIBUTIONS = ['accumulating', 'distributing'] as const;
+export type EtfDistribution = (typeof ETF_DISTRIBUTIONS)[number];
 
 interface InstrumentBase {
   readonly securityId: SecurityId;
@@ -75,7 +77,7 @@ export interface Etf extends InstrumentBase {
   readonly ucits: Metric<boolean>;
   readonly currencyHedged: Metric<boolean>;
   readonly inceptionDate: Metric<IsoDate>;
-  // A holdings (összetétel) a PHASE 08-ban kerül be, csak igazolt forrással (R-03).
+  // A holdings (összetétel) és a jegyzés-szintű ETF-adatok: `domain/etf/etf-profile.ts` (PHASE 08).
 }
 
 export type Instrument = Stock | Etf;

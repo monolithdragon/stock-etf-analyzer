@@ -329,6 +329,23 @@ src/testing/stock-analysis-fixtures.ts         CSAK tesztekhez: valós fixture �
 
 Adatút: `analyzeStockValuation` → `analyzeStockFundamentals` (PHASE 06) → `buildStockValuation` (tiszta) → `StockValuationAnalysis`. A feltevések állításakor a UI a `recalculateStockValuation`-t hívja (hálózat nélkül). A UI-ban nincs DCF-számítás (őrteszt: `src/__tests__/calculations-purity.test.ts`).
 
+**PHASE 08 (2026-11-22):** ETF-elemzés (D-066…D-069), a részvénylogikától különválasztva:
+
+```
+src/domain/etf/                                etf-classification (kategóriák), etf-holdings (pillanatkép + validáció),
+                                               etf-profile (jegyzés-szintű elemzési bemenet)
+src/calculations/returns/risk.ts               periódushozam, dátum-igazítás, volatilitás, downside dev., Sharpe, Sortino, béta
+src/calculations/etf/holdings.ts               top N, HHI / effektív N, kitettség-bontás
+src/calculations/etf/exposure.ts               régió-levezetés, devizakockázat
+src/application/shared/app-error-metric.ts     közös hiba → Metric leképezés (a stock-analysis-ből kiemelve)
+src/application/etf-analysis/                  types, etf-metric, etf-profile-builder (validált kézi metaadat),
+                                               etf-returns, etf-risk (kockázat + tracking), etf-costs,
+                                               etf-holdings-analysis (holdings + deviza), etf-features, etf-analysis (összerakás)
+src/application/use-cases/analyze-etf.ts       analyzeEtf (AppServices)
+```
+
+Adatút: `analyzeEtf` → párhuzamosan `getListingQuote`, `getInstrumentProfile`, `getPriceHistory` (`SPLIT_DIVIDEND` + `SPLIT`, tartalék `NONE`), `getDividendHistory`; opcionálisan `convertMoney` (AUM) → `buildEtfAnalysis` (tiszta) → `EtfAnalysis`. Az ETF-metaadat és a holdings ma a hívótól jön (`EtfMetadataInput`, `user_input`). Őrteszt: `src/__tests__/etf-stock-separation.test.ts` (az ETF-elemzés nem importál részvénymodult és fordítva).
+
 **Még nem létező mappák** (a saját fázisuk hozza létre): `scoring/` (10), `explanation/` (11), `server/cache/` (13), `infrastructure/storage/` (13), `presentation/{hooks,formatters,view-models}` (12).
 
 ### 5.2 Tervezett teljes struktúra (PHASE 01 terv)
