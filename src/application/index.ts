@@ -3,6 +3,10 @@
  * (soha nem hív közvetlenül szolgáltatói API-t vagy `fetch`-et).
  */
 import type { AnalyzeStockFundamentals } from './use-cases/analyze-stock-fundamentals';
+import type {
+  AnalyzeStockValuation,
+  RecalculateStockValuation,
+} from './use-cases/analyze-stock-valuation';
 import type { ConvertMoney } from './use-cases/convert-money';
 import type { GetListingQuote } from './use-cases/get-listing-quote';
 import type {
@@ -19,6 +23,11 @@ import type { RecordTransaction } from './use-cases/record-transaction';
 
 export type * from './ports';
 export * from './use-cases/analyze-stock-fundamentals';
+export * from './use-cases/analyze-stock-valuation';
+export * from './valuation/types';
+export { buildStockValuation } from './valuation/stock-valuation';
+export { buildDcfInputModel, DCF_INPUT_LABELS } from './valuation/dcf-inputs';
+export * from './valuation/defaults';
 export * from './use-cases/convert-money';
 export * from './use-cases/get-listing-quote';
 export * from './use-cases/get-market-data';
@@ -38,4 +47,8 @@ export interface AppServices {
   readonly recordTransaction: RecordTransaction;
   /** PHASE 06: részvény fundamentális elemzés (UI a PHASE 12-ben). */
   readonly analyzeStockFundamentals: AnalyzeStockFundamentals;
+  /** PHASE 07: értékelés + DCF (lekéréssel). */
+  readonly analyzeStockValuation: AnalyzeStockValuation;
+  /** PHASE 07: értékelés újraszámolása meglévő elemzésből, új feltevésekkel (hálózat nélkül). */
+  readonly recalculateStockValuation: RecalculateStockValuation;
 }

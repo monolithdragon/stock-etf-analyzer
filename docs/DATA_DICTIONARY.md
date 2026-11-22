@@ -300,6 +300,7 @@ Kód: `src/server/providers/sec-edgar/sec-normalizer.ts`. Kimenet: `FinancialSta
 | Market Cap | `marketCap` | `price × sharesOutstanding` | ár vagy részvényszám ≤ 0 → `INVALID_INPUT`; eltérő `priceAsOf`/`sharesAsOf` → `OK` + megjegyzés (napok száma) |
 | Enterprise Value | `enterpriseValue` | `marketCap + totalDebt − cashAndEquivalents` (kisebbségi részesedés, elsőbbségi részvény, lízing nélkül) | piaci érték ≤ 0 → `INVALID_INPUT`; negatív EV `OK` |
 | P/E | `priceToEarnings` | `price / eps` (TTM vagy utolsó FY – a hívó címkézi) | EPS ≤ 0 → **`NOT_MEANINGFUL`**; ár ≤ 0 → `INVALID_INPUT` |
+| Forward P/E (PHASE 07, D-065) | `priceToEarnings` | `price / forwardEps` – **csak forrásolt elemzői EPS-előrejelzésből** | forrás nélkül `MISSING` indokkal (ma mindig); saját becslés nincs; forward EPS ≤ 0 → `NOT_MEANINGFUL` |
 | P/FCF | `priceToFreeCashFlow` | `marketCap / FCF` | FCF ≤ 0 → `NOT_MEANINGFUL` |
 | P/S | `priceToSales` | `marketCap / revenue` | revenue ≤ 0 → `NOT_MEANINGFUL` |
 | P/B | `priceToBook` | `marketCap / shareholdersEquity` | equity ≤ 0 → `NOT_MEANINGFUL` |
@@ -308,21 +309,52 @@ Kód: `src/server/providers/sec-edgar/sec-normalizer.ts`. Kimenet: `FinancialSta
 | Dividend Yield | `dividendYield`, `dividendYieldFromMoney` | `TTM részvényenkénti osztalék / price` | hiány → `MISSING` (nem 0!); jelentett 0 → `OK` 0; GBX ár + GBP osztalék → fő egységre váltva; más eltérő pénznem → `INVALID_INPUT` (FX kell) |
 | TTM osztalék/részvény | `trailingDividendPerShare` | ex-dátum ∈ `(asOf − 365 nap, asOf]`; a split-korrigált összeg az elsődleges (hiányában nyers + megjegyzés); fő pénznemben | lefedettség az ablaknál később kezdődik → `INSUFFICIENT_DATA`; nincs esemény + ismeretlen lefedettség → `MISSING`; ismert lefedettség → `OK` 0; vegyes pénznem → `INVALID_INPUT` |
 | FCF Yield | `fcfYield` | `FCF / marketCap` | negatív FCF → negatív hozam, `OK`; piaci érték ≤ 0 → `INVALID_INPUT` |
-| Margin of Safety | `marginOfSafety` | `(intrinsicValue − price) / intrinsicValue` (negatív = drágább a belső értéknél) | `intrinsicValue ≤ 0` vagy ár ≤ 0 → `INVALID_INPUT` |
+| Margin of Safety | `marginOfSafety` | `(intrinsicValue − price) / intrinsicValue` (negatív = drágább a belső értéknél) | `intrinsicValue ≤ 0` vagy ár ≤ 0 → `INVALID_INPUT` (a DCF-modul az IV ≤ 0 esetet előtte `NOT_MEANINGFUL`-ként kezeli, D-064/5) |
 | Real Return | `realReturn` | `(1 + nominal) / (1 + inflation) − 1` (pontos Fisher) | `inflation ≤ −1` vagy `nominal < −1` → `INVALID_INPUT` |
 | Árváltozás EPS × P/E | `priceChangeFromEpsAndMultiple` | `(1 + g_EPS)(1 + Δ_P/E) − 1` (pl. +10% és −10% → −1%) | bármelyik ≤ −1 → `INVALID_INPUT` |
 | Múltbeli árfelbontás | `decomposePriceReturn` | `priceReturn = epsGrowth + multipleChange + epsGrowth × multipleChange` | EPS ≤ 0 → `NOT_MEANINGFUL` |
 | Évesített P/E-változás | `annualizedMultipleChange` | `(PE_end / PE_start)^(1/évek) − 1` | P/E ≤ 0 → `NOT_MEANINGFUL` |
 | Elvárt hozam (mentális modell) | `expectedReturnBreakdown` | `osztalékhozam + (1 + EPS-növekedés)(1 + évesített P/E-változás) − 1` – **becslés, nem előrejelzés** (a megjegyzés kimondja) | osztalékhozam < 0 vagy növekedés ≤ −1 → `INVALID_INPUT` |
 
-### 5.4 DCF (a PHASE 07 véglegesíti, D-022; közös konvenciók: D-057)
+### 5.4 DCF – VÉGLEGES (PHASE 07, D-064; közös konvenciók: D-057, D-022)
 
-- Bemenetek: `baseFcf`, `growthRates[]` (explicit évekre), `discountRate`, `terminalGrowth`, `totalDebt`, `cash`, `sharesOutstanding`, `price`, `years` (javasolt alapeset: 5; 3 támogatott; max. 10).
-- **Kész (PHASE 05):** `discountFactor` = `1 / (1 + r)^t` (év végi konvenció, `t` lehet tört); `presentValue` = `CF × discountFactor`; `gordonTerminalValue` = `FCF_n × (1 + g) / (r − g)` csak ha `r > g`, egyébként `INVALID_INPUT` emberi magyarázattal. A diszkontráta (0, 1] tartományban (1 fölött százalék-hiba gyanúja).
-- `PV_TV = TV / (1 + r)^n`; `EV_dcf = Σ PV_t + PV_TV`; `Equity = EV_dcf − totalDebt + cash`; `IV/share = Equity / sharesOutstanding` (PHASE 07).
-- **Ismert egyszerűsítés:** az FCF (`OCF − CapEx`) US GAAP szerint már levonja a kamatot, tehát nem tiszta FCFF. Ha az eredményt WACC-cal diszkontáljuk és EV-ként kezeljük, az torzíthat. A UI-ban jelölni kell; a PHASE 07 dönthet FCFF-közelítésről.
-- `baseFcf ≤ 0` → az alapértelmezett DCF nem futtatható (`INVALID_INPUT`), csak felhasználói felülírással, `user_input` jelöléssel.
-- Az érzékenységi tábla minden cellája ugyanazt az engine-függvényt hívja.
+> Kód: `src/calculations/valuation/dcf.ts` (`runDcf`), `dcf-scenarios.ts` (`runDcfScenarios`, `dcfSensitivityTable`, `sensitivityAxis`), `dcf-conventions.ts` (PHASE 05: `discountFactor`, `presentValue`, `gordonTerminalValue`, `checkDiscountRate`).
+
+**Bemenet (`DcfInput`)** – minden pénzösszeg ugyanabban a pénznemben, minden ráta tizedes tört:
+
+| Mező | Jelentés | Érvénytelen / speciális eset |
+|---|---|---|
+| `baseFcf` | kiinduló (0. évi) FCF | hiány → `MISSING`; **≤ 0 → `NOT_MEANINGFUL`** (csak felhasználói, normalizált felülírással fut) |
+| `growthRates[]` | éves FCF-növekedés az explicit évekre; a hossz = időtáv (**alapeset 5**, 1–10, a 3 tesztelt) | hossz ∉ [1, 10] → `INVALID_INPUT`; elem hiány → `MISSING` (`growthRate_k`); `≤ −1` vagy `> 1` → `INVALID_INPUT` (százalék-tipp) |
+| `discountRate` (r) | diszkontráta (felhasználói feltevés; nincs WACC/CAPM) | `∉ (0, 1]` → `INVALID_INPUT` |
+| `terminalGrowth` (g) | terminális növekedés | `≤ −1` → `INVALID_INPUT`; **`r ≤ g` → `INVALID_INPUT` emberi magyarázattal** |
+| `totalDebt`, `cash` | EV → equity híd | hiány → `MISSING` („a hiány nem 0”); `< 0` → `INVALID_INPUT` |
+| `sharesOutstanding` | kint lévő részvények | hiány → `MISSING`; `≤ 0` → `INVALID_INPUT` |
+| `marketPrice` (opcionális) | azonos pénznemű ár a MOS-hoz | hiány → csak a MOS `MISSING` |
+
+Ellenőrzési sorrend: időtáv → hiány / nem véges → ráták → `r > g` → mérlegtételek → részvényszám → kiinduló FCF.
+
+**Képletek és kimenet (`DcfResult`):**
+
+| Mező | Képlet |
+|---|---|
+| `years[t]` | `fcf_t = fcf_{t−1} × (1 + g_t)`; `discountFactor_t = 1 / (1 + r)^t`; `presentValue_t = fcf_t × discountFactor_t` (év végi, `t = 1..n`) |
+| `sumPvExplicit` | `Σ presentValue_t` |
+| `terminalValue` | `fcf_n × (1 + g) / (r − g)` (az n. év végére) |
+| `pvTerminalValue` | `terminalValue / (1 + r)^n` |
+| `terminalValueShare` | `pvTerminalValue / enterpriseValue` |
+| `enterpriseValue` | `sumPvExplicit + pvTerminalValue` |
+| `equityValue` | `enterpriseValue − totalDebt + cash` (lehet ≤ 0 → megjegyzés) |
+| `intrinsicValuePerShare` | `equityValue / sharesOutstanding` |
+| `marginOfSafety` | külön `CalcResult`: `(IV − ár) / IV`; IV ≤ 0 → `NOT_MEANINGFUL`; nincs ár → `MISSING`; ár ≤ 0 vagy nem véges → `INVALID_INPUT` |
+
+Megjegyzések (`notes`, nem érvénytelenítenek): TV-arány > 75%; `g > 4%`; `r − g < 2 pp`; equity ≤ 0. Küszöbök: `DCF_NOTE_THRESHOLDS`.
+
+**Forgatókönyvek:** `runDcfScenarios(company, { bear, base, bull })` – mindhárom `runDcf` ugyanazokkal a cégadatokkal; a feltevések a kimenetben; nem monoton Bear ≤ Base ≤ Bull → megjegyzés; részleges hiba → megjegyzés.
+
+**Szenzitivitási tábla:** `dcfSensitivityTable({ base, discountRates, terminalGrowthRates })` – sor = r, oszlop = g; **minden cella `runDcf({ ...base, discountRate, terminalGrowth })`** belső érték/részvény eredménye vagy nem-OK státusza (pl. `r ≤ g`). Tengely: 1–11 véges, egyedi érték, különben a tábla `INVALID_INPUT`. `sensitivityAxis(center, step, n)` szimmetrikus tengelyt ad (a lebegőpontos zaj levágva).
+
+- **Ismert egyszerűsítés:** az FCF (`OCF − CapEx`) US GAAP szerint a kamat után értendő, tehát nem tiszta FCFF; EV-ként kezelve torzíthat (D-022). Az EV → equity híd kisebbségi részesedés, elsőbbségi részvény és lízing nélkül (KI-44). A részvényszám nem hígított.
 
 ### 5.5 Hozam, kockázat, ETF, portfólió
 
@@ -561,7 +593,7 @@ Sorozatok: `revenue`, `grossProfit`, `operatingIncome`, `netIncome`, `eps`, `ope
 
 ### 13.6 Értékelés (`valuation`, D-062)
 
-`marketCap`, `enterpriseValue`, `pe`, `ps`, `pb`, `pfcf`, `fcfYield`, `evToEbitda`, `peg`, `dividendYield`, `dividendPerShareTtm`. Alap: aktuális ár + legutóbbi FY + legfrissebb mérlegnap (a megjegyzés megnevezi). Eltérő jegyzési/beszámolói pénznem → az ár-alapú szorzók `MISSING` (KI-50). Osztalék: TTM, ismeretlen lefedettséggel → esemény nélkül `MISSING`.
+`marketCap`, `enterpriseValue`, `pe`, `forwardPe` (PHASE 07: forrás nélkül `MISSING`, D-065), `ps`, `pb`, `pfcf`, `fcfYield`, `evToEbitda`, `peg`, `dividendYield`, `dividendPerShareTtm`. Alap: aktuális ár + legutóbbi FY + legfrissebb mérlegnap (a megjegyzés megnevezi). Eltérő jegyzési/beszámolói pénznem → az ár-alapú szorzók `MISSING` (KI-50). Osztalék: TTM, ismeretlen lefedettséggel → esemény nélkül `MISSING`.
 
 ### 13.7 Minőségi modell (`QualityAnalysis`, D-063)
 
@@ -584,3 +616,49 @@ Sorozatok: `revenue`, `grossProfit`, `operatingIncome`, `netIncome`, `eps`, `ope
 - `sources[]`: erőforrásonként (`annualStatements`, `quarterlyStatements`, `quote`, `profile`, `prices`, `dividends`) a forrás, `fetchedAt`, `asOf`, frissesség és az esetleges `AppError`.
 - `warnings[]`: elavult forrás, elérhetetlen forrás, becsült adósság, eltérő pénznem, nem naptári pénzügyi év.
 - `disclaimer`: „Nem befektetési tanács, nem hozamígéret…”.
+
+## 14. Értékelés és DCF – kimenet (PHASE 07, D-064, D-065)
+
+> Kód: típusok `src/application/valuation/types.ts`; bemeneti modell `dcf-inputs.ts`; összerakás `stock-valuation.ts`; kiinduló feltevések `defaults.ts`; use case-ek `src/application/use-cases/analyze-stock-valuation.ts` (`AppServices.analyzeStockValuation`, `AppServices.recalculateStockValuation`). Minden DCF-szám az 5.4 függvényeiből jön.
+
+### 14.1 DCF-bemenet (`DcfInputField`)
+
+| Bemenet | Alapértelmezett forrás | Megjegyzés |
+|---|---|---|
+| `baseFcf` | éves tábla `fcf`, legutóbbi FY (`basis`: „FY2026 (záró: …)”) | ≤ 0 → a DCF `NOT_MEANINGFUL`; felülírható |
+| `totalDebt`, `cash` | a legfrissebb mérlegnap (éves vs. negyedéves tábla első oszlopa; egyezésnél éves) | `estimated` adósság öröklődik + figyelmeztetés (D-059); bank/biztosító: `MISSING` |
+| `sharesOutstanding` | `overview.sharesOutstanding` (legfrissebb mérleg) | nem hígított |
+| `marketPrice` | `overview.price` | eltérő jegyzési/beszámolói pénznem → `MISSING` (KI-50); a MOS ekkor nem számolható |
+
+Mezők: `value` (`null`, ha nem használható – a hiány nem 0), `status`, `origin` (`MetricOrigin`; felülírásnál `user_input`), `unit`, `currency`, `basis`, `source` (`sourceId`, `sourceName`, `fetchedAt`, `asOf`), `reason`, `notes`, `overridden`. A pénz jellegű bemenet pénzneme eltér a beszámolói pénznemtől → `INVALID_INPUT` (nincs csendes FX). Ha egy kötelező bemenet (FCF, adósság, pénz, részvényszám) nem `OK`, minden forgatókönyv és a tábla ugyanazzal az indokolt hibával tér vissza („… felhasználói értékkel felülírható”).
+
+### 14.2 Forgatókönyvek (`DcfScenarioOutput`)
+
+| Mező | Tartalom |
+|---|---|
+| `id`, `label` | `bear` / `base` / `bull`; „Bear (óvatos)”, „Base (kiinduló)”, „Bull (kedvező)” – csak elnevezések |
+| `assumptions` | `growthRates[]`, `discountRate`, `terminalGrowth`, `explicitYears`, `source: 'default' \| 'user'` |
+| `result` | `CalcResult<DcfResult>` (5.4) |
+| `category` | `CalcResult<MarginOfSafetyCategory>` (14.4) |
+| `display` | megjelenítési javaslat: IV/részvény 3 értékes jegyre, MOS egész %-ra (`null`, ha a DCF nem `OK`) |
+
+Kiinduló feltevések (`DEFAULT_DCF_SCENARIOS`, **nem a cégre kalibrált**): Bear 2% / r 10% / g 1,5%; Base 5% / 9% / 2,5%; Bull 8% / 8% / 3%; 5 év konstans növekedéssel. Beállítás: `explicitYears`, `scenarios.{id}.{growthRates|discountRate|terminalGrowth}`, `inputOverrides.{bemenet}`.
+
+### 14.3 Szenzitivitás (`DcfSensitivityOutput`)
+
+`scenarioId: 'base'`, `table: CalcResult<DcfSensitivityTable>`. Alap tengelyek: Base r ± 2 × 0,01, Base g ± 2 × 0,005 (5 × 5); egyedi: `sensitivity.discountRates`, `sensitivity.terminalGrowthRates`.
+
+### 14.4 Kategóriák és küszöbök (`valuation-bands.ts`, D-065)
+
+| Kategória | Szabály (alap) |
+|---|---|
+| `DISCOUNT_TO_MODEL` | MOS ≥ `discountAtLeast` (0,25) |
+| `NEAR_MODEL` | `premiumBelow` ≤ MOS < `discountAtLeast` |
+| `PREMIUM_TO_MODEL` | MOS < `premiumBelow` (−0,10) |
+| Szorzó-sáv `LOW` / `MODERATE` / `HIGH` | `< lowBelow` / köztes / `> highAbove`; alap: P/E, Forward P/E, P/FCF 15/25; P/S 2/6; P/B 1,5/4; EV/EBITDA 10/16; PEG 1/2; FCF-hozam 0,03/0,06 (`higherIsCheaper`) |
+
+Érvénytelen küszöb (nem véges, fordított határ, `discountAtLeast ≥ 1`) → `INVALID_INPUT`. Nem pozitív szorzó → `NOT_MEANINGFUL` (FCF-hozamnál a negatív érték `LOW`). A kimenet mindig a használt küszöböt és a nyilatkozatot (`VALUATION_THRESHOLD_DISCLAIMER`) adja: **elemzési küszöbök, nem objektív igazságok, nem BUY/HOLD/SELL**.
+
+### 14.5 Teljes kimenet (`StockValuationAnalysis`)
+
+`generatedAt` (a számítás ideje), `fundamentalsGeneratedAt` (a forrásadatok elemzésének ideje), `listingId`, `multiples` (`metrics`: a 13.6 mutatói; `bands`), `dcf` (`provenanceKind: 'estimated'`, `inputs`, `scenarios`, `scenarioNotes`, `sensitivity`), `thresholds`, `explanation` (`formulas[]`, `conventions[]`, `context[]`: FCF CAGR 3/5, árbevétel CAGR 3/5, FCF-árrés, béta – csak viszonyítás, automatikusan nem kerül be), `warnings[]`, `disclaimer` (`DCF_DISCLAIMER`).

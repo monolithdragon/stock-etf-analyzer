@@ -315,6 +315,20 @@ src/calculations/returns/price-range.ts       52 hetes csúcs/mélypont záróá
 ```
 Adatút: `analyzeStockFundamentals` → a meglévő use case-ek (`getFinancialStatements` ×2, `getListingQuote`, `getInstrumentProfile`, `getPriceHistory`, `getDividendHistory`; párhuzamosan, frissességgel) → `stock-analysis/*` → `StockFundamentalAnalysis`. Egy forrás kiesése nem dönti el az elemzést (D-063/5). UI még nincs (PHASE 12).
 
+**PHASE 07 (2026-11-22):** értékelés és DCF (D-064, D-065):
+
+```
+src/calculations/valuation/dcf.ts              runDcf – tiszta DCF-motor (r > g, MOS, megjegyzések)
+src/calculations/valuation/dcf-scenarios.ts    Bear/Base/Bull + szenzitivitási tábla (minden cella runDcf)
+src/calculations/valuation/valuation-bands.ts  konfigurálható MOS- és szorzó-küszöbök
+src/application/valuation/                     types, defaults (kiinduló feltevések), dcf-inputs (bemeneti modell),
+                                               stock-valuation (összerakás, magyarázat)
+src/application/use-cases/analyze-stock-valuation.ts   analyzeStockValuation + recalculateStockValuation
+src/testing/stock-analysis-fixtures.ts         CSAK tesztekhez: valós fixture → hamis gateway → use case-ek
+```
+
+Adatút: `analyzeStockValuation` → `analyzeStockFundamentals` (PHASE 06) → `buildStockValuation` (tiszta) → `StockValuationAnalysis`. A feltevések állításakor a UI a `recalculateStockValuation`-t hívja (hálózat nélkül). A UI-ban nincs DCF-számítás (őrteszt: `src/__tests__/calculations-purity.test.ts`).
+
 **Még nem létező mappák** (a saját fázisuk hozza létre): `scoring/` (10), `explanation/` (11), `server/cache/` (13), `infrastructure/storage/` (13), `presentation/{hooks,formatters,view-models}` (12).
 
 ### 5.2 Tervezett teljes struktúra (PHASE 01 terv)

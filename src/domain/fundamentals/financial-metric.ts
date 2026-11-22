@@ -45,6 +45,8 @@ export const FINANCIAL_METRIC_IDS = [
   'marketCap',
   'enterpriseValue',
   'pe',
+  // PHASE 07: csak ténylegesen elérhető elemzői EPS-előrejelzésből (D-065)
+  'forwardPe',
   'pfcf',
   'ps',
   'pb',

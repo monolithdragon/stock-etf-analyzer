@@ -14,6 +14,7 @@ import {
   calcOk,
   chainCalc,
   requireInputs,
+  type CalcFailure,
   type CalcResult,
   type NumericInput,
 } from '../core/calc-result';
@@ -28,7 +29,8 @@ import {
 /** A diszkontráta józansági felső határa (tört). */
 export const MAX_DISCOUNT_RATE = 1;
 
-function checkDiscountRate(rate: number) {
+/** Diszkontráta-ellenőrzés: `(0, 1]` (PHASE 07: a DCF-motor is ezt használja). */
+export function checkDiscountRate(rate: number): CalcFailure | null {
   return rate > 0
     ? mustBeInRange('discountRate', rate, 0, MAX_DISCOUNT_RATE, DECIMAL_HINT)
     : calcInvalidInput(`A diszkontráta pozitív kell legyen (${rate}).`);

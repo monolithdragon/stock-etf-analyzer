@@ -39,3 +39,21 @@ describe('src/calculations – tisztaság', () => {
     },
   );
 });
+
+/**
+ * Elfogadási feltétel (PHASE 07): nincs DCF-számítás a UI-ban. A képernyők és komponensek csak a
+ * use case-ek (`analyzeStockValuation`, `recalculateStockValuation`) kimenetét jelenítik meg.
+ */
+describe('UI (src/app, src/presentation) – nincs DCF-számítás', () => {
+  const UI_DIRS = ['app', 'presentation'].map((dir) => path.join(__dirname, '..', dir));
+  const DCF_SYMBOLS =
+    /\b(runDcf|runDcfScenarios|dcfSensitivityTable|gordonTerminalValue|presentValue|discountFactor|buildStockValuation)\b/;
+  const files = UI_DIRS.flatMap(sourceFiles).filter((file) => !/\.test\.tsx?$/.test(file));
+
+  it.each(files.map((file) => [path.relative(path.join(__dirname, '..'), file), file]))(
+    '%s: nem hív DCF-motort',
+    (_name, file) => {
+      expect(fs.readFileSync(file, 'utf8')).not.toMatch(DCF_SYMBOLS);
+    },
+  );
+});

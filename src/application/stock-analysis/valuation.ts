@@ -64,7 +64,16 @@ export interface ValuationInput {
   readonly previousFy: PeriodStatements | null;
   readonly latestBalance: PeriodStatements | null;
   readonly calculatedAt: IsoTimestamp;
+  /**
+   * PHASE 07 (D-065): forrásolt elemzői EPS-előrejelzés (következő FY). A jelenlegi adatforrásokból
+   * nem kérünk le ilyet, ezért ma mindig hiányzik → a Forward P/E `MISSING` indokkal; saját
+   * becslésből SOHA nem töltjük ki.
+   */
+  readonly forwardEps?: Metric<number> | null;
 }
+
+export const FORWARD_EPS_MISSING_REASON =
+  'Nincs bekötött, forrásolt elemzői EPS-előrejelzés (a jelenlegi ingyenes adatforrásokból nem kérünk le ilyet); a Forward P/E-t saját feltevésből nem becsüljük.';
 
 export interface MarketOverviewMetrics {
   readonly price: FundamentalMetric;
@@ -337,6 +346,10 @@ export function computeValuation(input: ValuationInput): ValuationOutput {
         ).metric;
   const guard = (compute: () => MetricCalculation) => (currencyMismatch ? fxBlocked() : compute());
   const pe = guard(() => calculateMetric({ price, eps: fyValue('eps') }, {}, priceToEarnings, ctx));
+  const forwardEps = input.forwardEps ?? metricMissing<number>(FORWARD_EPS_MISSING_REASON);
+  const forwardPe = guard(() =>
+    calculateMetric({ price, eps: forwardEps }, {}, priceToEarnings, ctx),
+  );
   const dps = dividendPerShare(input.dividends, price, calculatedAt);
 
   const metric = (id: FinancialMetricId, calc: MetricCalculation) =>
@@ -345,6 +358,9 @@ export function computeValuation(input: ValuationInput): ValuationOutput {
     metric('marketCap', mc),
     metric('enterpriseValue', ev),
     metric('pe', pe),
+    calculatedMetric('forwardPe', forwardPe, null, [
+      'Forward P/E: az aktuális ár és a forrásolt következő évi EPS-előrejelzés hányadosa (csak ha ténylegesen elérhető).',
+    ]),
     metric(
       'ps',
       guard(() =>

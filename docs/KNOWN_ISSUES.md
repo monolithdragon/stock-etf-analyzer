@@ -1,18 +1,30 @@
 # Ismert problémák, kockázatok, ismeretlenek – Stock & ETF Analyzer
 
-> Frissítve: 2026-11-22 (PHASE 06 vége). Valószínűség (V) és hatás (H) skálája: **A** = Alacsony, **K** = Közepes, **M** = Magas.
+> Frissítve: 2026-11-22 (PHASE 07 vége). Valószínűség (V) és hatás (H) skálája: **A** = Alacsony, **K** = Közepes, **M** = Magas.
 
 ## Blokkolók
 
-**Nincs blokkoló a PHASE 07 indításához.** A PHASE 07 a PHASE 06 `analyzeStockFundamentals` kimenetére (legutóbbi FY, FCF, adósság, részvényszám, ár) és a PHASE 05 DCF-konvencióira épül.
+**Nincs blokkoló a PHASE 08 indításához.** A PHASE 08 (ETF-elemzés) a PHASE 04 adapterekre és a PHASE 05 hozam-/ETF-képleteire épül; a PHASE 07 értékelési modulja részvény-specifikus, az ETF-elemzést nem érinti.
+
+## PHASE 07 – ismert problémák és leletek (2026-11-22)
+
+| ID | Probléma / lelet | Hatás | Állapot / teendő | Felelős fázis |
+|---|---|---|---|---|
+| KI-58 | A **kiinduló DCF-feltevések általánosak** (Bear 2%/10%/1,5%, Base 5%/9%/2,5%, Bull 8%/8%/3%), nem a cégre kalibráltak; egy nagy, lassan növő és egy kis, gyorsan növő cég ugyanazt kapja. | K | Tudatos (D-064/7): `source: 'default'` jelölés, mind felülírható, a történeti kontextus (FCF/árbevétel CAGR, FCF-árrés) mellettük látszik. A UI-nak (PHASE 12) a feltevéseket szerkeszthetően, az eredmény mellett kell mutatnia. | 12 |
+| KI-59 | **Diszkontráta = felhasználói feltevés**, WACC/CAPM nincs (nincs forrásolt kockázatmentes hozam és piaci kockázati prémium; a béta szolgáltatói és tájékoztató). | K | Tudatos (D-064/8). Lehetőség: ECB/FRED hozamgörbe-adapter + saját béta (PHASE 08 hozammotor) után opcionális CAPM-javaslat, `estimated` címkével. | 13+ |
+| KI-60 | A **kiinduló FCF egyetlen FY** értéke, nem normalizált (egyszeri tételek, ciklikusság, működőtőke-ingadozás nincs kiszűrve); ciklikus cégnél félrevezető lehet. | K | Dokumentált a konvenciókban; felhasználói felülírással normalizálható (`inputOverrides.baseFcf`). Lehetőség: többéves átlag-javaslat a kontextusban. | 10, 12 |
+| KI-61 | A DCF **nem hígított** kint lévő részvényszámmal oszt (opciók, RSU, átváltható kötvények nélkül) → erős részvényalapú javadalmazásnál a belső érték/részvény felülbecsülhet. | A | Dokumentált (konvenciók). Bővítés: hígított részvényszám SEC-tagből, valós fixture-rel igazolva. | 15 |
+| KI-62 | A **Forward P/E mindig `MISSING`**: nincs bekötött, forrásolt elemzői EPS-előrejelzés (a free csomagokban nem igazolt ilyen végpont). | A | Tudatos (D-065/2); a motor kész (`ValuationInput.forwardEps`). Bekötés csak igazolt forrással és licenccel (DP-05). | 15 |
+| KI-63 | A MOS az **aktuális (gyakran `stale`) árral** számol; kereskedési időn kívül az ár szinte mindig elavult (KI-54), ezért a figyelmeztetésben szinte mindig megjelenik az „Elavult bemenet: Piaci ár”. | A | Őszinte, de zajos; a piaci naptár a PHASE 13 feladata. | 13 |
+| KI-64 | A **valuation-integrációs teszt** szélsőeseteit (negatív FCF, eltérő pénznem, frissebb negyedéves mérleg) a valós AAPL-elemzés módosított másolatán szimuláljuk, nem külön fixture-ön. | A | Elfogadva: a bemenet-kiválasztás és a motor ugyanaz; valós szélsőeset (BRK-B hiányzó adósság/pénz/részvényszám, MSFT becsült adósság, XOM FY nélkül) valós fixture-ön is tesztelt. | – |
 
 ## PHASE 06 – ismert problémák és leletek (2026-11-22)
 
 | ID | Probléma / lelet | Hatás | Állapot / teendő | Felelős fázis |
 |---|---|---|---|---|
-| KI-50 | **Eltérő jegyzési és beszámolói pénznem** (ADR, pl. TSM: TWD kimutatás, USD ár) esetén az ár-alapú szorzók (P/E, P/S, P/B, P/FCF, FCF-hozam, EV/EBITDA, PEG) `MISSING`. | K | Tudatos (D-062/4): nincs csendes FX. **Teendő:** a `convertMoney` bekötése a beszámolói értékek jegyzési pénznemre váltásához (FX dátum + forrás rögzítve). | 07 |
+| KI-50 | **Eltérő jegyzési és beszámolói pénznem** (ADR, pl. TSM: TWD kimutatás, USD ár) esetén az ár-alapú szorzók (P/E, P/S, P/B, P/FCF, FCF-hozam, EV/EBITDA, PEG) `MISSING`. | K | Tudatos (D-062/4): nincs csendes FX. **PHASE 07 (D-065/4):** nem került be; a DCF a beszámolói pénznemben számol, eltérő jegyzési pénznemnél a MOS `MISSING` (ár felülírással megadható). **Teendő:** a `convertMoney` bekötése (aszinkron FX-lekérés, dátum + forrás rögzítve) a többdevizás értékeléssel együtt. | 09 |
 | KI-51 | **Becsült `totalDebt`:** ha egy rövid lejáratú komponensnek nincs ténye, 0-nak vesszük (`estimated`, megnevezve) – pl. MSFT FY2026, KO Q3 2026. **Bankoknál, biztosítóknál és IFRS-filereknél** (JPM, BRK-B, TSM) a `totalDebt` `MISSING`. | K | Dokumentált (D-059). Bővítés: további tagek (pl. `NotesPayable`, `LongTermDebtAndFinanceLeaseObligations`, IFRS `Bonds…`) valós fixture-rel igazolva. | 07, 15 |
-| KI-52 | **TTM EPS** gyakorlatilag mindig `MISSING`: a származtatott Q4 EPS nem additív (D-060/2), és a 10-K nem ad Q4 EPS-t. | K | Tudatos. A szorzók ezért a legutóbbi FY EPS-ével számolnak (D-062/1). Lehetőség: TTM EPS = TTM NI / utolsó negyedév hígított részvényszáma, `estimated` címkével – PHASE 07 döntés. | 07 |
+| KI-52 | **TTM EPS** gyakorlatilag mindig `MISSING`: a származtatott Q4 EPS nem additív (D-060/2), és a 10-K nem ad Q4 EPS-t. | K | Tudatos. A szorzók ezért a legutóbbi FY EPS-ével számolnak (D-062/1). **PHASE 07 döntés (D-065/3):** nem vezetjük be (vegyes alapú szorzót adna, a TTM cash flow is hiányos – KI-18); a szorzók FY-alapúak maradnak. | 13, 15 |
 | KI-53 | A **split-gyanú heurisztika** (részvényszám > 1,5× változás, D-061/2) nagy akvizíciós kibocsátásnál téves riasztást adhat (az EPS-növekedés / CAGR ekkor `NOT_MEANINGFUL`, nem hibás szám). | A | Elfogadva (konzervatív: inkább nincs érték, mint vegyes bázisú). Javítás: split-események forrásból (FMP `splits`) – PHASE 07/13. | 07, 13 |
 | KI-54 | A jegyzés frissességi szabálya (15 perc FRESH, `QUOTE_FRESHNESS_POLICY`) miatt az ár – és minden belőle számolt szorzó – a kereskedési időn kívül szinte mindig `stale` eredetű. | A | Őszinte, de zajos. A piaci naptárt figyelembe vevő szabály a PHASE 13 feladata (ARCHITECTURE 11.). | 13 |
 | KI-55 | **Osztalékhozam nem fizető cégnél `MISSING`, nem 0%:** a free források osztaléktörténetének lefedettsége nem ismert, ezért esemény nélkül nem mondhatjuk, hogy 0 (D-062/5). | A | Tudatos. Javítás: a forrás lefedettségének igazolása, vagy a SEC `PaymentsOfDividends` jelentett 0-ja alapján – PHASE 07/08. | 07 |
@@ -25,7 +37,7 @@
 |---|---|---|---|---|
 | KI-42 | A **`totalDebt` forrásoldalon `MISSING`** (D-043), így a nettó adósság, nettó készpénz, EV, D/E, Invested Capital, ROIC és EV/EBITDA élő adattal ma mindig `MISSING`. A képletek készen és tesztelve állnak. | M (06–07) | **MEGOLDVA (PHASE 06, D-059):** lejárat szerinti bontásból összerakva, valós fixture-rel igazolva (a naiv összeadás a JNJ-nél dupla számolás lett volna). Maradék: KI-51. | 06 |
 | KI-43 | A **saját EPS** (`netIncome / weightedSharesDiluted`) az elsőbbségi osztalék levonása nélkül számol → elsőbbségi részvényes cégnél felülbecsülhet. | A | Kezelve: a jelentett EPS az elsődleges; a saját számítás csak tartalék, megjegyzéssel (D-056/4). | 06 |
-| KI-44 | Az **EV egyszerűsített**: kisebbségi részesedés, elsőbbségi részvény és lízing nélkül → nagy lízingállományú vagy kisebbségi részesedésű cégnél alulbecsülhet. | K | Dokumentált (D-056/10). A PHASE 07 dönthet a bővítésről (a forrásban elérhető tagekkel). | 07 |
+| KI-44 | Az **EV egyszerűsített**: kisebbségi részesedés, elsőbbségi részvény és lízing nélkül → nagy lízingállományú vagy kisebbségi részesedésű cégnél alulbecsülhet. | K | Dokumentált (D-056/10). **PHASE 07 (D-065/5):** változatlan; a DCF EV → equity hídja is csak adósság és pénz (a konvenciók kimondják). Bővítés valós fixture-rel igazolt tagekkel. | 15 |
 | KI-45 | A **TTM osztalék** 365 napos ex-dátum-ablaka szabálytalan ütemezésnél (eltolódó félévi/éves kifizetés) a határon egy kifizetést kihagyhat vagy kettőt számolhat. | K | Elfogadva az MVP-ben (D-056/12). Javítási lehetőség: a forrás `frequency` mezője alapján évesítés. PHASE 06: változatlan (az osztalékhozam ezt a függvényt használja). | 07, 08 |
 | KI-46 | A **TER hosszú távú hatása** a `(1 + r − TER)^n` közelítéssel számol (DATA_DICTIONARY 5.5); a pontosabb `(1 + r)(1 − TER)` alaktól `r × TER` nagyságrendben tér el (7% hozam, 0,2% TER mellett évente ~0,014 százalékpont). | A | Dokumentált (D-058). A PHASE 08 válthat, ha a megjelenítés pontosabbat igényel. | 08 |
 | KI-47 | A **tracking error** egyforma hosszú, dátum szerint igazított hozamsorokat vár; a dátum-igazítás (hiányzó kereskedési napok, eltérő tőzsdei naptár) a hívó dolga. | K (08) | Tudatos: a PHASE 08 végzi az igazítást (indexadat is kell). | 08 |

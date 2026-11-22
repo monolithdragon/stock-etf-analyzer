@@ -60,6 +60,10 @@ export const METRIC_DEFINITIONS: Readonly<Record<FinancialMetricId, MetricDefini
   marketCap: { formula: 'price × sharesOutstanding', unit: 'money' },
   enterpriseValue: { formula: 'marketCap + totalDebt − cashAndEquivalents', unit: 'money' },
   pe: { formula: 'price / eps', unit: 'multiple' },
+  forwardPe: {
+    formula: 'price / forwardEps (forrásolt elemzői EPS-előrejelzés; nincs saját becslés)',
+    unit: 'multiple',
+  },
   pfcf: { formula: 'marketCap / fcf', unit: 'multiple' },
   ps: { formula: 'marketCap / revenue', unit: 'multiple' },
   pb: { formula: 'marketCap / shareholdersEquity', unit: 'multiple' },
