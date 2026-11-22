@@ -53,9 +53,9 @@ Részletek: [../KNOWN_ISSUES.md](../KNOWN_ISSUES.md) „PHASE 09” szakasz.
 - **KI-50 (frissítve):** a részvény-szorzók FX-e továbbra is nyitott (nem portfólió-feladat) – PHASE 10 előtt vagy a PHASE 12-vel.
 
 ## 6. Nyitott kérdések
-- **Commit:** a munka a `phase-09` branchen van, **commit nélkül** (a CLAUDE.md szerint commit csak kérésre). Javasolt üzenet:
+- **Commit:** tulajdonosi jóváhagyással commitolva a `phase-09` branchen (`b9dc472`), PR #5 nyitva; a merge a tulajdonos döntése. Üzenet:
   `feat: PHASE 09 – portfólió és kockázat (átlagáras könyvelés, két P/L-nézet FX-hatással, kitettség direct/look-through, koncentráció, TWR-historikus, napló-validáció, ETF-átfedés modell)`
-- **FX-idősor (KI-77):** a PHASE 13-ban (proxy + cache) vagy egy rövid közbülső lépésben készüljön? Ma a többdevizás historikus elemzés csak kézi FX-idősorral fut.
+- **FX-idősor (KI-77):** a PHASE 13-ban készül (proxy + cache); addig a többdevizás historikus elemzés csak kézi FX-idősorral fut.
 - A régebbi nyitott pontok (EAS próbatelepítés, FMP keret/ToS, DP-05) változatlanok, a PHASE 10-et nem blokkolják.
 
 ## 7. Indulási útmutató a PHASE 10-hez

@@ -388,6 +388,6 @@ Próbáld ki azt is, hogy a `quote(...)` helyett üres `new Map()`-et adsz: a pi
 - [x] Nincs új, dokumentálatlan tároló (a PHASE 13-ig memóriában).
 - [x] `npm run check` exit 0 (1011/1011).
 - [x] Docs: DATA_DICTIONARY 7., DECISIONS D-072, KNOWN_ISSUES KI-76…82, ROADMAP, ARCHITECTURE, PROJECT_STATE, handoff.
-- [ ] Commit és PR – a tulajdonos döntése (a munka a `phase-09` branchen, commit nélkül).
+- [x] Commit (`b9dc472`) és PR #5 – a merge a tulajdonos döntése.
 
 **Következő:** PHASE 10 – Score és döntési engine. Állj meg itt; a 10-es prompt új chatben induljon.

@@ -33,7 +33,7 @@ Mobilalkalmazás (Expo SDK 58, React Native, TypeScript) részvények, ETF-ek é
 | **ETF-elemzés** | **Kész** (PHASE 08, D-066…D-069): `analyzeEtf`; jegyzés-szintű profil mezőnkénti lefedettséggel; price vs total return (acc/dist módszer, összehasonlítási alap); volatilitás, max DD, downside dev., Sharpe/Sortino (rf-fel), béta és tracking (TR indexsorral); TER-költség; holdings (top N, HHI, ország/szektor/deviza); hedged vs. mögöttes devizakockázat; feature-modell súlyozás nélkül; P/E/DCF `notApplicable`. **Free korlát:** ETF-metaadat és holdings csak kézi bevitelből (KI-65); SEC N-PORT igazolt, adapter nincs (KI-66). UI nincs (PHASE 12). |
 | **Portfólió és kockázat** | **Kész** (PHASE 09, D-072): `analyzePortfolio`; átlagáras könyvelés lépésenkénti naplóval; két P/L-nézet (natív / bázis: árhatás + FX-hatás; ráta: rögzített → ECB ügyleti napi → hiány); súlyok; visszakövethető összesítések; kitettség közvetlen és look-through nézetben; koncentráció (top N, HHI, egyedi részvény ISIN szerint, szektor/ország); historikus TWR + kockázat a tényleges mennyiségekből (csak kérésre); korreláció; ETF-átfedés adatmodell; napló-validáció. **Korlát:** többdevizás historikushoz nincs FX-idősor végpont (KI-77); tárolás memóriában. UI nincs (PHASE 12). |
 | Tárolás, cache | **Nincs** – PHASE 13 (SQLite, proxy cache) |
-| Git | `main`-en a PHASE 08 merge (`e6f0d02`, PR #4); a PHASE 09 a **`phase-09`** branchen, **commit nélkül** (a tulajdonos dönt a commitról és a PR-ről) |
+| Git | `main`-en a PHASE 08 merge (`e6f0d02`, PR #4); a PHASE 09 a **`phase-09`** branchen **commitolva** (`b9dc472`), PR #5 nyitva (merge: a tulajdonos dönt) |
 
 Fázisonkénti állapot: [ROADMAP.md](ROADMAP.md).
 
@@ -126,7 +126,7 @@ Teljes lista: [DECISIONS.md](DECISIONS.md).
 | (04A) | A SEC User-Agent kapcsolattartó e-mailjét a tulajdonos a `.env.local`-ba írta |
 
 ## Nyitott kérdések
-- **Commit:** a PHASE 09 a `phase-09` branchen van, **commit nélkül**; commit és PR a tulajdonos döntése szerint (javasolt üzenet a handoffban). A PHASE 08 már a `main`-en (PR #4, `e6f0d02`).
+- **Commit:** a PHASE 09 commitolva (`b9dc472`, `phase-09`), PR #5 nyitva; a merge a tulajdonos döntése. A PHASE 08 már a `main`-en (PR #4, `e6f0d02`).
 - **Ellentmondás-javítás:** a PHASE 07 handoff „commit nélkül” állapotot írt, de a PHASE 07 már commitolva és a `main`-be merge-ölve volt (`aee88fc`, merge `3fc0258`).
 - **Eldöntve (2026-11-22):** D-070 kockázati megbízhatósági címke (megvalósítva); D-071 N-PORT adapter helyett kibocsátói holdings-fájl import (PHASE 13, KI-74).
 - **EAS Hosting próbatelepítés** (D-004, KI-29): legkésőbb a PHASE 16 előtt; Expo-fiók kell.
