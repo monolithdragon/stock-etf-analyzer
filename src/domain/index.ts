@@ -15,6 +15,8 @@ export * from './fundamentals/financial-metric';
 export * from './fx/fx-rate';
 export * from './fx/fx-conversion';
 export * from './portfolio/portfolio';
+export * from './portfolio/ledger-validation';
+export * from './portfolio/portfolio-asset';
 export * from './analysis/analysis-result';
 export * from './analysis/stock-fundamentals';
 export * from './etf/etf-classification';

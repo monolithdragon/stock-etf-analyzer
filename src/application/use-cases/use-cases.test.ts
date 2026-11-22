@@ -123,6 +123,31 @@ describe('recordTransaction', () => {
     expect(saved).toHaveLength(0);
   });
 
+  it('PHASE 09: túladás (a meglévő naplóhoz képest) → VALIDATION, és semmi nem mentődik', async () => {
+    const { repository, saved } = fakeRepository();
+    const record = createRecordTransaction({
+      portfolioRepository: repository,
+      clock: fixedClock('2026-11-21T12:00:00Z'),
+      ids: sequentialIds(),
+    });
+    expect((await record(BUY)).ok).toBe(true); // 3 db
+    const oversell = await record({ ...BUY, type: 'SELL', quantity: 4 });
+    expect(oversell).toMatchObject({
+      ok: false,
+      error: { kind: 'VALIDATION', issues: [{ path: 'transactions.tx_2' }] },
+    });
+    // visszadátumozott eladás a vétel előtt → szintén túladás
+    const backdated = await record({ ...BUY, type: 'SELL', quantity: 1, tradeDate: '2026-11-19' });
+    expect(backdated.ok).toBe(false);
+    // ellentmondó deviza ugyanarra a jegyzésre
+    const otherCurrency = await record({ ...BUY, priceCurrency: 'EUR' as CurrencyCode });
+    expect(otherCurrency.ok).toBe(false);
+    expect(saved).toHaveLength(1);
+    // figyelmeztetés (lehetséges duplikátum) nem akadályoz
+    expect((await record(BUY)).ok).toBe(true);
+    expect(saved).toHaveLength(2);
+  });
+
   it('tárolási hiba → STORAGE hiba változatlanul továbbmegy', async () => {
     const { repository } = fakeRepository({ failSave: AppErrors.storage('A lemez megtelt.') });
     const record = createRecordTransaction({

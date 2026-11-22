@@ -10,6 +10,7 @@
 > - **PHASE 06 (2026-11-22):** a `totalDebt` összerakva (4.2, 4.4, 5.2; D-059); `InstrumentProfile.beta` (3.4); új **13. fejezet**: a részvény fundamentális elemzés eredmény-modellje (eredet-címke, kimutatás-nézetek, Q4/TTM, időszaki mutatók, trend/CAGR, értékelés, minőségi modell; D-060…D-063).
 > - **PHASE 07 (2026-11-22):** DCF véglegesítve (5.4), új 14. fejezet (értékelés és DCF kimenete).
 > - **PHASE 08 (2026-11-22):** az 5.5 kockázati sorai véglegesek (D-066); a 6. fejezet a 15.-re mutat; új **15. fejezet**: ETF-elemzés (profil, kategóriák, holdings, deviza, hozam, kockázat, költség, tracking, feature-modell; D-066…D-069).
+- **PHASE 09 (2026-11-22):** a **7. fejezet VÉGLEGES** (D-072): átlagáras könyvelés, napló-validáció, eszköz-metaadat, két P/L-nézet FX-felbontással, összesítések, kitettség (közvetlen / look-through), koncentráció, historikus TWR, ETF-átfedés adatmodell. Az 5.5 új sorai: `averageCostLedger`, `timeWeightedReturn`, `holdingsOverlap`.
 
 ## 1. Általános konvenciók
 
@@ -387,6 +388,9 @@ Megjegyzések (`notes`, nem érvénytelenítenek): TV-arány > 75%; `g > 4%`; `r
 | Rendszeres befizetés FV | `futureValueOfContributions` | `i = (1 + r_éves)^(1/m) − 1` (effektív, m = 12 alapból); időszak **végén**: `PMT × ((1+i)^n − 1) / i`; időszak **elején**: `× (1 + i)`; `i = 0` → `PMT × n`; + `PV × (1+i)^n` | `n = évek × m` nem egész → `INVALID_INPUT`; `r ∉ (−1, 1]` → `INVALID_INPUT` (százalék-hiba) |
 | Portfóliósúly | `portfolioWeights` | `pozícióérték (kijelzési pénznemben) / árazott összérték` | ár nélküli pozíció az `unpriced` listába, **nem 0 súllyal**; eltérő pénznem → `INVALID_INPUT`; negatív érték → `INVALID_INPUT` |
 | Súlyozott hozam | `weightedReturn` | `Σ w_i × r_i` | Σw ≠ 1 (±1e-6) → `INVALID_INPUT` (≈100 → „százalék?” tipp); hiányzó hozam → `MISSING` |
+| Átlagáras könyvelés | `averageCostLedger` | vétel: CB += q·P + díj; eladás: realizált = q·P − díj − q·(CB/Q), CB −= q·(CB/Q); split: Q × f (CB változatlan) | túladás → `INVALID_INPUT`; abs(Q) < 1e-9 → 0 (D-072/1) |
+| Időarányos hozam (TWR) | `timeWeightedReturn` | `r_t = (V_t − F_t + I_t) / V_{t−1} − 1`; index = Π(1 + r_t) | `V_{t−1} ≤ 0` napon nincs megfigyelés; < 2 nap → `INSUFFICIENT_DATA`; negatív mozgás előtti érték → `INVALID_INPUT` (D-072/8) |
+| ETF-átfedés | `holdingsOverlap` | Σ min(w_A,i, w_B,i) a közös ISIN-ekre (pozitív súlyok) | ISIN nélkül nincs párosítás; részleges listán alsó becslés (D-072/10) |
 
 ## 6. ETF-mezők
 
@@ -394,16 +398,85 @@ Megjegyzések (`notes`, nem érvénytelenítenek): TV-arány > 75%; `g > 4%`; `r
 
 **PHASE 08:** a megvalósított, végleges modell és a mutatók a **[15. fejezetben](#15-etf-elemzés-phase-08-d-066d-069)** vannak (`EtfProfile`, `EtfHoldingsSnapshot`, `EtfClassification`, `EtfAnalysis`). A `domain/instrument` `Etf` entitás az értékpapír-szintű metaadat; az `EtfProfile` a jegyzés-szintű elemzési bemenet.
 
-## 7. Portfólió-mezők
+## 7. Portfólió-mezők – VÉGLEGES (PHASE 09, D-072)
 
 | Entitás | Mezők |
 |---|---|
-| `Portfolio` | `id`, `name`, `baseCurrency` (kijelzési), `createdAt` |
-| `Transaction` | Diszkriminált unió a `type` szerint (PHASE 03). Közös: `id`, `portfolioId`, `listingId` (D-025: a konkrét tőzsdei jegyzés), `tradeDate` (nem lehet jövőbeli a felhasználó helyi napja szerint), `note` (≤ 500 karakter vagy `null`), `fxRateToBase` (`FxRate` dátummal és forrással, vagy `null`). **`BUY` / `SELL`:** `quantity` (> 0, tört megengedett), `price` (Money, > 0), `fees` (Money, ≥ 0; pénzneme eltérhet az árétól). **`DIVIDEND` / `FEE`:** `amount` (Money, > 0). **`SPLIT`:** `ratioFrom`, `ratioTo` (> 0, nem egyenlők; pl. 1 → 4). Az „eladás ≤ birtokolt mennyiség” szabály pozíciót igényel → PHASE 09. |
-| `Position` (származtatott) | `listingId`, `quantity`, `averageCost` (Money, instrumentum pénznemben), `costBasis`, `marketValue` (Metric), `unrealizedPL`, `realizedPL`, `weight` |
+| `Portfolio` | `id`, `name`, `baseCurrency` (bázis = kijelzési pénznem), `createdAt` |
+| `Transaction` | Diszkriminált unió a `type` szerint (PHASE 03). Közös: `id`, `portfolioId`, `listingId` (D-025: a konkrét tőzsdei jegyzés; a ticker benne van), `tradeDate` (nem lehet jövőbeli a felhasználó helyi napja szerint), `note` (≤ 500 karakter vagy `null`), `fxRateToBase` (a fő pénznem → bázis ráta dátummal és forrással, pl. a brókeré; vagy `null`). **`BUY` / `SELL`:** `quantity` (> 0, tört megengedett), `price` (Money, > 0, a jegyzés pénznemében), `fees` (Money, ≥ 0; pénzneme eltérhet az árétól). **`DIVIDEND`:** bruttó kapott osztalék (`amount`). **`FEE`:** külön díj (pl. számlavezetés). **`SPLIT`:** `ratioFrom`, `ratioTo` (pl. 1 → 4). |
+| `PortfolioAssetMetadata` | `listingId`, `name`, `isin`, `kind` (`stock` / `etf`), `assetClass` (`equity`/`bond`/`commodity`/`multi_asset`/`other`; részvény = `equity`), `country` (részvénynél kockázati ország; ETF-nél a domicil – kitettségként NEM használt), `sector`, `hedgeCurrency`, `source` (`reported` profil / `user_input`). Hiány = `null`. Kód: `src/domain/portfolio/portfolio-asset.ts`. |
+| `PositionAnalysis` (számított, nem tárolt) | lásd 7.1 |
 
-- **P/L két nézetben:** (a) instrumentum pénznemében, FX-hatás nélkül; (b) kijelzési pénznemben = jelenlegi érték mai FX-szel − bekerülés tranzakciós napi FX-szel (FX-hatással). Mindkettő megjeleníthető, és jelölve van.
-- **Könyvelési módszer:** átlagár (MVP, D-012). FIFO később. Adózási célra nem alkalmas (ezt jelezni kell).
+### 7.1 Pozíció (`PositionAnalysis`) – átlagár-módszer (D-012, D-072/1–4)
+
+| Mező | Definíció |
+|---|---|
+| `status` | `open` (mennyiség > 0), `closed` (0), `invalid` (hibás napló – minden mutató `INVALID_INPUT`) |
+| `quantity` | Σ vétel − Σ eladás, split-szorzóval; 1e-9 alatti maradék → 0 |
+| `nativeCurrency` | az első adásvétel ár-pénzneme, ahogy rögzítették (pl. `GBX`) |
+| `averageCostNative`, `costBasisNative` | natív bekerülés (díjjal); átlagár = bekerülés / mennyiség (zártnál `NOT_APPLICABLE`) |
+| `lastPrice` | az árfolyam (szolgáltatói provenance-szel); zárt pozíciónál `NOT_APPLICABLE` |
+| `marketValueNative` | mennyiség × ár (az árfolyam a natív egységre váltva, pl. GBP → GBX) |
+| `unrealizedPLNative`, `unrealizedReturnNative` | piaci érték − bekerülés; ÷ bekerülés |
+| `realizedPLNative` | Σ eladásonként q × ár − díj − q × átlagár |
+| `dividendsNative` | kapott osztalék a kifizetés pénznemében (lehet több deviza) |
+| `costBasisBase`, `realizedPLBase`, `grossInvestedBase` | ugyanaz a könyvelés az ügyleti napi rátára váltott eseményeken (bruttó befektetés = Σ vétel q × ár + díj) |
+| `marketValueBase` | natív piaci érték ÷ alegység-osztó × MAI ráta |
+| `unrealizedPLBase` = `priceEffectBase` + `fxEffectBase` | árhatás = natív nem realizált P/L × mai ráta; FX-hatás = natív bekerülés × mai ráta − bázis bekerülés |
+| `dividendsBase`, `otherFeesBase` | Σ (összeg × a kifizetés napi rátája) |
+| `totalReturnBase`, `totalReturnPct` | nem realizált + realizált + osztalék − külön díjak; ÷ bruttó befektetés (egyszerű, NEM idő-/pénzsúlyozott) |
+| `weight` | bázisdevizás piaci érték / árazott összérték; ár/FX nélkül `MISSING` (nem 0), zártnál `NOT_APPLICABLE` |
+| `currentFx`, `ledger[]` | a mai ráta; lépésenként: mennyiség, natív bekerülés, átlagár, realizált delta, a használt ráta (`source`: `transaction` / `market`, `asOf`) |
+
+**FX-ráta elsőbbsége** (fő pénznem → bázis): azonos fő pénznem → nincs váltás; rögzített `fxRateToBase`; ECB-ráta az ügylet napjára; különben **hiány** (soha nem a mai ráta). GBX ↔ GBP: egységváltás ÷/× 100. Más pénznemű díj a natív könyvelésben: díj × ráta(díj) / ráta(natív), az ügylet napján.
+
+**Könyvelési módszer:** átlagár (D-012); FIFO később (KI-79). **Adózási célra nem alkalmas** – a kimenet `accountingMethod.taxWarning` mezője ezt kimondja.
+
+### 7.2 Napló-validáció (`validateTransactionLedger`, D-072/9)
+
+| Kód | Súlyosság | Feltétel |
+|---|---|---|
+| `DUPLICATE_ID` | hiba, **blokkoló** | ismétlődő tranzakció-azonosító |
+| `PORTFOLIO_MISMATCH` | hiba, **blokkoló** | más portfólió tranzakciója |
+| `INVALID_VALUE` | hiba | mennyiség/ár ≤ 0 vagy nem véges, díj < 0, összeg ≤ 0, split-arány ≤ 0 (futásidőben, tárolóból jövő adatra is) |
+| `MISSING_CURRENCY` | hiba | hiányzó vagy érvénytelen ár-/díj-/összeg-pénznem |
+| `CURRENCY_CONFLICT` | hiba | egy jegyzés két fő pénznemben, vagy eltér az árfolyam pénznemétől (GBX/GBP nem ütközés) |
+| `FX_RATE_MISMATCH` | hiba | a rögzített ráta nem „fő pénznem → bázis” irányú, vagy ≤ 0 |
+| `OVERSELL` | hiba | eladás > az adott napon birtokolt mennyiség (időrendben) |
+| `POSSIBLE_DUPLICATE` | figyelmeztetés | azonos nap, jegyzés, típus és tartalom |
+| `SPLIT_WITHOUT_POSITION`, `DIVIDEND_WITHOUT_POSITION` | figyelmeztetés | nincs nyitott pozíció |
+
+Hibánál az érintett jegyzés pozíciója `invalid`; blokkoló hibánál az `analyzePortfolio` `VALIDATION` hibát ad. Időrend: dátum, azon belül a rögzítési sorrend. A `recordTransaction` az új hibát okozó tranzakciót elutasítja.
+
+### 7.3 Összesítés (`PortfolioTotals`)
+
+Minden összeg (`marketValue`, `costBasis`, `unrealizedPL`, `priceEffect`, `fxEffect`, `realizedPL`, `dividends`, `otherFees`, `grossInvested`, `totalReturn`) = Σ a pozíciók megfelelő bázis-mezője, `components` (jegyzés + összeg) listával. Ha bármelyik pozíció értéke hiányzik: `value` = `MISSING` (okokkal), `missing` = az érintett jegyzések, `availableSum` = részösszeg. `totalReturnPct` = `totalReturn / grossInvested`.
+
+### 7.4 Kitettség és koncentráció (D-072/6–7)
+
+| Nézet | Dimenziók | Módszer |
+|---|---|---|
+| `direct` | `instrumentKind`, `assetClass`, `tradingCurrency` (GBX → GBP), `country`, `sector` | pozíciónként egy tétel; ETF-nél ország/szektor nincs (besorolatlan) |
+| `look_through` | `country`, `sector`, `underlyingCurrency` | részvény (saját metaadat; deviza = jegyzési) + ETF-súly × holdings-súly, azonos kulcsnál összeadva; fedezett ETF → fedezési deviza; holdings nélküli ETF → `uncoveredWeight` |
+
+Mindkettő az `exposureBreakdown` eredménye: `groups`, `unclassifiedWeight` (felsorolt, de besorolás nélkül), `uncoveredWeight` (le nem fedett), `methodNote`. Koncentráció: `largestPosition`, `top5Weight`, `top10Weight`, `herfindahl`, `effectivePositions` (az árazott pozíciókon; ár nélküli pozíció mellett „részleges”), `singleNames` (ISIN szerint: `directWeight`, `viaEtfWeight`, `totalWeight`, `viaEtfs`; max. 10), `sector[]` / `country[]` (nézetenként a legnagyobb csoport és a top 3 súlya).
+
+### 7.5 Historikus elemzés (`PortfolioHistoryAnalysis`, D-072/8)
+
+| Mező | Definíció |
+|---|---|
+| napi érték `V_t` | Σ (tényleges mennyiség_t × split-korrekció × záróár_t ÷ alegység × FX_t) |
+| `cumulativeReturn` | TWR: Π(1 + r_t) − 1, `r_t = (V_t − F_t + I_t) / V_{t−1} − 1`; F = vétel/eladás napvégi áron, I = osztalék |
+| `annualizedReturn` | (1 + TWR)^(1/évek) − 1, csak ≥ 1 éves ablakon |
+| `volatility`, `maxDrawdown`, `downsideDeviation`, `sharpe`, `sortino` | a 15.7 definíciói a TWR napi hozamaira / indexére; ≥ 126 napi hozam; `reliability` (D-070); rf nélkül Sharpe/Sortino `MISSING` |
+| `correlations[]` | páronkénti Pearson-korreláció a nyitott pozíciók natív napi hozamaiból, közös dátumokon (max. 10 pozíció) |
+| `status`, `limitations` | az ablak (`start`, `end`) vagy a hiány oka; az ablak később indul, ha az ár/FX nem fedi a portfólió elejét |
+
+Naptár: a kereskedési napok uniója, forward-fill ≤ 7 naptári nap. Ár: split-korrigált (vagy nyers) sor; osztalék-korrigált tilos. Többdevizás portfólió napi FX-idősor nélkül → `MISSING` (KI-77). Csak kérésre (`history.enabled`).
+
+### 7.6 ETF-átfedés (`EtfOverlapModel`, D-072/10)
+
+`pairs[]`: `a`, `b`, `holdingsAsOf`, `overlap` (`holdingsOverlap`: `overlapWeight`, `commonCount`, `common` max. 10, `unmatchableWeightA/B`); `etfsWithoutHoldings`; `method`. Teljes összehasonlítás és képernyő: PHASE 14.
 
 ## 8. FX-mezők
 
@@ -454,7 +527,8 @@ Minden domain típus az `@/domain` modulból importálható. Ahol konstruktor va
 | Kimutatások (4.1–4.2) | `FinancialStatement = IncomeStatement \| BalanceSheet \| CashFlowStatement` | `createFinancialStatement` (a meg nem adott tétel → `MISSING`) | `src/domain/fundamentals/financial-statement.ts` |
 | Számított mutató (5.) | `FinancialMetric`, `FinancialMetricId` | `createFinancialMetric` | `src/domain/fundamentals/financial-metric.ts` |
 | FX (8.) | `FxRate` (1 `base` = `rate` `quote`) | `createFxRate` | `src/domain/fx/fx-rate.ts` |
-| Portfólió (7.) | `Portfolio`, `Transaction`, `Position` (csak típus) | `createPortfolio`, `createTransaction` | `src/domain/portfolio/portfolio.ts` |
+| Portfólió (7.) | `Portfolio`, `Transaction`, `PortfolioAssetMetadata`, `LedgerIssue` | `createPortfolio`, `createTransaction`, `createPortfolioAssetMetadata`, `validateTransactionLedger`, `orderTransactions` | `src/domain/portfolio/` |
+| Portfólióelemzés (7.) — 09 | `PortfolioAnalysis`, `PositionAnalysis`, `PortfolioTotals`, `PortfolioExposure`, `PortfolioConcentration`, `PortfolioHistoryAnalysis`, `EtfOverlapModel` | `analyzePortfolio` (use case), `buildPortfolioAnalysis` (tiszta) | `src/application/portfolio/`, `src/application/use-cases/analyze-portfolio.ts` |
 | Elemzés (9.) | `AnalysisResult`, `AnalysisSubject` | `createAnalysisResult`, `summarizeCompleteness` | `src/domain/analysis/analysis-result.ts` |
 | Contract (hálózat) | `QuoteDto`, `metricSchema`, `dataProvenanceSchema` | `parseApiResponse`, `quoteFromDto`, `apiErrorToAppError` | `src/contracts/*` |
 | Jegyzés-jelölt (3.3) — 04A | `ListingCandidate`, `SecurityListings` | `createListingCandidate` | `src/domain/instrument/listing-candidate.ts` |
@@ -476,6 +550,7 @@ Minden domain típus az `@/domain` modulból importálható. Ahol konstruktor va
 | Hozam (5.3, 5.5) — 05 | `SeriesReturn`, `PriceReturnDecomposition`, `ExpectedReturnBreakdown`, `MaxDrawdown`, `FutureValueResult` | `simpleReturn`, `seriesReturn`, `realReturn`, `annualizeReturn`, `maxDrawdown`, `requiredRecovery`, `futureValueOfContributions`, … | `src/calculations/returns/*.ts` |
 | ETF-költség, követés (5.5) — 05 | `TerImpact` | `annualTerCost`, `terLongTermImpact`, `trackingDifference`, `trackingError` | `src/calculations/etf/costs-tracking.ts` |
 | Portfólió-alapok (5.5) — 05 | `PortfolioWeights` | `portfolioWeights`, `weightedReturn` | `src/calculations/portfolio/portfolio-basics.ts` |
+| Portfólió-motor (5.5) — 09 | `AverageCostLedger`, `TimeWeightedReturn`, `HoldingsOverlap` | `averageCostLedger`, `timeWeightedReturn`, `holdingsOverlap` | `src/calculations/portfolio/`, `src/calculations/etf/overlap.ts` |
 
 **Validációs józansági határok.** Ezek nem üzleti definíciók; a hibás bemenet kiszűrésére szolgálnak.
 

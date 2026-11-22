@@ -114,4 +114,51 @@ describe('createAppServices', () => {
     const stored = await repository.listTransactions(portfolio.value.id);
     expect(stored.ok && stored.value).toHaveLength(1);
   });
+
+  it('PHASE 09: mock módban rögzített tranzakciókból portfólióelemzés (USD + EUR, EUR bázis)', async () => {
+    const eur = parseCurrencyCode('EUR');
+    const usd = parseCurrencyCode('USD');
+    if (!eur.ok || !usd.ok) throw new Error('pénznem');
+    const portfolio = createPortfolio({
+      id: 'p9',
+      name: 'Demó',
+      baseCurrency: eur.value,
+      createdAt: '2026-11-01T00:00:00Z',
+    });
+    if (!portfolio.ok) throw new Error('portfólió');
+    const repository = new InMemoryPortfolioRepository({ portfolios: [portfolio.value] });
+    const services = createAppServices(
+      { dataMode: 'mock', apiBaseUrl: null },
+      { clock, portfolioRepository: repository },
+    );
+    const common = { portfolioId: 'p9', tradeDate: '2026-11-10', fees: 0 } as const;
+    await services.recordTransaction({
+      ...common,
+      listingId: 'DEMO@XNAS' as never,
+      type: 'BUY',
+      quantity: 2,
+      price: 90,
+      priceCurrency: usd.value,
+      feesCurrency: usd.value,
+    });
+    await services.recordTransaction({
+      ...common,
+      listingId: 'DEMOETF@XETR' as never,
+      type: 'BUY',
+      quantity: 4,
+      price: 45,
+      priceCurrency: eur.value,
+      feesCurrency: eur.value,
+    });
+    const result = await services.analyzePortfolio('p9');
+    if (!result.ok) throw new Error(result.error.message);
+    const analysis = result.value;
+    // DEMO: 2 × 100 USD / 1,1 = 181,82 EUR; DEMOETF: 4 × 50 = 200 EUR (mock FX: EUR/USD 1,1)
+    expect(analysis.totals.marketValue.value).toMatchObject({ status: 'OK' });
+    const mv = analysis.totals.marketValue.value;
+    expect(mv.status === 'OK' && mv.value.amount).toBeCloseTo(200 / 1.1 + 200, 6);
+    expect(mv.status === 'OK' && mv.provenance.kind).toBe('mock'); // demó nem „mosódik tisztára”
+    expect(analysis.warnings.join(' ')).toContain('DEMO');
+    expect(analysis.fxRatesUsed.every((r) => r.provenance.kind === 'mock')).toBe(true);
+  });
 });

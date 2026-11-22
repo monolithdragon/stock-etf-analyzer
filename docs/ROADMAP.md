@@ -1,6 +1,6 @@
 # Roadmap – Stock & ETF Analyzer
 
-> Frissítve: 2026-11-22 (PHASE 08 vége). Minden fázis külön chatben fut, a `stock_etf_analyzer_prompts` csomag `NN_*.md` promptja alapján.
+> Frissítve: 2026-11-22 (PHASE 09 vége). Minden fázis külön chatben fut, a `stock_etf_analyzer_prompts` csomag `NN_*.md` promptja alapján.
 > **Fázisszabály:** a következő fázis csak akkor indul, ha az előző befejezési feltételei teljesültek, vagy a hiányok a KNOWN_ISSUES-ban dokumentálva vannak.
 > **Verzió:** a promptok egy része SDK 57-et említ. Mindenhol **SDK 58** értendő (D-020).
 
@@ -16,8 +16,8 @@
 | 06 | Részvény fundamentális elemzés | **KÉSZ** (2026-11-22) | |
 | 07 | Értékelés és DCF | **KÉSZ** (2026-11-22) | |
 | 08 | ETF-elemzés | **KÉSZ** (2026-11-22) | |
-| 09 | Portfólió és kockázat | **KÖVETKEZIK** | |
-| 10 | Score és döntési engine | NEM KEZDŐDÖTT | M3 Elemzőmotor kész |
+| 09 | Portfólió és kockázat | **KÉSZ** (2026-11-22) | |
+| 10 | Score és döntési engine | **KÖVETKEZIK** | M3 Elemzőmotor kész |
 | 11 | AI-magyarázó engine | NEM KEZDŐDÖTT | |
 | 12 | UI/UX és navigáció | NEM KEZDŐDÖTT | |
 | 13 | Tárolás, cache, offline | NEM KEZDŐDÖTT | **M4 MVP** |
@@ -332,6 +332,20 @@ Minden fázis közös lezárása (CLAUDE.md):
 - **Befejezési feltétel:**
   - Minden összesítés visszavezethető tranzakciókra.
   - Tesztek: vegyes deviza, súlyszámítás, hiányzó ár/FX.
+
+- **Eredmény (2026-11-22): KÉSZ.**
+  - Domain: `validateTransactionLedger` (túladás, duplikált/ellentmondó tranzakció, hiányzó pénznem, hibás FX-irány; időrend), `PortfolioAssetMetadata`; a `Position` számított kimenet lett (`PositionAnalysis`).
+  - Motor: `averageCostLedger` (átlagár, D-012 → Elfogadva), `timeWeightedReturn` (TWR), `holdingsOverlap`; a kockázat a meglévő `risk.ts`/`drawdown.ts`/`holdings.ts` függvényekkel (nem másolva).
+  - Alkalmazás (`src/application/portfolio/`): két P/L-nézet (natív / bázis, árhatás + FX-hatás), ráta-elsőbbség (rögzített → ECB ügyleti napi → hiány), súlyok, visszakövethető összesítések (`components`, `missing`, `availableSum`), kitettség közvetlen és look-through nézetben, koncentráció (top N, HHI, egyedi részvény ISIN szerint, szektor/ország), historikus TWR + kockázat (tényleges mennyiségekből, nem a mai súlyokból), korreláció, ETF-átfedés adatmodell.
+  - Use case: `analyzePortfolio` (`AppServices`); a `recordTransaction` a meglévő naplóval együtt validál (túladás elutasítva).
+  - Ellenőrzés: `npm run check` exit 0; **1011/1011 teszt** (66 suite; +84); az új modulok 97,3% sor, a motor 100%.
+  - **Nem készült el (tudatosan):** tartós tárolás (13), képernyő (12), teljes ETF-összehasonlítás (14), napi FX-idősor végpont (KI-77), FIFO/adó (KI-79), készpénzszámla és IRR (KI-78).
+  - Új döntés: D-072. Új ismert problémák: KI-76…KI-82.
+- **A későbbi fázisok kapcsolódási pontjai (PHASE 09-ből):**
+  - PHASE 10 (score): `PortfolioAnalysis.concentration` (top N, HHI, egyedi részvény, szektor/ország), `exposures` (`uncoveredWeight` = adathiány, nem 0), `history` mutatói a `reliability` címkével; a portfólió-szintű döntés (pl. túlkoncentráció-jelzés) küszöbei ott készülnek.
+  - PHASE 12 (UI): két P/L-nézet jelölve (natív / bázis + FX-dátum), `accountingMethod.taxWarning`, `validation.issues` mezőnként, a `missing` pozíciók és `limitations` mindig láthatók; tranzakció-űrlap a `recordTransaction` VALIDATION hibáival.
+  - PHASE 13 (tárolás/cache): SQLite `PortfolioRepository` (a port változatlan), proxy-cache (KI-76), FX-idősor végpont (KI-77), holdings-fájl import (KI-74 → look-through).
+  - PHASE 14: ETF-összehasonlítás az `EtfOverlapModel` / `holdingsOverlap` alapján.
 
 ### PHASE 10 – Score és döntési engine
 - **Cél:** konfigurálható, determinisztikus, visszakövethető pontozás és döntés.

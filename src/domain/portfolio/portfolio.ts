@@ -22,7 +22,6 @@ import {
   type IsoDate,
   type IsoTimestamp,
   type ListingId,
-  type Metric,
   type Money,
   type PortfolioId,
   type Result,
@@ -229,20 +228,7 @@ export function createTransaction(
 }
 
 // ---------------------------------------------------------------------------
-// Position – SZÁRMAZTATOTT (a tranzakciókból számolja a PHASE 09, átlagár-módszerrel)
+// Position – SZÁRMAZTATOTT vetület. PHASE 09 (D-072): NEM domain-entitás, hanem az alkalmazási
+// réteg számított kimenete (`PositionAnalysis`, `src/application/portfolio/types.ts`): a
+// tranzakciókból átlagár-módszerrel (D-012), két P/L-nézetben (natív és alapdeviza).
 // ---------------------------------------------------------------------------
-
-export interface Position {
-  readonly portfolioId: PortfolioId;
-  readonly listingId: ListingId;
-  readonly quantity: number;
-  /** Átlagos bekerülési ár a jegyzés pénznemében (D-012: átlagár-módszer). */
-  readonly averageCost: Money;
-  readonly costBasis: Money;
-  /** Hiányzó ár esetén nem 0, hanem `MISSING` (DATA_DICTIONARY 5.5). */
-  readonly marketValue: Metric<Money>;
-  readonly unrealizedPL: Metric<Money>;
-  readonly realizedPL: Money;
-  /** Súly a portfólióban (tizedes tört); hiányzó árú pozíciónál nem 0, hanem nem-OK státusz. */
-  readonly weight: Metric<number>;
-}

@@ -1,6 +1,6 @@
 # Architektúra – Stock & ETF Analyzer
 
-> Állapot: **részben megvalósítva** (PHASE 04B, 2026-11-21). A 3., 4.4–4.5, 5., 6.3 (a 10 végpont), 6.4 (ProviderRouter, kvóta, csomagmátrix) és 7. fejezet a **tényleges kódot** írja le; a cache (11.) és az offline működés (12.) még terv.
+> Állapot: **részben megvalósítva** (PHASE 04B, 2026-11-21; az 5.1 a PHASE 09-ig frissítve, 2026-11-22). A 3., 4.4–4.5, 5., 6.3 (a 10 végpont), 6.4 (ProviderRouter, kvóta, csomagmátrix) és 7. fejezet a **tényleges kódot** írja le; a cache (11.) és az offline működés (12.) még terv.
 > Kapcsolódó dokumentumok: [DECISIONS.md](DECISIONS.md), [DATA_SOURCES.md](DATA_SOURCES.md), [DATA_DICTIONARY.md](DATA_DICTIONARY.md), [REQUIREMENTS.md](REQUIREMENTS.md).
 
 ## 1. Alapelvek
@@ -241,7 +241,7 @@ src/
 │  ├─ market/quote.ts             Quote, PriceSeries
 │  ├─ fundamentals/               financial-statement.ts (Income | Balance | CashFlow), financial-metric.ts
 │  ├─ fx/fx-rate.ts               FxRate
-│  ├─ portfolio/portfolio.ts      Portfolio, Transaction (BUY|SELL|DIVIDEND|FEE|SPLIT), Position (csak típus)
+│  ├─ portfolio/                  portfolio.ts (Portfolio, Transaction BUY|SELL|DIVIDEND|FEE|SPLIT), ledger-validation.ts (09), portfolio-asset.ts (09)
 │  ├─ analysis/analysis-result.ts AnalysisResult, adatteljesség (COMPLETE|PARTIAL|INSUFFICIENT)
 │  └─ shared/shared.test.ts, entities.test.ts
 ├─ contracts/                     zod: közös sémák (provenance, Metric), quote DTO, API-boríték + hibakód-leképezés
@@ -345,6 +345,23 @@ src/application/use-cases/analyze-etf.ts       analyzeEtf (AppServices)
 ```
 
 Adatút: `analyzeEtf` → párhuzamosan `getListingQuote`, `getInstrumentProfile`, `getPriceHistory` (`SPLIT_DIVIDEND` + `SPLIT`, tartalék `NONE`), `getDividendHistory`; opcionálisan `convertMoney` (AUM) → `buildEtfAnalysis` (tiszta) → `EtfAnalysis`. Az ETF-metaadat és a holdings ma a hívótól jön (`EtfMetadataInput`, `user_input`). Őrteszt: `src/__tests__/etf-stock-separation.test.ts` (az ETF-elemzés nem importál részvénymodult és fordítva).
+
+**PHASE 09 (2026-11-22):** portfólió és kockázat (D-072):
+
+```
+src/domain/portfolio/ledger-validation.ts      napló-validáció (túladás, duplikátum, deviza-ellentmondás, FX-irány), időrend
+src/domain/portfolio/portfolio-asset.ts        eszköz-metaadat (fajta, eszközosztály, ország, szektor, ISIN, fedezés)
+src/calculations/portfolio/average-cost.ts     átlagáras könyvelés (lépésenkénti naplóval)
+src/calculations/portfolio/time-weighted-return.ts  TWR pénzmozgásokkal
+src/calculations/etf/overlap.ts                ETF-átfedés (Σ min súly, ISIN szerint)
+src/application/shared/engine-provenance.ts    motor-provenance (az etf-metric-ből kiemelve, közös)
+src/application/portfolio/                     types, fx-lookup (ráta-elsőbbség), portfolio-positions (két P/L-nézet),
+                                               portfolio-totals (súly + összesítés), portfolio-exposure (kitettség,
+                                               koncentráció, átfedés), portfolio-history (TWR + kockázat), portfolio-analysis
+src/application/use-cases/analyze-portfolio.ts analyzePortfolio (AppServices); record-transaction: napló-validáció
+```
+
+Adatút: `analyzePortfolio` → `PortfolioRepository` (portfólió + tranzakciók) → napló-validáció (blokkoló hiba → `VALIDATION`) → párhuzamosan `getListingQuote` (nyitott pozíciók), `getInstrumentProfile` (opcionális), `getPriceHistory` (csak `history.enabled`), `convertMoney` (ügyleti napok + ma, duplikátum nélkül) → `buildPortfolioAnalysis` (tiszta) → `PortfolioAnalysis`. Tárolás: továbbra is `InMemoryPortfolioRepository` (PHASE 13).
 
 **Még nem létező mappák** (a saját fázisuk hozza létre): `scoring/` (10), `explanation/` (11), `server/cache/` (13), `infrastructure/storage/` (13), `presentation/{hooks,formatters,view-models}` (12).
 

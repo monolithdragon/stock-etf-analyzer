@@ -3,6 +3,7 @@
  * (soha nem hív közvetlenül szolgáltatói API-t vagy `fetch`-et).
  */
 import type { AnalyzeEtf } from './use-cases/analyze-etf';
+import type { AnalyzePortfolio } from './use-cases/analyze-portfolio';
 import type { AnalyzeStockFundamentals } from './use-cases/analyze-stock-fundamentals';
 import type {
   AnalyzeStockValuation,
@@ -43,6 +44,14 @@ export * from './use-cases/get-listing-quote';
 export * from './use-cases/get-market-data';
 export * from './use-cases/get-market-reference-data';
 export * from './use-cases/record-transaction';
+export * from './use-cases/analyze-portfolio';
+export * from './portfolio/types';
+export {
+  buildPortfolioAnalysis,
+  ACCOUNTING_METHOD,
+  PORTFOLIO_ANALYSIS_DISCLAIMER,
+} from './portfolio/portfolio-analysis';
+export { MAX_FORWARD_FILL_DAYS, MAX_CORRELATION_POSITIONS } from './portfolio/portfolio-history';
 
 /** A UI számára elérhető szolgáltatások – a composition root (`src/config/container.ts`) állítja elő. */
 export interface AppServices {
@@ -63,4 +72,6 @@ export interface AppServices {
   readonly recalculateStockValuation: RecalculateStockValuation;
   /** PHASE 08: ETF-elemzés (a részvénylogikától különválasztva; UI a PHASE 12-ben). */
   readonly analyzeEtf: AnalyzeEtf;
+  /** PHASE 09: portfólióelemzés (pozíciók, P/L két nézetben, kitettség, koncentráció, historikus). */
+  readonly analyzePortfolio: AnalyzePortfolio;
 }

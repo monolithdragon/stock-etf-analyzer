@@ -1,8 +1,11 @@
 /**
  * Use case: tranzakció rögzítése egy portfólióba.
  *
- * Lépések: azonosító ellenőrzése → portfólió létezik? → domain-validáció → mentés.
+ * Lépések: azonosító ellenőrzése → portfólió létezik? → domain-validáció → napló-validáció
+ * (PHASE 09: túladás, ellentmondó deviza, hibás FX-irány – a meglévő tranzakciókkal együtt;
+ * visszadátumozott eladás is lehet túladás egy későbbi eladásnál) → mentés.
  * Minden várt hiba `Result`-ként jön vissza (VALIDATION, NOT_FOUND, STORAGE).
+ * A napló-figyelmeztetések (pl. lehetséges duplikátum) nem akadályozzák a rögzítést.
  */
 import {
   AppErrors,
@@ -12,6 +15,7 @@ import {
   parsePortfolioId,
   toLocalIsoDate,
   validateFields,
+  validateTransactionLedger,
   type AppError,
   type Result,
   type Transaction,
@@ -57,6 +61,26 @@ export function createRecordTransaction(deps: RecordTransactionDeps): RecordTran
       { today: toLocalIsoDate(deps.clock.now()) },
     );
     if (!transaction.ok) return transaction;
+
+    const existing = await deps.portfolioRepository.listTransactions(portfolioId);
+    if (!existing.ok) return existing;
+    const before = validateTransactionLedger(portfolio.value, existing.value);
+    const after = validateTransactionLedger(portfolio.value, [
+      ...existing.value,
+      transaction.value,
+    ]);
+    const known = new Set(before.issues.map((i) => `${i.code}|${i.transactionId}`));
+    const introduced = after.issues.filter(
+      (i) => i.severity === 'error' && !known.has(`${i.code}|${i.transactionId}`),
+    );
+    if (introduced.length > 0) {
+      return err(
+        AppErrors.validation(
+          'A tranzakció ellentmond a meglévő naplónak.',
+          introduced.map((i) => ({ path: `transactions.${i.transactionId}`, message: i.message })),
+        ),
+      );
+    }
 
     const saved = await deps.portfolioRepository.addTransaction(transaction.value);
     if (!saved.ok) return saved;

@@ -25,4 +25,7 @@ export * from './returns/risk';
 export * from './etf/costs-tracking';
 export * from './etf/holdings';
 export * from './etf/exposure';
+export * from './etf/overlap';
 export * from './portfolio/portfolio-basics';
+export * from './portfolio/average-cost';
+export * from './portfolio/time-weighted-return';
