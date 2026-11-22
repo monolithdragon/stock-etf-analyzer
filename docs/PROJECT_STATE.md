@@ -32,7 +32,7 @@ Mobilalkalmazás (Expo SDK 58, React Native, TypeScript) részvények, ETF-ek é
 | **Értékelés és DCF** | **Kész** (PHASE 07, D-064, D-065): `runDcf` (explicit PV, Gordon TV `r > g`-vel, EV, equity, IV/részvény, MOS), Bear/Base/Bull, szenzitivitási tábla ugyanazzal az engine-nel, konfigurálható küszöbök, Forward P/E (csak forrásból; ma `MISSING`), magyarázható kimenet. Kiinduló feltevések általánosak, felülírhatók (KI-58). UI nincs (PHASE 12). |
 | **ETF-elemzés** | **Kész** (PHASE 08, D-066…D-069): `analyzeEtf`; jegyzés-szintű profil mezőnkénti lefedettséggel; price vs total return (acc/dist módszer, összehasonlítási alap); volatilitás, max DD, downside dev., Sharpe/Sortino (rf-fel), béta és tracking (TR indexsorral); TER-költség; holdings (top N, HHI, ország/szektor/deviza); hedged vs. mögöttes devizakockázat; feature-modell súlyozás nélkül; P/E/DCF `notApplicable`. **Free korlát:** ETF-metaadat és holdings csak kézi bevitelből (KI-65); SEC N-PORT igazolt, adapter nincs (KI-66). UI nincs (PHASE 12). |
 | Tárolás, cache | **Nincs** – PHASE 13 (SQLite, proxy cache) |
-| Git | `main`-en a PHASE 07 merge (`3fc0258`); a PHASE 08 a **`phase-08`** branchen, **commit nélkül** (a tulajdonos dönt; javasolt üzenet a handoffban) |
+| Git | `main`-en a PHASE 07 merge (`3fc0258`); a PHASE 08 a **`phase-08`** branchen **commitolva** (`10bf075`); merge a `main`-be: PR-rel (a tulajdonos dönt) |
 
 Fázisonkénti állapot: [ROADMAP.md](ROADMAP.md).
 
@@ -122,7 +122,7 @@ Teljes lista: [DECISIONS.md](DECISIONS.md).
 | (04A) | A SEC User-Agent kapcsolattartó e-mailjét a tulajdonos a `.env.local`-ba írta |
 
 ## Nyitott kérdések
-- **Commit:** a PHASE 08 változásai a `phase-08` branchen vannak, commit nélkül (a tulajdonos dönt). Javasolt üzenet a handoffban.
+- **Commit:** a PHASE 08 commitolva a `phase-08` branchen (`10bf075`); a `main`-be merge PR-rel, a tulajdonos döntése szerint.
 - **Ellentmondás-javítás:** a PHASE 07 handoff „commit nélkül” állapotot írt, de a PHASE 07 már commitolva és a `main`-be merge-ölve volt (`aee88fc`, merge `3fc0258`).
 - **Eldöntve (2026-11-22):** D-070 kockázati megbízhatósági címke (megvalósítva); D-071 N-PORT adapter helyett kibocsátói holdings-fájl import (PHASE 13, KI-74).
 - **EAS Hosting próbatelepítés** (D-004, KI-29): legkésőbb a PHASE 16 előtt; Expo-fiók kell.

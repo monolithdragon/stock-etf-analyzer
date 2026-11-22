@@ -54,7 +54,7 @@ Részletek: [../KNOWN_ISSUES.md](../KNOWN_ISSUES.md) „PHASE 08” szakasz.
 - KI-71…KI-73 (A): disztribúciós TR újrabefektetés nélkül (tartalék-út), régió-heurisztika és teljes fedezés feltevése, kategória-validáció csak enum.
 
 ## 6. Nyitott kérdések
-- **Commit:** a PHASE 08 változásai a `phase-08` branchen vannak, **commit nélkül** (a tulajdonos dönt). Javasolt üzenet:
+- **Commit:** a PHASE 08 commitolva a `phase-08` branchen (`10bf075`, 2026-11-22); merge a `main`-be PR-rel. Commit-üzenet:
   `feat: PHASE 08 – ETF-elemzés (EtfProfile, holdings, kockázat, tracking, acc/dist total return, deviza, feature-modell)`
 - **Ellentmondás (javítva):** a PHASE 07 handoff és a PROJECT_STATE „commit nélkül” állapotot írt, de a PHASE 07 már a `main`-en volt (`aee88fc`, merge `3fc0258`). A PROJECT_STATE frissítve.
 - **Eldöntve (2026-11-22, tulajdonosi jóváhagyás):**
