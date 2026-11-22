@@ -13,8 +13,15 @@ export type CurrencyCode = Brand<string, 'CurrencyCode'>;
 
 const CURRENCY_PATTERN = /^[A-Z]{3}$/;
 
+/**
+ * Kis-nagybetűre érzékeny, nem szabványos penny-jelölések. A sima nagybetűsítés a `GBp`-t
+ * (penny) `GBP`-vé (font) alakítaná – ez 100-szoros hiba volna. Ezért explicit leképezés.
+ */
+const MINOR_UNIT_ALIASES: Readonly<Record<string, string>> = { GBp: 'GBX' };
+
 export function parseCurrencyCode(input: string): Result<CurrencyCode> {
-  const normalized = input.trim().toUpperCase();
+  const trimmed = input.trim();
+  const normalized = (MINOR_UNIT_ALIASES[trimmed] ?? trimmed).toUpperCase();
   return CURRENCY_PATTERN.test(normalized)
     ? ok(normalized as CurrencyCode)
     : invalid(`Érvénytelen pénznemkód: "${input}". Formátum: 3 betű (ISO 4217), pl. USD.`);

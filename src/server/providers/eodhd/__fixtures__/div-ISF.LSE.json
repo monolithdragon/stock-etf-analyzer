@@ -1,0 +1,80 @@
+{
+  "_fixture": {
+    "source": "EODHD",
+    "url": "https://eodhd.com/api/div/ISF.LSE?fmt=json&from=2025-01-01",
+    "recordedAt": "2026-11-21T16:00:00Z",
+    "note": "VALÓS válasz (élő próbahívás a tulajdonos free kulcsával), teszt-fixture-nek megvágva. A kulcs NEM szerepel benne. Az ár GBX, az osztalék GBP!"
+  },
+  "response": [
+    {
+      "date": "2025-03-13",
+      "declarationDate": "2025-03-06",
+      "recordDate": null,
+      "paymentDate": "2025-03-26",
+      "period": "Quarterly",
+      "value": 0.0475,
+      "unadjustedValue": 0.0475,
+      "currency": "GBP"
+    },
+    {
+      "date": "2025-06-12",
+      "declarationDate": "2025-06-05",
+      "recordDate": null,
+      "paymentDate": "2025-06-25",
+      "period": "Quarterly",
+      "value": 0.1168,
+      "unadjustedValue": 0.1168,
+      "currency": "GBP"
+    },
+    {
+      "date": "2025-09-11",
+      "declarationDate": "2025-09-04",
+      "recordDate": null,
+      "paymentDate": "2025-09-24",
+      "period": "Quarterly",
+      "value": 0.0737,
+      "unadjustedValue": 0.0737,
+      "currency": "GBP"
+    },
+    {
+      "date": "2025-12-11",
+      "declarationDate": "2025-12-04",
+      "recordDate": null,
+      "paymentDate": "2025-12-24",
+      "period": "Quarterly",
+      "value": 0.0528,
+      "unadjustedValue": 0.0528,
+      "currency": "GBP"
+    },
+    {
+      "date": "2026-03-19",
+      "declarationDate": "2026-03-12",
+      "recordDate": null,
+      "paymentDate": "2026-03-31",
+      "period": "Quarterly",
+      "value": 0.0492,
+      "unadjustedValue": 0.0492,
+      "currency": "GBP"
+    },
+    {
+      "date": "2026-06-18",
+      "declarationDate": "2026-06-11",
+      "recordDate": null,
+      "paymentDate": "2026-06-30",
+      "period": "Quarterly",
+      "value": 0.1288,
+      "unadjustedValue": 0.1288,
+      "currency": "GBP"
+    },
+    {
+      "date": "2026-09-17",
+      "declarationDate": "2026-09-10",
+      "recordDate": null,
+      "paymentDate": "2026-09-30",
+      "period": "Quarterly",
+      "value": 0.0865,
+      "unadjustedValue": 0.0865,
+      "currency": "GBP"
+    }
+  ]
+}

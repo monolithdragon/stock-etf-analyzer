@@ -1,0 +1,29 @@
+{
+  "_fixture": {
+    "source": "FMP stable",
+    "url": "https://financialmodelingprep.com/stable/quote?symbol=SPY",
+    "recordedAt": "2026-11-21T16:00:00Z",
+    "note": "VALÓS válasz (élő próbahívás a tulajdonos free kulcsával), teszt-fixture-nek megvágva. A kulcs NEM szerepel benne. exchange: AMEX = NYSE Arca."
+  },
+  "response": [
+    {
+      "symbol": "SPY",
+      "name": "State Street SPDR S&P 500 ETF",
+      "price": 689.81,
+      "changePercentage": -3.64033,
+      "change": -26.06,
+      "volume": 150944451,
+      "dayLow": 686.81,
+      "dayHigh": 718.29,
+      "yearHigh": 781.62,
+      "yearLow": 629.28,
+      "marketCap": 728803935622,
+      "priceAvg50": 760.1798,
+      "priceAvg200": 732.7553,
+      "exchange": "AMEX",
+      "open": 713.56,
+      "previousClose": 715.87,
+      "timestamp": 1795208404
+    }
+  ]
+}

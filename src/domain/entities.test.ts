@@ -162,7 +162,7 @@ describe('Quote és PriceSeries', () => {
     const series = {
       listingId: LISTING,
       currency: USD,
-      adjusted: true,
+      adjustment: 'SPLIT' as const,
       provenance: provenance(),
     };
     expect(

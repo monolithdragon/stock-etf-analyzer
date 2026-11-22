@@ -61,6 +61,22 @@ const BUY: RecordTransactionCommand = {
   feesCurrency: 'USD' as CurrencyCode,
 };
 
+/** A blokkban nem használt (PHASE 04B) gateway-képességek: hívásuk tesztelési hiba. */
+const unusedPhase04bMethods = {
+  getPriceHistory: async () => {
+    throw new Error('nem várt hívás');
+  },
+  getInstrumentProfile: async () => {
+    throw new Error('nem várt hívás');
+  },
+  getDividends: async () => {
+    throw new Error('nem várt hívás');
+  },
+  searchInstruments: async () => {
+    throw new Error('nem várt hívás');
+  },
+};
+
 describe('recordTransaction', () => {
   it('validált tranzakciót ment generált azonosítóval', async () => {
     const { repository, saved } = fakeRepository();
@@ -142,6 +158,14 @@ describe('getListingQuote', () => {
         gateway.calls += 1;
         return result;
       },
+      // Ebben a blokkban csak a getQuote számít; a többi képesség nem hívható.
+      getSecurityListings: async () => {
+        throw new Error('nem várt hívás');
+      },
+      getFinancialStatements: async () => {
+        throw new Error('nem várt hívás');
+      },
+      ...unusedPhase04bMethods,
     };
     return gateway;
   };

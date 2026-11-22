@@ -1,0 +1,50 @@
+{
+  "_fixture": {
+    "source": "EODHD",
+    "url": "https://eodhd.com/api/div/SAP.XETRA?fmt=json&from=2023-01-01",
+    "recordedAt": "2026-11-21T16:00:00Z",
+    "note": "VALÓS válasz (élő próbahívás a tulajdonos free kulcsával), teszt-fixture-nek megvágva. A kulcs NEM szerepel benne."
+  },
+  "response": [
+    {
+      "date": "2023-05-12",
+      "declarationDate": "2023-02-27",
+      "recordDate": null,
+      "paymentDate": "2023-05-16",
+      "period": "Final",
+      "value": 2.05,
+      "unadjustedValue": 2.05,
+      "currency": "EUR"
+    },
+    {
+      "date": "2024-05-16",
+      "declarationDate": "2024-02-09",
+      "recordDate": null,
+      "paymentDate": "2024-05-21",
+      "period": "Final",
+      "value": 2.2,
+      "unadjustedValue": 2.2,
+      "currency": "EUR"
+    },
+    {
+      "date": "2025-05-14",
+      "declarationDate": "2025-02-20",
+      "recordDate": null,
+      "paymentDate": "2025-05-16",
+      "period": "Final",
+      "value": 2.35,
+      "unadjustedValue": 2.35,
+      "currency": "EUR"
+    },
+    {
+      "date": "2026-05-06",
+      "declarationDate": "2026-02-19",
+      "recordDate": null,
+      "paymentDate": "2026-05-08",
+      "period": "Interim",
+      "value": 2.5,
+      "unadjustedValue": 2.5,
+      "currency": "EUR"
+    }
+  ]
+}

@@ -1,0 +1,80 @@
+{
+  "_fixture": {
+    "source": "FMP stable",
+    "url": "https://financialmodelingprep.com/stable/search-symbol?query=ISF",
+    "recordedAt": "2026-11-21T16:00:00Z",
+    "note": "VALÓS válasz (élő próbahívás a tulajdonos free kulcsával), teszt-fixture-nek megvágva. A kulcs NEM szerepel benne. Az első 10 sor (OTC és nem igazolt tőzsdék is)."
+  },
+  "response": [
+    {
+      "symbol": "ISF.L",
+      "name": "iShares Core FTSE 100 UCITS ETF",
+      "currency": "GBp",
+      "exchangeFullName": "London Stock Exchange",
+      "exchange": "LSE"
+    },
+    {
+      "symbol": "ISFFF",
+      "name": "Iss A/S",
+      "currency": "USD",
+      "exchangeFullName": "Other OTC",
+      "exchange": "OTC"
+    },
+    {
+      "symbol": "ISFD.L",
+      "name": "iShares Core FTSE 100 UCITS ETF",
+      "currency": "USD",
+      "exchangeFullName": "London Stock Exchange",
+      "exchange": "LSE"
+    },
+    {
+      "symbol": "ISFR.L",
+      "name": "iShares MSCI France UCITS ETF",
+      "currency": "GBp",
+      "exchangeFullName": "London Stock Exchange",
+      "exchange": "LSE"
+    },
+    {
+      "symbol": "ISFE.L",
+      "name": "iShares MSCI AC Far East ex-Japan Small Cap UCITS ETF",
+      "currency": "GBp",
+      "exchangeFullName": "London Stock Exchange",
+      "exchange": "LSE"
+    },
+    {
+      "symbol": "ISFU.L",
+      "name": "iShares Core FTSE 100 UCITS ETF",
+      "currency": "USD",
+      "exchangeFullName": "London Stock Exchange",
+      "exchange": "LSE"
+    },
+    {
+      "symbol": "ISFT.CN",
+      "name": "ICEsoft Technologies Canada Corp.",
+      "currency": "CAD",
+      "exchangeFullName": "Canadian Securities Exchange",
+      "exchange": "CNQ"
+    },
+    {
+      "symbol": "ISFA.AS",
+      "name": "iShares Core FTSE 100 UCITS ETF",
+      "currency": "EUR",
+      "exchangeFullName": "Euronext Amsterdam",
+      "exchange": "AMS"
+    },
+    {
+      "symbol": "ISFT.BO",
+      "name": "IntraSoft Technologies Limited",
+      "currency": "INR",
+      "exchangeFullName": "Bombay Stock Exchange",
+      "exchange": "BSE"
+    },
+    {
+      "symbol": "ISFL.BO",
+      "name": "ISF Limited",
+      "currency": "INR",
+      "exchangeFullName": "Bombay Stock Exchange",
+      "exchange": "BSE"
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "_fixture": {
+    "source": "EODHD",
+    "url": "https://eodhd.com/api/search/OTP?exchange=BUD&limit=50&fmt=json",
+    "recordedAt": "2026-11-21T16:30:00Z",
+    "note": "VALÓS válasz (élő próbahívás a tulajdonos free kulcsával), teszt-fixture-nek megvágva. A kulcs NEM szerepel benne."
+  },
+  "response": [
+    {
+      "Code": "OTP",
+      "Exchange": "BUD",
+      "Name": "OTP Bank Nyrt",
+      "Type": "Common Stock",
+      "Country": "Hungary",
+      "Currency": "HUF",
+      "ISIN": "HU0000061726",
+      "isPrimary": true,
+      "previousClose": 38470,
+      "previousCloseDate": "2026-11-20"
+    },
+    {
+      "Code": "ETFCETOPOTP",
+      "Exchange": "BUD",
+      "Name": "OTP CETOP Indexkoveto UCITS ETF Alap",
+      "Type": "ETF",
+      "Country": "Cayman Islands",
+      "Currency": "EUR",
+      "ISIN": null,
+      "isPrimary": false,
+      "previousClose": 19.926,
+      "previousCloseDate": "2026-11-20"
+    }
+  ]
+}

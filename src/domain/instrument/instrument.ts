@@ -99,7 +99,8 @@ export interface Listing {
 
 const COUNTRY_PATTERN = /^[A-Z]{2}$/;
 
-function parseCountry(input: string): Result<string> {
+/** ISO 3166-1 alpha-2 országkód (pl. `US`, `IE`). */
+export function parseCountryCode(input: string): Result<string> {
   const normalized = input.trim().toUpperCase();
   return COUNTRY_PATTERN.test(normalized)
     ? ok(normalized)
@@ -121,7 +122,7 @@ function baseFieldResults(input: InstrumentBaseInput) {
     securityId: parseSecurityId(input.securityId),
     isin: parseNullable(input.isin, parseIsin),
     name: requireNonEmpty(input.name),
-    country: parseNullable(input.country, parseCountry),
+    country: parseNullable(input.country, parseCountryCode),
     figi: parseNullable(input.figi, (v) => requireNonEmpty(v, 20)),
   };
 }

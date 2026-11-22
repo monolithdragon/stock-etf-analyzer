@@ -1,0 +1,58 @@
+{
+  "_fixture": {
+    "source": "EODHD",
+    "url": "https://eodhd.com/api/search/IE00BK5BQT80?fmt=json",
+    "recordedAt": "2026-11-21T16:00:00Z",
+    "note": "VALÓS válasz (élő próbahívás a tulajdonos free kulcsával), teszt-fixture-nek megvágva. A kulcs NEM szerepel benne. VWCE (Vanguard FTSE All-World, acc)."
+  },
+  "response": [
+    {
+      "Code": "VWRP",
+      "Exchange": "LSE",
+      "Name": "Vanguard FTSE All-World UCITS ETF USD Accumulation",
+      "Type": "ETF",
+      "Country": "UK",
+      "Currency": "GBP",
+      "ISIN": "IE00BK5BQT80",
+      "isPrimary": false,
+      "previousClose": 133.52,
+      "previousCloseDate": "2026-11-20"
+    },
+    {
+      "Code": "VWCE",
+      "Exchange": "XETRA",
+      "Name": "Vanguard FTSE All-World UCITS ETF USD Accumulation",
+      "Type": "ETF",
+      "Country": "Germany",
+      "Currency": "EUR",
+      "ISIN": "IE00BK5BQT80",
+      "isPrimary": false,
+      "previousClose": 159.34,
+      "previousCloseDate": "2026-11-20"
+    },
+    {
+      "Code": "VWRA",
+      "Exchange": "LSE",
+      "Name": "Vanguard FTSE All-World UCITS ETF USD Accumulation",
+      "Type": "ETF",
+      "Country": "UK",
+      "Currency": "USD",
+      "ISIN": "IE00BK5BQT80",
+      "isPrimary": false,
+      "previousClose": 174.96,
+      "previousCloseDate": "2026-11-20"
+    },
+    {
+      "Code": "VWCE",
+      "Exchange": "F",
+      "Name": "Vanguard FTSE All-World UCITS ETF USD Accumulation",
+      "Type": "ETF",
+      "Country": "Germany",
+      "Currency": "EUR",
+      "ISIN": "IE00BK5BQT80",
+      "isPrimary": false,
+      "previousClose": 158.32,
+      "previousCloseDate": "2026-11-20"
+    }
+  ]
+}

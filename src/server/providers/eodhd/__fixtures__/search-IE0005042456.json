@@ -1,0 +1,82 @@
+{
+  "_fixture": {
+    "source": "EODHD",
+    "url": "https://eodhd.com/api/search/IE0005042456?fmt=json",
+    "recordedAt": "2026-11-21T16:00:00Z",
+    "note": "VALÓS válasz (élő próbahívás a tulajdonos free kulcsával), teszt-fixture-nek megvágva. A kulcs NEM szerepel benne. ISF (iShares Core FTSE 100): GBX, USD, CHF, EUR jegyzések."
+  },
+  "response": [
+    {
+      "Code": "ISF",
+      "Exchange": "LSE",
+      "Name": "iShares Core FTSE 100 UCITS ETF GBP (Dist)",
+      "Type": "ETF",
+      "Country": "UK",
+      "Currency": "GBX",
+      "ISIN": "IE0005042456",
+      "isPrimary": false,
+      "previousClose": 1010.8,
+      "previousCloseDate": "2026-11-20"
+    },
+    {
+      "Code": "ISFU",
+      "Exchange": "LSE",
+      "Name": "iShares Core FTSE 100 UCITS ETF GBP (Dist)",
+      "Type": "ETF",
+      "Country": "UK",
+      "Currency": "USD",
+      "ISIN": "IE0005042456",
+      "isPrimary": false,
+      "previousClose": 13.226,
+      "previousCloseDate": "2026-11-20"
+    },
+    {
+      "Code": "IUSZ",
+      "Exchange": "XETRA",
+      "Name": "iShares Public Limited Company - iShares Core FTSE 100 UCITS ETF",
+      "Type": "ETF",
+      "Country": "Germany",
+      "Currency": "EUR",
+      "ISIN": "IE0005042456",
+      "isPrimary": false,
+      "previousClose": 12.044,
+      "previousCloseDate": "2026-11-20"
+    },
+    {
+      "Code": "ISF",
+      "Exchange": "SW",
+      "Name": "iShares Core FTSE 100 UCITS ETF GBP (Dist)",
+      "Type": "ETF",
+      "Country": "Switzerland",
+      "Currency": "CHF",
+      "ISIN": "IE0005042456",
+      "isPrimary": false,
+      "previousClose": 11.2,
+      "previousCloseDate": "2026-11-20"
+    },
+    {
+      "Code": "ISFA",
+      "Exchange": "AS",
+      "Name": "iShares Core FTSE 100 UCITS ETF GBP (Dist) EUR",
+      "Type": "ETF",
+      "Country": "Netherlands",
+      "Currency": "EUR",
+      "ISIN": "IE0005042456",
+      "isPrimary": false,
+      "previousClose": 12.063,
+      "previousCloseDate": "2026-11-20"
+    },
+    {
+      "Code": "IUSZ",
+      "Exchange": "F",
+      "Name": "iShares Public Limited Company - iShares Core FTSE 100 UCITS ETF",
+      "Type": "ETF",
+      "Country": "Germany",
+      "Currency": "EUR",
+      "ISIN": "IE0005042456",
+      "isPrimary": false,
+      "previousClose": 12.028,
+      "previousCloseDate": "2026-11-20"
+    }
+  ]
+}

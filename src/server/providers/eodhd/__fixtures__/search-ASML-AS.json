@@ -1,0 +1,22 @@
+{
+  "_fixture": {
+    "source": "EODHD",
+    "url": "https://eodhd.com/api/search/ASML?exchange=AS&limit=50&fmt=json",
+    "recordedAt": "2026-11-21T16:45:00Z",
+    "note": "VALÓS válasz (élő próbahívás a tulajdonos free kulcsával), teszt-fixture-nek megvágva. A kulcs NEM szerepel benne."
+  },
+  "response": [
+    {
+      "Code": "ASML",
+      "Exchange": "AS",
+      "Name": "ASML Holding N.V.",
+      "Type": "Common Stock",
+      "Country": "Netherlands",
+      "Currency": "EUR",
+      "ISIN": "NL0010273215",
+      "isPrimary": true,
+      "previousClose": 1168,
+      "previousCloseDate": "2026-11-20"
+    }
+  ]
+}

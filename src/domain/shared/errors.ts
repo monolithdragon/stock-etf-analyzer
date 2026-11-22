@@ -5,6 +5,7 @@
  * - `AppError` = a MŰVELET hiúsult meg (pl. nincs hálózat, érvénytelen bemenet).
  * - `Metric` nem-OK státusza = egy ÉRTÉK hiányzik / nem értelmezhető, de az elemzés folytatódhat.
  */
+import type { UnavailableReason } from './metric';
 
 export interface ValidationIssue {
   /** A hibás mező útvonala, pl. `quantity` vagy `price.amount`. Üres = maga az érték. */
@@ -57,6 +58,16 @@ export type AppError =
       /** A hiányzó bemenetek azonosítói, pl. `['revenue', 'netIncome']`. */
       readonly missing: readonly string[];
     }
+  | {
+      /**
+       * Az adat létezhet, de a jelenlegi forrás-beállítással NEM elérhető (PHASE 04B, D-027):
+       * csomagkorlát (`PLAN_LIMIT`), a forrás nem fedi le (`NOT_COVERED`), vagy elfogyott a
+       * napi kvóta (`QUOTA_EXHAUSTED`). Nem hiba a mi oldalunkon, és nem „nincs ilyen adat”.
+       */
+      readonly kind: 'UNAVAILABLE';
+      readonly message: string;
+      readonly reason: UnavailableReason;
+    }
   | { readonly kind: 'CALCULATION_INVALID'; readonly message: string }
   | { readonly kind: 'STORAGE'; readonly message: string }
   | { readonly kind: 'AI'; readonly message: string; readonly failure: AiFailure };
@@ -102,6 +113,11 @@ export const AppErrors = {
     message: message ?? `Hiányzó adat: ${missing.join(', ')}.`,
     missing,
   }),
+  unavailable: (reason: UnavailableReason, message: string): AppError => ({
+    kind: 'UNAVAILABLE',
+    message,
+    reason,
+  }),
   calculationInvalid: (message: string): AppError => ({ kind: 'CALCULATION_INVALID', message }),
   storage: (message: string): AppError => ({ kind: 'STORAGE', message }),
   ai: (failure: AiFailure, message: string): AppError => ({ kind: 'AI', message, failure }),
@@ -124,6 +140,8 @@ export function isRetryable(error: AppError): boolean {
     case 'VALIDATION':
     case 'NOT_FOUND':
     case 'MISSING_DATA':
+    // Csomagkorlát / lefedettség nem javul újrapróbálással; a kvóta csak másnap (nem azonnal).
+    case 'UNAVAILABLE':
     case 'CALCULATION_INVALID':
     case 'STORAGE':
       return false;

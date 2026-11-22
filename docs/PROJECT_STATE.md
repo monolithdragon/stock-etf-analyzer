@@ -1,105 +1,91 @@
 # Projektállapot – Stock & ETF Analyzer
 
-> Utolsó frissítés: **2026-11-21**, PHASE 03 vége.
+> Utolsó frissítés: **2026-11-22**, PHASE 05 vége.
 
 ## Cél röviden
 Mobilalkalmazás (Expo SDK 58, React Native, TypeScript) részvények, ETF-ek és saját portfólió átlátható, forrásolt, reprodukálható elemzésére. Az AI csak magyaráz. Részletek: [REQUIREMENTS.md](REQUIREMENTS.md).
 
 ## Aktuális fázis
-- **Lezárt fázis:** PHASE 03 – Architektúra, domain modellek és alkalmazási rétegek (**KÉSZ**). Átadás: [handoffs/phase-03-handoff.md](handoffs/phase-03-handoff.md).
-- **Következő fázis:** PHASE 04A – Proxy váz és ingyenes alapforrások (prompt: `04_ADATFORRASOK_ES_DEVIZA.md`, első chat; D-028).
+- **Lezárt fázis:** PHASE 05 – Pénzügyi calculation engine (**KÉSZ**). Átadás: [handoffs/phase-05-handoff.md](handoffs/phase-05-handoff.md). Útmutató: [phases/phase-05-financial-calculation-engine.md](phases/phase-05-financial-calculation-engine.md).
+- **Előző:** PHASE 04 (04A + 04B) – [handoffs/phase-04-handoff.md](handoffs/phase-04-handoff.md).
+- **Következő:** PHASE 06 – Részvény fundamentális elemzés (prompt: `06_…`). Első feladat: a `totalDebt` összerakása (KI-42).
 
 ## Készültség
 
 | Terület | Állapot |
 |---|---|
-| Tervezés (követelmények, architektúra, adatforrások, adatszótár, roadmap) | **Kész** (PHASE 01) |
-| Expo projekt | **Kész, fut** – SDK 58, RN 0.88.1, React 19.3.0, TS 6.0.3 strict, Expo Router. Android emulátoron ellenőrizve (Expo Go 58.0.5), világos és sötét módban. |
-| Navigáció | Stack: Kezdőlap (`/`), A projektről (`/about`), „nem található”. A tabok a PHASE 12-ben jönnek (D-034). |
-| Theme / UI-alap | Világos/sötét paletta, térköz- és betűtokenek, 5 közös komponens, magyar szövegek egy helyen |
-| Env-konfiguráció | `.env.example` (titok nélkül), `src/config/env.ts` validált nyilvános env; `.env*` gitignore-olva |
-| Domain modell | **Kész** (PHASE 03): `Instrument` (Stock \| Etf), `Listing`, `Quote`, `PriceSeries`, `FinancialStatement` (3 változat), `FinancialMetric`, `FxRate`, `Portfolio`, `Transaction` (5 típus), `Position` (típus), `AnalysisResult`, `DataProvenance`, `Metric<T>`, `Result`/`AppError`; validált konstruktorok |
-| Rétegek | **Kész**: `src/domain`, `src/contracts` (zod 4.6.7), `src/application` (4 port, 2 use case), `src/infrastructure` (mock, memóriabeli tároló, rendszeróra), `src/config/container.ts` (composition root), `AppServicesProvider` |
-| Rétegszabályok | **Kikényszerítve** ESLinttel (`import/no-restricted-paths`, `no-restricted-imports`, `no-restricted-globals` → nincs `fetch` a képernyőkben); szándékos hibákkal igazolva |
-| Lint / formázás / typecheck | **Zöld** (2026-11-21): `npm run check` exit 0 |
-| Tesztek | **98/98 zöld** (9 suite): domain, contracts, use case-ek, composition root, DI-hook, env, theme, navigáció |
-| Expo ellenőrzések | `npx expo install --check`: up to date (PHASE 03); `npx expo export --platform android`: bundle OK (PHASE 03); `npx expo-doctor@latest`: 20/20 (PHASE 03) |
-| Git | `main`; a PHASE 03 változásai commitra várnak (a tulajdonos dönt a commitról) |
-| Számítás, valós adat, proxy, tárolás | **Nincs** – PHASE 04A (adat/proxy), 05 (képletek), 13 (SQLite) |
-| Adatforrás-kulcsok | Nincsenek; a PHASE 04B-ig nem is kellenek |
+| Tervezés | **Kész** (PHASE 01); a 04A/04B-ben a valós adatokhoz igazítva |
+| Expo projekt | **Kész, fut** – SDK 58, RN 0.88.1, React 19.3.0, TS 6.0.3 strict, Expo Router. Emulátoron utoljára a PHASE 02-ben futott (KI-12). |
+| Navigáció / UI | Stack: Kezdőlap, A projektről, „nem található”. A PHASE 04-ben nincs UI-változás; a képernyők a PHASE 12-ben jönnek. |
+| Domain modell | **Kész** (PHASE 03) + 04A (`ListingCandidate`, `FinancialStatementSet`, `FxConversion`…) + **04B**: `PriceAdjustment`, `DividendHistory`, `InstrumentProfile`, `InstrumentSearchResult`, `UNAVAILABLE` hibafajta |
+| Rétegek | domain → contracts → application → infrastructure / server → config → presentation; ESLint-tel kikényszerítve |
+| **Proxy** | **Kész, lokálisan élő adattal igazolva**: 10 API route (`health`, `providers/status`, `fx`, `search`, `securities/{isin}/listings`, `stocks/{id}/financials`, `instruments/{id}/quote`, `/prices`, `/profile`, `/dividends`); `ProviderRouter` fallbackkel; kvóta-őr; csomagmátrix env-ből |
+| **Adatforrások** | **Élő, igazolt**: `sec-edgar` (US kimutatások), `ecb-fx` (FX), `openfigi` (ISIN → jegyzések), **`fmp`** (US ár, ártörténet, profil, osztalék, keresés), **`eodhd`** (ár, ártörténet 1 év, osztalék, keresés, ISIN → jegyzések pénznemmel; US + 6 európai tőzsde); `mock` (demó). **Free-ben nem elérhető**: ETF-metaadat/holdings, nem US profil és kimutatás → `UNAVAILABLE / PLAN_LIMIT` |
+| **FX** | **Kész** (04A): natív és kijelzési pénznem külön, ráta + dátum + forrás, elavult rátánál hiba |
+| Kliens adatelérés | `mock` mód: demó gateway-ek; `live` mód: proxy gateway-ek (`EXPO_PUBLIC_API_BASE_URL`); 04B: +4 use case (`getPriceHistory`, `getInstrumentProfile`, `getDividendHistory`, `searchInstruments`) |
+| Lint / formázás / typecheck | **Zöld** (2026-11-22): `npm run check` exit 0 |
+| Tesztek | **553/553 zöld** (38 suite; PHASE 05: +216). `src/calculations` lefedettség: 99,56% sor, 97,91% ág. Élő API-t teszt nem hív: valós, megvágott fixture-ök (12 SEC-cég, ECB, OpenFIGI, **FMP 10, EODHD 21 fájl**) + hamis `fetch` |
+| Expo ellenőrzések (04B) | élő füstpróba (saját dev szerver, 8083); `expo export` web: 10 API route; Android: Hermes bundle **szerverkód és titok nélkül** (szkennelve) |
+| Biztonság (04B) | Kulcs csak szerver env-ben; repó-szkenner (220 fájl): 0 találat; válasz, napló és env-figyelmeztetés kulcsmentes (teszt) |
+| **Számítási motor** | **Kész** (PHASE 05, D-055…D-058): `src/calculations/` – az összes 05-ös képlet tiszta függvényként, `CalcResult` (N/M, MISSING, INVALID_INPUT…), `Metric`-adapter `calculated` provenance-szel, DCF-konvenciók. Még nem hívja use case (PHASE 06). |
+| Tárolás, cache | **Nincs** – PHASE 13 (SQLite, proxy cache) |
+| Git | branch `phase-04a`; a PHASE 04B commitolva (`1a29fe8`); a PHASE 05 változásai commitra várnak (a tulajdonos dönt) |
 
 Fázisonkénti állapot: [ROADMAP.md](ROADMAP.md).
 
-## A projektmappa tartalma (2026-11-21, PHASE 03 vége)
+## A projektmappa tartalma (2026-11-22, PHASE 05 vége)
 ```
 stock-etf-analyzer/
-├─ CLAUDE.md                 állandó projektutasítások
-├─ README.md                 telepítés, indítás, parancsok (kezdőbarát)
-├─ app.json, package.json, package-lock.json, tsconfig.json
-├─ eslint.config.js          ESLint + Prettier + RÉTEGSZABÁLYOK (PHASE 03)
-├─ jest.config.js            Jest (jest-expo), kanonikus útvonallal (D-041)
-├─ .prettierrc.json, .prettierignore, .gitattributes, .gitignore, .env.example
-├─ .vscode/, assets/
+├─ CLAUDE.md, README.md, app.json, package.json, tsconfig.json, jest.config.js
+├─ eslint.config.js          ESLint + Prettier + RÉTEGSZABÁLYOK
+├─ .env.example              minta (04B: FMP_PLAN, EODHD_PLAN magyarázattal); a valódi értékek: .env.local (gitignore)
+├─ scripts/record-sec-fixtures.mjs   SEC fixture-rögzítő (D-047)
 ├─ src/
-│  ├─ app/                   _layout.tsx (AppServicesProvider), index, about, +not-found
-│  ├─ domain/                tiszta TS: shared/, instrument/, market/, fundamentals/, fx/, portfolio/, analysis/
-│  ├─ contracts/             zod sémák, quote DTO, API-boríték
-│  ├─ application/           ports/, use-cases/ (get-listing-quote, record-transaction)
-│  ├─ infrastructure/        system/, mock/, api-client/ (live helyőrző)
-│  ├─ config/                env.ts, container.ts (composition root)
+│  ├─ app/                   képernyők + api/v1/**/+api.ts (10 proxy-route, vékonyak)
+│  ├─ domain/                tiszta TS (04B: market/dividend.ts, instrument/instrument-profile.ts, instrument-search.ts)
+│  ├─ calculations/          PHASE 05: tiszta képletek – core/, fundamentals/, valuation/, returns/, etf/, portfolio/, definitions.ts
+│  ├─ contracts/             zod (04B: market.ts, search.ts, provider-status.ts)
+│  ├─ application/           portok + use case-ek (04B: get-market-data.ts)
+│  ├─ infrastructure/        api-client/ (proxy kliens + gateway-ek), mock/, system/
+│  ├─ server/                CSAK SZERVER: env, server-context, http/, handlers/,
+│  │                         providers/ (sec-edgar, ecb-fx, openfigi, fmp, eodhd, mock + __fixtures__),
+│  │                         routing/ (provider-router, plans, quota, markets), logging, testing/
+│  ├─ config/                env.ts, container.ts (kliens composition root)
 │  ├─ presentation/          components/, theme/, strings/, di/
-│  └─ __tests__/routes.test.tsx
-└─ docs/
-   ├─ PROJECT_STATE.md  REQUIREMENTS.md  ARCHITECTURE.md  DECISIONS.md  ROADMAP.md
-   ├─ DATA_SOURCES.md  DATA_DICTIONARY.md  KNOWN_ISSUES.md
-   ├─ phases/phase-01…, phase-02…, phase-03-architecture-domain-model.md
-   └─ handoffs/phase-01…, phase-02…, phase-03-handoff.md
+│  └─ __tests__/             routes.test.tsx, proxy-integration.test.ts, calculations-purity.test.ts
+└─ docs/                     PROJECT_STATE, REQUIREMENTS, ARCHITECTURE, DECISIONS, ROADMAP,
+                             DATA_SOURCES, DATA_DICTIONARY, KNOWN_ISSUES, phases/, handoffs/
 ```
-Rétegek és adatút: [ARCHITECTURE.md](ARCHITECTURE.md) 3., 4.4, 5.
 
-## Fejlesztői környezet (2026-11-21-én ellenőrizve)
+## Fejlesztői környezet (2026-11-21)
 
 | Eszköz | Állapot |
 |---|---|
 | OS | Windows 11 Pro |
-| Node.js | v26.10.0 – az SDK 58 támogatja (22.13+ / 24.3+ / 26+) |
-| npm | 12.2.0 (figyelem: `-- --dev` hatástalan, lásd KI-03) |
-| Git | 2.56.1; rendszerszinten `core.autocrlf=true` → a repóban `.gitattributes` LF-et kényszerít |
-| Android Studio + SDK | telepítve (`%LOCALAPPDATA%\Android\Sdk`; platformok: android-35, 36, 37.0) |
-| Android emulátor (AVD) | `Medium_Phone_API_37.0` (API 37) – az app ezen fut |
-| Expo Go (emulátoron) | 58.0.5 – az Expo CLI telepítette automatikusan |
-| JDK | Android Studio JBR, OpenJDK 25.0.3; `JAVA_HOME` nincs beállítva (csak dev buildhez kell, KI-05) |
-| `ANDROID_HOME` | nincs beállítva – **az Expo CLI-nek nem kell** (alapértelmezett SDK-hely). Opcionális javítás: fázisútmutató 13.2 (KI-04) |
-| `adb` a PATH-ban | nincs (a `Path` `REG_SZ` típusa miatt a `%ANDROID_HOME%` hivatkozás nem oldódik fel, KI-04) |
-| macOS / iOS szimulátor | nincs; iOS csak EAS Builddel (felhőben), Apple fiókkal |
+| Node.js | v26.10.0; npm 12.2.0 (KI-03) |
+| Git | 2.56.1; `.gitattributes` LF-et kényszerít |
+| Android Studio + emulátor | `Medium_Phone_API_37.0`, Expo Go 58.0.5 (PHASE 02) |
+| `.env.local` | **létezik**: `SEC_USER_AGENT`, `FMP_API_KEY`, `EODHD_API_KEY`, `FMP_PLAN=free`, `EODHD_PLAN=free` (értékvakon ellenőrizve); gitignore-olt |
+| Futó dev szerverek | a 8081-es (valószínűleg a tulajdonosé) és egy 8082-es folyamat **régi szerverkóddal** fut → újraindítandó (KI-41, KI-27) |
+| Szolgáltatói keret 2026-11-21 | EODHD: a napi 20 hívás a fázis próbáin elfogyott (+ néhány bónuszhívás); UTC éjfélkor nullázódik (KI-32) |
 
 ## Fő döntések (összefoglaló)
-- D-001 Expo SDK 58 / RN **0.88.1** / React **19.3.0** / TS 6.0.3 strict / Expo Router; Node 26; npm.
-- D-003 Clean Architecture-lite, moduláris monolit, kézi DI.
-- D-004/D-005 Vékony proxy (Expo Router API routes + EAS Hosting, ideiglenes); a szolgáltató-adapterek a szerveren.
-- **D-008** Kizárólag saját használat (DP-02).
-- **D-023** Célpiacok: US + Európa (UCITS ETF, részvény) + globális. Free módban a nem US elemzés ár alapú (DP-01).
-- **D-024** Adapterek: `sec-edgar`, `ecb-fx`, `openfigi`, `mock` (04A); `fmp`, `eodhd` (04B); ProviderRouter és kvóta-költségvetés (DP-03).
-- **D-025** Security (ISIN) és Listing (`symbol@MIC`) szétválasztása (UCITS több listing).
-- **D-026** Magyarázat: ingyenes szabályalapú összefoglaló az alap, LLM opcionális (DP-04).
-- **D-027** Fizetős adatbővítés nyitva, konfigurációval bekapcsolható (DP-05).
-- **D-028** A PHASE 04 két chatben (04A, 04B).
-- D-010/D-011 `Metric<T>` státuszokkal, provenance típusok.
-- **PHASE 02:**
-  - D-029 struktúra (`src/app` + `src/presentation` + `src/config`);
-  - D-030 ESLint + Prettier (`--max-warnings 0`, `no-explicit-any`, `no-floating-promises`, `import/order`);
-  - D-031 TS-beállítás (`noUncheckedIndexedAccess`, `types: ["jest"]`);
-  - D-032 tesztkonvenció;
-  - D-033 env-minta;
-  - D-034 Stack-navigáció, tabok a PHASE 12-ben.
-- **PHASE 03:**
-  - D-035 domain-konvenciók (diszkriminált uniók, branded típusok, smart constructorok, `null` vs `Metric`; Security = `Instrument`);
-  - D-036 `Result`/`AppError`;
-  - D-037 negyedév 80–100 nap;
-  - D-038 rétegszabályok ESLinttel;
-  - D-039 zod 4.6.7, validációs munkamegosztás;
-  - D-040 csak használt portok, függvény-factory DI;
-  - D-041 `jest.config.js` kanonikus útvonallal (Windows).
+- D-001 Expo SDK 58 / RN 0.88.1 / React 19.3.0 / TS 6.0.3 strict / Expo Router; Node 26; npm.
+- D-003 Clean Architecture-lite; D-004 vékony proxy (Expo Router API routes; EAS Hosting – **Ideiglenes**); D-005 adapterek a szerveren.
+- D-008 csak saját használat; D-023 US + Európa + globális; D-024 adapterek és routing; D-025 Security/Listing; D-027 fizetős bővítés nyitva; D-028 PHASE 04 két részben.
+- PHASE 02: D-029…D-034. PHASE 03: D-035…D-041. PHASE 04A: D-042…D-048.
+- **PHASE 04B:**
+  - D-049 `ProviderRouter`, véglegesített routing-tábla, fallback-szabályok; SEC csak US (nem US kimutatás: `PLAN_LIMIT`);
+  - D-050 ártörténet-korrekció explicit fajtával (`NONE` | `SPLIT` | `SPLIT_DIVIDEND`);
+  - D-051 csomagmátrix env-ből, napi kvóta prioritással (keresés ≤ 75%);
+  - D-052 jegyzés-pénznem: helyszíni szabály (US → USD, Xetra → EUR) vagy EODHD kereső, soha nem kitalálva;
+  - D-053 `UNAVAILABLE` hibafajta + `unavailableReason` a szerződésben; 402 → kvóta (EODHD) / csomag (FMP);
+  - D-054 új domain-típusok és végpontok; szerverkontextus a `globalThis`-en.
+- **PHASE 05:**
+  - D-055 számítási motor: szám-szintű képletek (`CalcResult`) + `Metric`-adapter, rétegszabály;
+  - D-056 véglegesített fundamentális definíciók (N/M negatív nevezőnél, EPS-sorrend, NOPAT-kulcs csak explicit tartalékkal, ROE „bármely nevező ≤ 0” szabály, DOL 1%-os küszöb, EV-egyszerűsítés, TTM osztalék);
+  - D-057 DCF-konvenciók (év végi diszkontálás, `r > g`);
+  - D-058 hozam-, ETF- és portfólió-konvenciók (365,25 nap, effektív havi ráta, TER-közelítés, tracking error periódusszám).
 
 Teljes lista: [DECISIONS.md](DECISIONS.md).
 
@@ -109,13 +95,16 @@ Teljes lista: [DECISIONS.md](DECISIONS.md).
 |---|---|
 | DP-01 | US részvények és ETF-ek, európai UCITS ETF-ek és részvények, globális ETF-ek és részvények |
 | DP-02 | Csak saját használat |
-| DP-03 | FMP és EODHD kulcs megvan; az ajánlott további forrásokhoz is legyen adapter |
+| DP-03 | FMP és EODHD kulcs megvan (04B: mindkettő **free**); az ajánlott további forrásokhoz is legyen adapter |
 | DP-04 | Lehetőleg ingyenes AI, de maradjon más lehetőség |
-| DP-05 | Később dönt, ne legyen kizárva |
+| DP-05 | Később dönt, ne legyen kizárva (fizetős csomag: env-váltással bekapcsolható, D-051) |
+| (04A) | A SEC User-Agent kapcsolattartó e-mailjét a tulajdonos a `.env.local`-ba írta |
 
 ## Nyitott kérdések
-- DP-05 (fizetős adatcsomag): tudatosan nyitott.
-- U-13: a meglévő FMP és EODHD kulcs csomagszintje. A PHASE 04B ellenőrzi.
-- KI-04 (opcionális): beállítod-e az `ANDROID_HOME`-ot és javítod-e a `Path` típusát (fázisútmutató 13.2)? A fejlesztést nem blokkolja.
+- **Commit:** a PHASE 05 változásai nincsenek commitolva (a tulajdonos dönt). Javasolt üzenet a handoffban.
+- **EAS Hosting próbatelepítés** (D-004, KI-29): legkésőbb a PHASE 16 előtt; Expo-fiók kell.
+- **FMP keret és ToS** (KI-39): a tulajdonos ellenőrizze az FMP-fiók dashboardján (a hivatalos oldal 403).
+- DP-05 (fizetős adatcsomag): tudatosan nyitott. Nem US fundamentumhoz és ETF-metaadathoz kellene.
+- KI-04 (opcionális): `ANDROID_HOME` / `Path` javítása.
 
-Egyik sem blokkolja a PHASE 04A-t. A PHASE 04A-hoz kulcs nem kell, csak a SEC User-Agent kapcsolattartó (a tulajdonos írja a `.env.local`-ba). Részletek: [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
+Egyik sem blokkolja a PHASE 06-ot. Részletek: [KNOWN_ISSUES.md](KNOWN_ISSUES.md).

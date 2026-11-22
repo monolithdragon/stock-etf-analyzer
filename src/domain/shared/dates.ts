@@ -47,6 +47,11 @@ export function toIsoTimestamp(date: Date): IsoTimestamp {
   return date.toISOString() as IsoTimestamp;
 }
 
+/** `Date` → az UTC szerinti naptári nap (`YYYY-MM-DD`), pl. szerveroldali „ma”-hoz. */
+export function toUtcIsoDate(date: Date): IsoDate {
+  return date.toISOString().slice(0, 10) as IsoDate;
+}
+
 /**
  * `Date` → a készülék HELYI naptári napja (`YYYY-MM-DD`).
  * A felhasználó „ma” fogalma helyi idő szerinti (pl. tranzakció dátumánál),

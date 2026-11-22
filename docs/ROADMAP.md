@@ -1,6 +1,6 @@
 # Roadmap – Stock & ETF Analyzer
 
-> Frissítve: 2026-11-21 (PHASE 03 vége). Minden fázis külön chatben fut, a `stock_etf_analyzer_prompts` csomag `NN_*.md` promptja alapján.
+> Frissítve: 2026-11-22 (PHASE 05 vége). Minden fázis külön chatben fut, a `stock_etf_analyzer_prompts` csomag `NN_*.md` promptja alapján.
 > **Fázisszabály:** a következő fázis csak akkor indul, ha az előző befejezési feltételei teljesültek, vagy a hiányok a KNOWN_ISSUES-ban dokumentálva vannak.
 > **Verzió:** a promptok egy része SDK 57-et említ. Mindenhol **SDK 58** értendő (D-020).
 
@@ -11,9 +11,9 @@
 | 01 | Követelmények és architektúra | **KÉSZ** (2026-11-21) | – |
 | 02 | Projekt setup | **KÉSZ** (2026-11-21) | **M1 Futó váz ✅** |
 | 03 | Architektúra és domain modell | **KÉSZ** (2026-11-21) | |
-| 04 | Adatforrások, proxy és deviza – **két chatben: 04A + 04B** (D-028) | NEM KEZDŐDÖTT – **04A következik** | M2 Adat a csövön |
-| 05 | Pénzügyi calculation engine | NEM KEZDŐDÖTT | |
-| 06 | Részvény fundamentális elemzés | NEM KEZDŐDÖTT | |
+| 04 | Adatforrások, proxy és deviza – **két chatben: 04A + 04B** (D-028) | **KÉSZ** (04A és 04B, 2026-11-21) | **M2 Adat a csövön ✅** |
+| 05 | Pénzügyi calculation engine | **KÉSZ** (2026-11-22) | |
+| 06 | Részvény fundamentális elemzés | **KÖVETKEZIK** | |
 | 07 | Értékelés és DCF | NEM KEZDŐDÖTT | |
 | 08 | ETF-elemzés | NEM KEZDŐDÖTT | |
 | 09 | Portfólió és kockázat | NEM KEZDŐDÖTT | |
@@ -159,6 +159,22 @@ Minden fázis közös lezárása (CLAUDE.md):
   - A proxy lokálisan fut.
   - A spike eredménye a D-004-ben.
   - Átadás: `docs/handoffs/phase-04a-handoff.md`.
+- **Eredmény (2026-11-21): KÉSZ.**
+  - Proxy váz: 5 API route (`health`, `fx`, `securities/{isin}/listings`, `stocks/{id}/financials`, `instruments/{id}/quote`), hosztfüggetlen handlerek, kimenet-önellenőrzés a közös contract-sémával (D-044).
+  - `MarketDataProvider` szerződés (képességenként külön metódus, `capabilitiesOf`), `ProviderRegistry` live XOR mock (D-045).
+  - Adapterek: `sec-edgar` (12 valós cég fixture-je, D-043), `ecb-fx`, `openfigi` (igazolt exchCode → MIC, D-042), `mock`.
+  - Kliens: `ProxyMarketDataGateway`, `ProxyFxGateway`, proxy HTTP-kliens; `FxGateway` port; use case-ek: `convertMoney` (FxService, D-046), `getSecurityListings`, `getFinancialStatements`.
+  - Spike: lokálisan igazolva, EAS-próbatelepítés nem készült; U-03 megválaszolva (D-004 frissítve).
+  - Ellenőrzés: `npm run check` exit 0, **228/228 teszt** (19 suite); `expo export` web (szerver-bundle) és Android OK; a kliens-bundle-ben nincs szerverkód és titok.
+  - Új döntések: D-042…D-048. Új ismert problémák: KI-17…KI-29.
+  - **Eltérés a tervtől:** a `/search` végpont a 04B-be került (FMP/EODHD kereső kell hozzá).
+- **A PHASE 04B kapcsolódási pontjai (PHASE 04A-ból):**
+  - Új adapterek: `src/server/providers/fmp/`, `src/server/providers/eodhd/` – a `MarketDataProvider` metódusait valósítják meg (`getQuote`, `getPriceHistory`, …); profil/osztalék/ETF-metódus a saját domain-típusával együtt kerül be.
+  - A `findProvider` (első találat) helyére a `ProviderRouter` jön (`src/server/routing/`), a regiszter `providers` listájára építve.
+  - Env: `FMP_API_KEY`, `EODHD_API_KEY`, `FMP_PLAN`, `EODHD_PLAN` → `src/server/env.ts` bővítése (érték soha nem kerül naplóba vagy health-válaszba).
+  - A `ListingCandidate.tradingCurrency` kitöltése és az ISIN → US listing (KI-21, KI-22).
+  - Hibák: a 402 már `RATE_LIMITED`-re képződik; a `QUOTA_EXHAUSTED`/`PLAN_LIMIT` megkülönböztetéséhez a `CAPABILITY_UNAVAILABLE` mellé új kód vagy `unavailableReason` mező kellhet (contract-bővítés, visszafelé kompatibilisen).
+  - Tesztminta: `fakeFetch` + `loadFixture` (`src/server/testing/test-helpers.ts`), és a végponttól végpontig minta (`src/__tests__/proxy-integration.test.ts`).
 
 #### 04B – FMP, EODHD, routing és kvóta
 - **Benne:**
@@ -176,6 +192,20 @@ Minden fázis közös lezárása (CLAUDE.md):
   - A routing és a fallback tesztelt (beleértve a 402/429 esetet).
   - Fizetős csomagra váltás csak env-módosítást igényel (teszttel demonstrálva).
   - Átadás: `docs/handoffs/phase-04-handoff.md`.
+- **Eredmény (2026-11-21): KÉSZ.**
+  - Csomagszint (U-13): mindkét kulcs **free**. Az FMP free csak US (annak is egy része); az EODHD free 20 hívás/nap, 1 év történet, fundamentum nélkül. Élő próbák: DATA_SOURCES 11.
+  - Adapterek: `fmp` (quote, ártörténet 3 korrekcióval, profil, osztalék, keresés), `eodhd` (quote, ártörténet, osztalék, keresés ISIN-nel is, ISIN → jegyzések pénznemmel).
+  - `ProviderRouter` (D-049), csomagmátrix `FMP_PLAN`/`EODHD_PLAN`-ből (D-051), napi kvóta-őr prioritással, `UNAVAILABLE` hibafajta + `unavailableReason` (D-053).
+  - Új végpontok: `prices`, `profile`, `dividends`, `search`, `providers/status` (összesen 10). Kliens: 4 új use case frissesség-számítással.
+  - Fixture: 3 UCITS ETF (VWCE, IWDA, ISF – GBX) és 4 nem US részvény (SAP, ASML, NESN – CHF, OTP – HUF), valamint FMP: AAPL (quote, profil, osztalék), SPY (ETF, NYSE Arca), NVDA (split, 3 korrekció), keresés (ISF, SAP).
+  - Ellenőrzés: `npm run check` exit 0, **337/337 teszt** (25 suite); élő füstpróba a 8083-as porton; Android- és web-export szkennelve (nincs titok, a kliens-bundle-ben nincs szolgáltatói kód); repó-szkenner: 0 találat.
+  - Új döntések: D-049…D-054. Új ismert problémák: KI-30…KI-41.
+  - **Eltérés a tervtől:** `prices?adjusted` helyett `adjustment=none|split|split_dividend`; `corporate-actions` helyett `dividends` (split nincs bekötve); EAS-próbatelepítés továbbra sincs (tulajdonosi döntés, KI-29).
+- **A PHASE 05 kapcsolódási pontjai (PHASE 04-ből):**
+  - A képletek bemenete domain-típus: `FinancialStatementSet` (SEC, `Metric` `MISSING`/`OK`), `PriceSeries` (`adjustment`!), `DividendHistory` (eseményenkénti pénznem!), `Quote`, `FxConversion`.
+  - Hozamhoz: `SPLIT_DIVIDEND` sorozat = total return; `SPLIT` = árhozam. Különböző korrekciójú sorozatot nem szabad keverni.
+  - Osztalékhozamhoz az osztalék és az ár pénznemét egyeztetni kell (ISF: GBP osztalék vs. GBX ár → `toMajor`).
+  - A `src/calculations/` mappa még nem létezik (az ESLint-szabályokban a `./calculations` réteg már szerepel).
 
 ### PHASE 05 – Pénzügyi calculation engine
 - **Cél:** tiszta, dokumentált, tesztelt képletkönyvtár.
@@ -187,6 +217,18 @@ Minden fázis közös lezárása (CLAUDE.md):
   - A modul nem importál RN-t, UI-t vagy hálózatot.
   - A DATA_DICTIONARY definíciói véglegesek.
   - Lefedettség ≥ 90% (mért érték rögzítve).
+- **Eredmény (2026-11-22): KÉSZ.**
+  - `src/calculations/` (D-055): szám-szintű, tiszta képletek `CalcResult` kimenettel + `Metric`-adapter (`calculateMetric`, `preferReported`, `toFinancialMetric`, `METRIC_DEFINITIONS`).
+  - A 05-ös prompt teljes képletlistája: jövedelmezőség, EPS-választás, növekedés, CAGR, ROE/ROA/ROIC, NOPAT, DOL; nettó adósság, D/E, FCF-család, EBITDA; piaci érték, EV, P/E, P/FCF, P/S, P/B, EV/EBITDA, PEG, osztalék- és FCF-hozam (TTM osztalék pénznem-egyeztetéssel), MOS; reálhozam, EPS × P/E felbontás, elvárthozam-modell; drawdown/recovery, TER, tracking difference/error, total return, rendszeres befizetés FV; portfóliósúly, súlyozott hozam. DCF-konvenciók: `discountFactor`, `presentValue`, `gordonTerminalValue` (D-057).
+  - DATA_DICTIONARY 5. fejezet **végleges** (D-056, D-058), új 12. fejezet (motor-konvenciók).
+  - Ellenőrzés: `npm run check` exit 0; **553/553 teszt** (38 suite); lefedettség `src/calculations`: **99,56% sor, 97,91% ág, 100% függvény**.
+  - Rétegszabály: ESLint-zóna + `src/__tests__/calculations-purity.test.ts`.
+  - Új döntések: D-055…D-058. Új ismert problémák: KI-42…KI-49.
+- **A PHASE 06 kapcsolódási pontjai (PHASE 05-ből):**
+  - Kimutatás-tétel (`Metric<number>`) → `calculateMetric({ … }, { … }, képlet, { unit, calculatedAt, period })` → `toFinancialMetric(id, …, period)`.
+  - Jelentett elsőbbség: `preferReported(lineItems.grossProfit, () => calculateMetric(…))`; EPS: `selectEps` (a `basis` a címkéhez).
+  - N éves trend/CAGR: `cagrOverYears([{ fiscalYear, value | null }], N)`.
+  - **Teendő:** a `totalDebt` összerakása (KI-42), Q4/TTM és YTD-különbség (D-021, KI-18/19) – ezek nélkül a mérleg-alapú mutatók `MISSING`-ek maradnak.
 
 ### PHASE 06 – Részvény fundamentális elemzés
 - **Cél:** `analyzeStock` use case: alapadatok, kimutatások, mutatók, trendek, provenance.

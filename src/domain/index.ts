@@ -4,9 +4,15 @@
  */
 export * from './shared';
 export * from './instrument/instrument';
+export * from './instrument/listing-candidate';
+export * from './instrument/instrument-profile';
+export * from './instrument/instrument-search';
 export * from './market/quote';
+export * from './market/dividend';
 export * from './fundamentals/financial-statement';
+export * from './fundamentals/financial-statement-set';
 export * from './fundamentals/financial-metric';
 export * from './fx/fx-rate';
+export * from './fx/fx-conversion';
 export * from './portfolio/portfolio';
 export * from './analysis/analysis-result';

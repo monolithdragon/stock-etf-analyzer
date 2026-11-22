@@ -5,16 +5,36 @@
  * A UI a kész `AppServices`-t kapja (React Contexten át), az adaptereket nem ismeri.
  */
 import {
+  createConvertMoney,
+  createGetDividendHistory,
+  createGetFinancialStatements,
+  createGetInstrumentProfile,
   createGetListingQuote,
+  createGetPriceHistory,
+  createGetSecurityListings,
   createRecordTransaction,
+  createSearchInstruments,
   type AppServices,
   type Clock,
+  type FxGateway,
   type IdGenerator,
   type MarketDataGateway,
   type PortfolioRepository,
 } from '@/application';
-import { notImplementedMarketDataGateway } from '@/infrastructure/api-client/not-implemented-market-data-gateway';
+import {
+  notImplementedFxGateway,
+  notImplementedMarketDataGateway,
+} from '@/infrastructure/api-client/not-implemented-market-data-gateway';
+import {
+  createProxyFxGateway,
+  createProxyMarketDataGateway,
+} from '@/infrastructure/api-client/proxy-gateways';
+import {
+  createProxyHttpClient,
+  type ClientFetch,
+} from '@/infrastructure/api-client/proxy-http-client';
 import { InMemoryPortfolioRepository } from '@/infrastructure/mock/in-memory-portfolio-repository';
+import { createMockFxGateway } from '@/infrastructure/mock/mock-fx-gateway';
 import { createMockMarketDataGateway } from '@/infrastructure/mock/mock-market-data-gateway';
 import { createLocalIdGenerator, systemClock } from '@/infrastructure/system/system-clock';
 
@@ -24,39 +44,70 @@ export interface AppDependencies {
   readonly clock: Clock;
   readonly ids: IdGenerator;
   readonly marketData: MarketDataGateway;
+  readonly fx: FxGateway;
   readonly portfolioRepository: PortfolioRepository;
 }
 
+/** A globális fetch, késleltetve feloldva (tesztben a `fetchImpl` felülírható). */
+const globalFetch: ClientFetch = (input, init) => fetch(input, init);
+
 /**
  * Az adatmódnak megfelelő alapértelmezett adapterek.
+ * - `mock`: demóadat (`kind: 'mock'`), hálózat nélkül;
+ * - `live` + proxy URL: a proxy gateway-ek;
+ * - `live` URL nélkül: őszinte hibát adó helyőrzők (nem csendes demóadat).
  * Az órát kívülről kapja, hogy egy (tesztben) felülírt óra az adapterekhez is eljusson.
  */
 export function createDefaultDependencies(
   env: PublicEnv,
   clock: Clock = systemClock,
+  fetchImpl: ClientFetch = globalFetch,
 ): AppDependencies {
-  return {
+  const base = {
     clock,
     ids: createLocalIdGenerator(clock),
-    // live: a proxy kliens a PHASE 04A-ban váltja a helyőrzőt.
-    marketData:
-      env.dataMode === 'mock'
-        ? createMockMarketDataGateway(clock)
-        : notImplementedMarketDataGateway,
     // A tartós (SQLite) tároló a PHASE 13-ban jön; addig mindkét módban memóriában.
     portfolioRepository: new InMemoryPortfolioRepository(),
+  };
+  if (env.dataMode === 'mock') {
+    return {
+      ...base,
+      marketData: createMockMarketDataGateway(clock),
+      fx: createMockFxGateway(clock),
+    };
+  }
+  if (env.apiBaseUrl === null) {
+    return { ...base, marketData: notImplementedMarketDataGateway, fx: notImplementedFxGateway };
+  }
+  const http = createProxyHttpClient({ baseUrl: env.apiBaseUrl, fetchImpl });
+  return {
+    ...base,
+    marketData: createProxyMarketDataGateway(http),
+    fx: createProxyFxGateway(http),
   };
 }
 
 /** Use case-ek összeállítása. Tesztben bármelyik függőség felülírható. */
 export function createAppServices(
   env: PublicEnv,
-  overrides: Partial<AppDependencies> = {},
+  overrides: Partial<AppDependencies> & { readonly fetchImpl?: ClientFetch } = {},
 ): AppServices {
   const clock = overrides.clock ?? systemClock;
-  const deps: AppDependencies = { ...createDefaultDependencies(env, clock), ...overrides };
+  const { fetchImpl, ...depOverrides } = overrides;
+  const deps: AppDependencies = {
+    ...createDefaultDependencies(env, clock, fetchImpl),
+    ...depOverrides,
+  };
+  const market = { marketData: deps.marketData, clock: deps.clock };
   return {
-    getListingQuote: createGetListingQuote({ marketData: deps.marketData, clock: deps.clock }),
+    getListingQuote: createGetListingQuote(market),
+    getSecurityListings: createGetSecurityListings(market),
+    getFinancialStatements: createGetFinancialStatements(market),
+    getPriceHistory: createGetPriceHistory(market),
+    getInstrumentProfile: createGetInstrumentProfile(market),
+    getDividendHistory: createGetDividendHistory(market),
+    searchInstruments: createSearchInstruments(market),
+    convertMoney: createConvertMoney({ fxGateway: deps.fx, clock: deps.clock }),
     recordTransaction: createRecordTransaction({
       portfolioRepository: deps.portfolioRepository,
       clock: deps.clock,
