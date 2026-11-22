@@ -1,13 +1,14 @@
 # Projektállapot – Stock & ETF Analyzer
 
-> Utolsó frissítés: **2026-11-21**, PHASE 04B vége (a teljes PHASE 04 lezárva).
+> Utolsó frissítés: **2026-11-22**, PHASE 05 vége.
 
 ## Cél röviden
 Mobilalkalmazás (Expo SDK 58, React Native, TypeScript) részvények, ETF-ek és saját portfólió átlátható, forrásolt, reprodukálható elemzésére. Az AI csak magyaráz. Részletek: [REQUIREMENTS.md](REQUIREMENTS.md).
 
 ## Aktuális fázis
-- **Lezárt fázis:** PHASE 04 – Adatforrások, proxy és deviza (**KÉSZ**: 04A + 04B). Átadás: [handoffs/phase-04-handoff.md](handoffs/phase-04-handoff.md) (a 04A részletei: [handoffs/phase-04a-handoff.md](handoffs/phase-04a-handoff.md)). Útmutató: [phases/phase-04-data-sources-currency.md](phases/phase-04-data-sources-currency.md).
-- **Következő:** PHASE 05 – Pénzügyi calculation engine (prompt: `05_…`). Élő adatforrást nem igényel.
+- **Lezárt fázis:** PHASE 05 – Pénzügyi calculation engine (**KÉSZ**). Átadás: [handoffs/phase-05-handoff.md](handoffs/phase-05-handoff.md). Útmutató: [phases/phase-05-financial-calculation-engine.md](phases/phase-05-financial-calculation-engine.md).
+- **Előző:** PHASE 04 (04A + 04B) – [handoffs/phase-04-handoff.md](handoffs/phase-04-handoff.md).
+- **Következő:** PHASE 06 – Részvény fundamentális elemzés (prompt: `06_…`). Első feladat: a `totalDebt` összerakása (KI-42).
 
 ## Készültség
 
@@ -22,16 +23,17 @@ Mobilalkalmazás (Expo SDK 58, React Native, TypeScript) részvények, ETF-ek é
 | **Adatforrások** | **Élő, igazolt**: `sec-edgar` (US kimutatások), `ecb-fx` (FX), `openfigi` (ISIN → jegyzések), **`fmp`** (US ár, ártörténet, profil, osztalék, keresés), **`eodhd`** (ár, ártörténet 1 év, osztalék, keresés, ISIN → jegyzések pénznemmel; US + 6 európai tőzsde); `mock` (demó). **Free-ben nem elérhető**: ETF-metaadat/holdings, nem US profil és kimutatás → `UNAVAILABLE / PLAN_LIMIT` |
 | **FX** | **Kész** (04A): natív és kijelzési pénznem külön, ráta + dátum + forrás, elavult rátánál hiba |
 | Kliens adatelérés | `mock` mód: demó gateway-ek; `live` mód: proxy gateway-ek (`EXPO_PUBLIC_API_BASE_URL`); 04B: +4 use case (`getPriceHistory`, `getInstrumentProfile`, `getDividendHistory`, `searchInstruments`) |
-| Lint / formázás / typecheck | **Zöld** (2026-11-21): `npm run check` exit 0 |
-| Tesztek | **337/337 zöld** (25 suite). Élő API-t teszt nem hív: valós, megvágott fixture-ök (12 SEC-cég, ECB, OpenFIGI, **FMP 10, EODHD 21 fájl**) + hamis `fetch` |
+| Lint / formázás / typecheck | **Zöld** (2026-11-22): `npm run check` exit 0 |
+| Tesztek | **553/553 zöld** (38 suite; PHASE 05: +216). `src/calculations` lefedettség: 99,56% sor, 97,91% ág. Élő API-t teszt nem hív: valós, megvágott fixture-ök (12 SEC-cég, ECB, OpenFIGI, **FMP 10, EODHD 21 fájl**) + hamis `fetch` |
 | Expo ellenőrzések (04B) | élő füstpróba (saját dev szerver, 8083); `expo export` web: 10 API route; Android: Hermes bundle **szerverkód és titok nélkül** (szkennelve) |
 | Biztonság (04B) | Kulcs csak szerver env-ben; repó-szkenner (220 fájl): 0 találat; válasz, napló és env-figyelmeztetés kulcsmentes (teszt) |
-| Számítás, tárolás, cache | **Nincs** – PHASE 05 (képletek), 13 (SQLite, proxy cache) |
-| Git | branch `phase-04a`; a PHASE 04B változásai commitra várnak (a tulajdonos dönt) |
+| **Számítási motor** | **Kész** (PHASE 05, D-055…D-058): `src/calculations/` – az összes 05-ös képlet tiszta függvényként, `CalcResult` (N/M, MISSING, INVALID_INPUT…), `Metric`-adapter `calculated` provenance-szel, DCF-konvenciók. Még nem hívja use case (PHASE 06). |
+| Tárolás, cache | **Nincs** – PHASE 13 (SQLite, proxy cache) |
+| Git | branch `phase-04a`; a PHASE 04B commitolva (`1a29fe8`); a PHASE 05 változásai commitra várnak (a tulajdonos dönt) |
 
 Fázisonkénti állapot: [ROADMAP.md](ROADMAP.md).
 
-## A projektmappa tartalma (2026-11-21, PHASE 04B vége)
+## A projektmappa tartalma (2026-11-22, PHASE 05 vége)
 ```
 stock-etf-analyzer/
 ├─ CLAUDE.md, README.md, app.json, package.json, tsconfig.json, jest.config.js
@@ -41,6 +43,7 @@ stock-etf-analyzer/
 ├─ src/
 │  ├─ app/                   képernyők + api/v1/**/+api.ts (10 proxy-route, vékonyak)
 │  ├─ domain/                tiszta TS (04B: market/dividend.ts, instrument/instrument-profile.ts, instrument-search.ts)
+│  ├─ calculations/          PHASE 05: tiszta képletek – core/, fundamentals/, valuation/, returns/, etf/, portfolio/, definitions.ts
 │  ├─ contracts/             zod (04B: market.ts, search.ts, provider-status.ts)
 │  ├─ application/           portok + use case-ek (04B: get-market-data.ts)
 │  ├─ infrastructure/        api-client/ (proxy kliens + gateway-ek), mock/, system/
@@ -49,7 +52,7 @@ stock-etf-analyzer/
 │  │                         routing/ (provider-router, plans, quota, markets), logging, testing/
 │  ├─ config/                env.ts, container.ts (kliens composition root)
 │  ├─ presentation/          components/, theme/, strings/, di/
-│  └─ __tests__/             routes.test.tsx, proxy-integration.test.ts
+│  └─ __tests__/             routes.test.tsx, proxy-integration.test.ts, calculations-purity.test.ts
 └─ docs/                     PROJECT_STATE, REQUIREMENTS, ARCHITECTURE, DECISIONS, ROADMAP,
                              DATA_SOURCES, DATA_DICTIONARY, KNOWN_ISSUES, phases/, handoffs/
 ```
@@ -78,6 +81,11 @@ stock-etf-analyzer/
   - D-052 jegyzés-pénznem: helyszíni szabály (US → USD, Xetra → EUR) vagy EODHD kereső, soha nem kitalálva;
   - D-053 `UNAVAILABLE` hibafajta + `unavailableReason` a szerződésben; 402 → kvóta (EODHD) / csomag (FMP);
   - D-054 új domain-típusok és végpontok; szerverkontextus a `globalThis`-en.
+- **PHASE 05:**
+  - D-055 számítási motor: szám-szintű képletek (`CalcResult`) + `Metric`-adapter, rétegszabály;
+  - D-056 véglegesített fundamentális definíciók (N/M negatív nevezőnél, EPS-sorrend, NOPAT-kulcs csak explicit tartalékkal, ROE „bármely nevező ≤ 0” szabály, DOL 1%-os küszöb, EV-egyszerűsítés, TTM osztalék);
+  - D-057 DCF-konvenciók (év végi diszkontálás, `r > g`);
+  - D-058 hozam-, ETF- és portfólió-konvenciók (365,25 nap, effektív havi ráta, TER-közelítés, tracking error periódusszám).
 
 Teljes lista: [DECISIONS.md](DECISIONS.md).
 
@@ -93,10 +101,10 @@ Teljes lista: [DECISIONS.md](DECISIONS.md).
 | (04A) | A SEC User-Agent kapcsolattartó e-mailjét a tulajdonos a `.env.local`-ba írta |
 
 ## Nyitott kérdések
-- **Commit:** a PHASE 04B változásai nincsenek commitolva (a tulajdonos dönt). Javasolt üzenet a handoffban.
+- **Commit:** a PHASE 05 változásai nincsenek commitolva (a tulajdonos dönt). Javasolt üzenet a handoffban.
 - **EAS Hosting próbatelepítés** (D-004, KI-29): legkésőbb a PHASE 16 előtt; Expo-fiók kell.
 - **FMP keret és ToS** (KI-39): a tulajdonos ellenőrizze az FMP-fiók dashboardján (a hivatalos oldal 403).
 - DP-05 (fizetős adatcsomag): tudatosan nyitott. Nem US fundamentumhoz és ETF-metaadathoz kellene.
 - KI-04 (opcionális): `ANDROID_HOME` / `Path` javítása.
 
-Egyik sem blokkolja a PHASE 05-öt. Részletek: [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
+Egyik sem blokkolja a PHASE 06-ot. Részletek: [KNOWN_ISSUES.md](KNOWN_ISSUES.md).

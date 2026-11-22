@@ -295,7 +295,9 @@ src/
 scripts/record-sec-fixtures.mjs   SEC fixture-rögzítő (fejlesztői eszköz)
 ```
 
-**Még nem létező mappák** (a saját fázisuk hozza létre): `calculations/` (05), `scoring/` (10), `explanation/` (11), `server/cache/` (13), `infrastructure/storage/` (13), `presentation/{hooks,formatters,view-models}` (12).
+**PHASE 05 (2026-11-22):** elkészült a `src/calculations/` (D-055): `core/` (`CalcResult`, numerikus konvenciók, `Metric`-adapter), `fundamentals/`, `valuation/` (szorzók + DCF-konvenciók), `returns/`, `etf/`, `portfolio/`, `definitions.ts`. Rétegszabály: csak a `domain`-t importálhatja (ESLint-zóna + `src/__tests__/calculations-purity.test.ts`). Még nem hívja use case – az első fogyasztó a PHASE 06 `analyzeStock`.
+
+**Még nem létező mappák** (a saját fázisuk hozza létre): `scoring/` (10), `explanation/` (11), `server/cache/` (13), `infrastructure/storage/` (13), `presentation/{hooks,formatters,view-models}` (12).
 
 ### 5.2 Tervezett teljes struktúra (PHASE 01 terv)
 

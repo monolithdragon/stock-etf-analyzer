@@ -1,10 +1,23 @@
 # Ismert problémák, kockázatok, ismeretlenek – Stock & ETF Analyzer
 
-> Frissítve: 2026-11-21 (PHASE 04B vége – a teljes PHASE 04 lezárva). Valószínűség (V) és hatás (H) skálája: **A** = Alacsony, **K** = Közepes, **M** = Magas.
+> Frissítve: 2026-11-22 (PHASE 05 vége). Valószínűség (V) és hatás (H) skálája: **A** = Alacsony, **K** = Közepes, **M** = Magas.
 
 ## Blokkolók
 
-**Nincs blokkoló a PHASE 05 indításához.** A PHASE 05 (képletmotor) tiszta számítás, élő adatforrást nem igényel.
+**Nincs blokkoló a PHASE 06 indításához.** A PHASE 06 a meglévő SEC-adatokra (fixture + élő `sec-edgar`) és a PHASE 05 képleteire épül. Figyelem: a `totalDebt` összerakása (KI-42) a PHASE 06 első feladatai közé tartozik.
+
+## PHASE 05 – ismert problémák és leletek (2026-11-22)
+
+| ID | Probléma / lelet | Hatás | Állapot / teendő | Felelős fázis |
+|---|---|---|---|---|
+| KI-42 | A **`totalDebt` forrásoldalon `MISSING`** (D-043), így a nettó adósság, nettó készpénz, EV, D/E, Invested Capital, ROIC és EV/EBITDA élő adattal ma mindig `MISSING`. A képletek készen és tesztelve állnak. | M (06–07) | **Teendő:** a PHASE 06 rakja össze a `totalDebt`-et (`ShortTermBorrowings` + `LongTermDebtCurrent` + `LongTermDebtNoncurrent`, a dupla számolás elkerülésével, valós fixture-rel igazolva). | 06 |
+| KI-43 | A **saját EPS** (`netIncome / weightedSharesDiluted`) az elsőbbségi osztalék levonása nélkül számol → elsőbbségi részvényes cégnél felülbecsülhet. | A | Kezelve: a jelentett EPS az elsődleges; a saját számítás csak tartalék, megjegyzéssel (D-056/4). | 06 |
+| KI-44 | Az **EV egyszerűsített**: kisebbségi részesedés, elsőbbségi részvény és lízing nélkül → nagy lízingállományú vagy kisebbségi részesedésű cégnél alulbecsülhet. | K | Dokumentált (D-056/10). A PHASE 07 dönthet a bővítésről (a forrásban elérhető tagekkel). | 07 |
+| KI-45 | A **TTM osztalék** 365 napos ex-dátum-ablaka szabálytalan ütemezésnél (eltolódó félévi/éves kifizetés) a határon egy kifizetést kihagyhat vagy kettőt számolhat. | K | Elfogadva az MVP-ben (D-056/12). Javítási lehetőség: a forrás `frequency` mezője alapján évesítés – PHASE 06/08. | 06, 08 |
+| KI-46 | A **TER hosszú távú hatása** a `(1 + r − TER)^n` közelítéssel számol (DATA_DICTIONARY 5.5); a pontosabb `(1 + r)(1 − TER)` alaktól `r × TER` nagyságrendben tér el (7% hozam, 0,2% TER mellett évente ~0,014 százalékpont). | A | Dokumentált (D-058). A PHASE 08 válthat, ha a megjelenítés pontosabbat igényel. | 08 |
+| KI-47 | A **tracking error** egyforma hosszú, dátum szerint igazított hozamsorokat vár; a dátum-igazítás (hiányzó kereskedési napok, eltérő tőzsdei naptár) a hívó dolga. | K (08) | Tudatos: a PHASE 08 végzi az igazítást (indexadat is kell). | 08 |
+| KI-48 | A `src/__tests__/calculations-purity.test.ts` a Node-típusokat a Jest tranzitív függőségeként telepített `@types/node`-ból kapja (`/// <reference types="node" />`); közvetlen függőség nincs. | A | Elfogadva (új csomag nem kellett). Ha egy Jest-frissítés elhagyná, a `@types/node` közvetlen dev-függőségként felvehető. | – |
+| KI-49 | A számítási motort **még nem hívja use case** és UI; élő adaton még nem futott. | A | Várt állapot: az első fogyasztó a PHASE 06 `analyzeStock`. | 06 |
 
 ## PHASE 04B – ismert problémák és leletek (2026-11-21)
 

@@ -616,3 +616,52 @@ A tulajdonos válaszai:
   - Végpontok: `GET /api/v1/instruments/{id}/prices`, `/profile`, `/dividends`, `GET /api/v1/search?q=`, `GET /api/v1/providers/status`. A tervezett `corporate-actions` helyett `dividends` (split-végpont nincs bekötve – a név ne ígérjen többet).
   - Kliens: `MarketDataGateway` + 4 use case (`getPriceHistory` saját frissesség-szabállyal: 4 nap FRESH, 14 nap STALE `[FELTÉTELEZÉS – PHASE 13]`; `getInstrumentProfile`; `getDividendHistory`; `searchInstruments`).
   - A szerverkontextus singletonja a `globalThis`-en él, mert az Expo route-onként külön bundle-t fordít (KI-31).
+
+## PHASE 05 – Pénzügyi calculation engine (2026-11-22)
+
+### D-055 – A számítási motor szerkezete: szám-szintű képletek + `Metric`-adapter
+- **Dátum:** 2026-11-22 · **Státusz:** Elfogadva
+- **Döntés:**
+  - Hely: `src/calculations/` (ARCHITECTURE 3., 5.2): `core/`, `fundamentals/`, `valuation/`, `returns/`, `etf/`, `portfolio/`, `definitions.ts`, `index.ts`. Csak a `@/domain`-t importálhatja; külső csomag, hálózat (`fetch`…), React/RN/Expo tilos – ESLint-zóna + `no-restricted-imports` + `no-restricted-globals`, valamint a `src/__tests__/calculations-purity.test.ts` (óra és véletlen sem).
+  - **Két szint.** (1) Képlet: tiszta függvény nevesített objektum-bemenettel (`number | null | undefined`; `null` = hiányzó, `0` = tényleges nulla). Kimenete `CalcResult<T>`: `OK` (érték + `notes[]`) vagy `MISSING` / `NOT_APPLICABLE` / `NOT_MEANINGFUL` / `INSUFFICIENT_DATA` / `INVALID_INPUT` + emberi indok. (2) `calculateMetric(required, optional, formula, context)`: a domain `Metric<number>` bemeneteket a képletre emeli.
+  - **Adapter-szabályok:** kötelező nem-OK bemenet → a képlet nem fut, a legsúlyosabb státusz megy tovább (`ERROR` > `INVALID_INPUT` > `UNAVAILABLE` > `MISSING` > `INSUFFICIENT_DATA` > `NOT_APPLICABLE` > `NOT_MEANINGFUL`; az `UNAVAILABLE` ok-kódja megmarad). Opcionális nem-OK bemenet → `null`. A pénz jellegű (`money`, `money_per_share`) bemenetek eltérő pénzneme → `INVALID_INPUT` (nincs csendes FX). Provenance: `sourceId: 'engine'`; `kind` = `mock`, ha bármelyik bemenet mock, `estimated`, ha bármelyik becsült vagy a kontextus ezt kéri, egyébként `calculated`; `asOf` = a legrégebbi bemenet; `freshness` = a legrosszabb (`EXPIRED` > `UNKNOWN` > `STALE` > `FRESH`); `inputs` = a bemenetek nevei; a számítás időpontja injektált (`calculatedAt`).
+  - `preferReported(reported, compute)`: a jelentett OK érték elsőbbsége (pl. `grossProfit`). `METRIC_DEFINITIONS: Record<FinancialMetricId, { formula, unit }>` – a fordító kikényszeríti, hogy minden mutató-azonosítónak legyen definíciója; a `toFinancialMetric` ebből építi a domain `FinancialMetric`-et.
+  - **Biztonsági háló:** a `calcOk` (mint a `metricOk`) nem véges számot soha nem ad `OK`-ként → `INVALID_INPUT`, objektumon és tömbön belül is.
+- **Indok:** a szám-szintű képlet könnyen és teljesen tesztelhető; a `Metric`-adapter egy helyen kezeli a státusz-továbbadást és a provenance-t. A PHASE 06 így duplikáció nélkül, közvetlenül a kimutatás-tételekre köthet.
+- **Alternatíva (elvetve):** minden képlet közvetlenül `Metric`-et fogad – ekkor minden függvényben ismétlődne a státuszkezelés és a provenance-építés.
+
+### D-056 – A fundamentális képletek véglegesített definíciói (DATA_DICTIONARY 5.1–5.3)
+- **Dátum:** 2026-11-22 · **Státusz:** Elfogadva
+- **Döntés** (ahol a PHASE 01 kiinduló definíciója nyitva hagyott kérdést):
+  1. **Nevező-szabály:** marzsnál, konverziónál és szorzónál a nulla vagy negatív nevező → `NOT_MEANINGFUL`, soha nem negatív szorzó. Kivétel: eszköz ≤ 0 (ROA), ár ≤ 0, részvényszám ≤ 0, piaci érték ≤ 0 → `INVALID_INPUT` (adathiba, nem gazdasági helyzet).
+  2. **Előjel:** COGS, működési költség, CapEx, osztalék, törlesztés, D&A, adósság és pénz < 0 → `INVALID_INPUT` (nem fordítunk előjelet csendben).
+  3. **Üzemi eredmény:** a jelentett US GAAP `OperatingIncomeLoss` az elsődleges; saját számítás: `grossProfit − operatingExpenses`. Nem azonos a „NI + kamat + adó” EBIT-tel (a nem működési tételek nincsenek benne).
+  4. **EPS-sorrend:** jelentett hígított → jelentett alap (megjegyzéssel) → saját `netIncome / weightedSharesDiluted` (megjegyzéssel: az elsőbbségi osztalék levonása nélkül). A választott bázis (`basis`) az eredményben szerepel.
+  5. **Effektív adókulcs:** `pretaxIncome ≤ 0`, vagy az eredmény a [0, 1] tartományon kívül esik → `NOT_MEANINGFUL`. **NOPAT-kulcs:** az effektív kulcs, ha `OK`; különben CSAK a hívó által explicit megadott tartalék kulcs (az eredmény ekkor `estimated`). A motor nem talál ki alapkulcsot (pl. 21%-ot).
+  6. **Invested Capital:** `equity + totalDebt − cash` (finanszírozási oldal; lízing és kisebbségi részesedés nélkül). ROIC = NOPAT / átlagos IC.
+  7. **ROE/ROA/ROIC átlag:** a nyitó és a záró érték átlaga; nyitó hiányában a záró, megjegyzéssel. **Ha bármelyik felhasznált nevező ≤ 0**, az eredmény N/M (ROE, ROIC) vagy `INVALID_INPUT` (ROA) – a negatívból pozitívba forduló átlag is félrevezető.
+  8. **Növekedés:** bázis = 0 → N/M („nullás bázisév”), bázis < 0 → N/M; a pozitívból negatívba fordulás `OK` (−100% alatt is). **CAGR:** bármelyik végpont ≤ 0 → N/M; N éves CAGR idősorból csak a két végpont-év meglétével számolható (különben `INSUFFICIENT_DATA`).
+  9. **DOL:** bázis ≤ 0 → N/M; |%Δ árbevétel| < 1% (`DOL_MIN_REVENUE_CHANGE`) → N/M, mert a kis nevező a zajt erősíti fel.
+  10. **EV** = piaci érték + adósság − pénz (kisebbségi részesedés, elsőbbségi részvény és lízing nélkül). A negatív EV `OK`, de az EV/EBITDA ekkor N/M.
+  11. **PEG** = P/E / (növekedés × 100); a növekedés tizedes tört bemenet. Növekedés ≤ 0 → N/M.
+  12. **Osztalékhozam:** hiány → `MISSING`; jelentett 0 → `OK` 0. TTM-ablak: `(asOf − 365 nap, asOf]` az ex-dátum szerint; a split-korrigált összeg az elsődleges; GBX → GBP normalizálás (`toMajor`); más eltérő pénznem → `INVALID_INPUT`. Esemény nélküli ablak: ismert lefedettségnél `OK` 0, ismeretlennél `MISSING`.
+  13. Az **FCF-hozam** negatív FCF-nél negatív és `OK` (nem szorzó). A **`totalDebt`** forrásoldalon továbbra is `MISSING` (D-043), így a nettó adósság, az EV, a D/E és a ROIC addig `MISSING`; a tételek összerakása a PHASE 06 feladata.
+- **Indok:** a CLAUDE.md pénzügyi szabályai (N/M negatív nevezőnél, a hiány nem 0, nincs kitalált adat); egy definíció, a különbségek dokumentálva.
+
+### D-057 – DCF közös konvenciók (előkészítés a PHASE 07-hez)
+- **Dátum:** 2026-11-22 · **Státusz:** Elfogadva
+- **Döntés:** év végi diszkontálás (`t = 1..n`; a periódus lehet tört, így a mid-year konvenció `t − 0.5`-tel ugyanezekkel a függvényekkel megoldható, ha a PHASE 07 bevezeti). A diszkontráta a (0, 1] tartományban (1 fölött százalék-hiba gyanúja → `INVALID_INPUT`). Gordon TV = `CF_n × (1 + g) / (r − g)` csak `r > g` esetén, különben `INVALID_INPUT` magyarázattal. Függvények: `discountFactor`, `presentValue`, `gordonTerminalValue`. A teljes DCF, a forgatókönyvek és az érzékenységi tábla a PHASE 07-ben készül, ezekre építve.
+
+### D-058 – Hozam-, ETF- és portfólió-konvenciók
+- **Dátum:** 2026-11-22 · **Státusz:** Elfogadva
+- **Döntés:**
+  - **Évesítés dátumokból:** napok / 365,25 (`DAYS_PER_YEAR`). Az 1 évnél rövidebb időszak évesítése `OK`, figyelmeztetéssel. A napi hozamsorok 252-es évesítése (volatilitás) továbbra is a PHASE 08 döntése.
+  - **Hozam ártörténetből**, a korrekció szerint címkézve (D-050): `SPLIT_DIVIDEND` → total return, `SPLIT` → árhozam, `NONE` → nyers árhozam (split-figyelmeztetéssel). Total return árakból: újrabefektetés nélkül, megjegyzéssel; hiányzó osztalék → `MISSING`.
+  - **Reálhozam:** a pontos Fisher-alak, `(1 + n)/(1 + i) − 1`.
+  - **Árváltozás = EPS × P/E:** `(1 + g)(1 + Δ) − 1`; a múltbeli felbontásban `priceReturn = epsGrowth + multipleChange + interaction`. Csak pozitív EPS mellett.
+  - **Elvárt hozam (mentális modell):** `osztalékhozam + (1 + EPS-növekedés)(1 + évesített P/E-változás) − 1`. Mindig becslés; a megjegyzés kimondja: „nem előrejelzés és nem garantált hozam”.
+  - **Rendszeres befizetés FV:** effektív időszaki ráta `(1 + r)^(1/m) − 1` (alap: m = 12). Időszak végi (`end`) és eleji (`begin`, `× (1 + i)`) időzítés választható; `i = 0` → `PMT × n`; `n = évek × m` egész szám kell legyen; az éves ráta (−1, 1].
+  - **TER:** tizedes tört, 0 … 0.10 (mint a domain `Etf.ter`). A hosszú távú hatás a DATA_DICTIONARY szerinti `(1 + r − TER)^n` közelítés (a pontosabb `(1 + r)(1 − TER)` alaktól `r × TER` nagyságrendben tér el).
+  - **Tracking difference** = ETF − index hozam azonos időszakra. **Tracking error** = a különbségek minta szórása × √(évi periódusszám); a periódusszámot a hívó adja meg (napi 252 / heti 52 / havi 12).
+  - **Drawdown:** a ±1e-12 alatti lebegőpontos zaj 0 (`snapToZero`). Szükséges recovery: DD > 0 → `INVALID_INPUT`, DD ≤ −1 → N/M.
+  - **Portfóliósúly:** az árazott pozíciók összértékéhez viszonyítva; az ár nélküli pozíció külön listában (`unpriced`), nem 0 súllyal; eltérő pénznem → `INVALID_INPUT`; short nem támogatott. **Súlyozott hozam:** a súlyok összege 1 ± 1e-6; ≈ 100 esetén a hibaüzenet a „százalék vs. tört” tévedésre utal.

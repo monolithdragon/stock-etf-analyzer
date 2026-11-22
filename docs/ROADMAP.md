@@ -1,6 +1,6 @@
 # Roadmap – Stock & ETF Analyzer
 
-> Frissítve: 2026-11-21 (PHASE 04B vége – a teljes PHASE 04 kész). Minden fázis külön chatben fut, a `stock_etf_analyzer_prompts` csomag `NN_*.md` promptja alapján.
+> Frissítve: 2026-11-22 (PHASE 05 vége). Minden fázis külön chatben fut, a `stock_etf_analyzer_prompts` csomag `NN_*.md` promptja alapján.
 > **Fázisszabály:** a következő fázis csak akkor indul, ha az előző befejezési feltételei teljesültek, vagy a hiányok a KNOWN_ISSUES-ban dokumentálva vannak.
 > **Verzió:** a promptok egy része SDK 57-et említ. Mindenhol **SDK 58** értendő (D-020).
 
@@ -12,8 +12,8 @@
 | 02 | Projekt setup | **KÉSZ** (2026-11-21) | **M1 Futó váz ✅** |
 | 03 | Architektúra és domain modell | **KÉSZ** (2026-11-21) | |
 | 04 | Adatforrások, proxy és deviza – **két chatben: 04A + 04B** (D-028) | **KÉSZ** (04A és 04B, 2026-11-21) | **M2 Adat a csövön ✅** |
-| 05 | Pénzügyi calculation engine | **KÖVETKEZIK** | |
-| 06 | Részvény fundamentális elemzés | NEM KEZDŐDÖTT | |
+| 05 | Pénzügyi calculation engine | **KÉSZ** (2026-11-22) | |
+| 06 | Részvény fundamentális elemzés | **KÖVETKEZIK** | |
 | 07 | Értékelés és DCF | NEM KEZDŐDÖTT | |
 | 08 | ETF-elemzés | NEM KEZDŐDÖTT | |
 | 09 | Portfólió és kockázat | NEM KEZDŐDÖTT | |
@@ -217,6 +217,18 @@ Minden fázis közös lezárása (CLAUDE.md):
   - A modul nem importál RN-t, UI-t vagy hálózatot.
   - A DATA_DICTIONARY definíciói véglegesek.
   - Lefedettség ≥ 90% (mért érték rögzítve).
+- **Eredmény (2026-11-22): KÉSZ.**
+  - `src/calculations/` (D-055): szám-szintű, tiszta képletek `CalcResult` kimenettel + `Metric`-adapter (`calculateMetric`, `preferReported`, `toFinancialMetric`, `METRIC_DEFINITIONS`).
+  - A 05-ös prompt teljes képletlistája: jövedelmezőség, EPS-választás, növekedés, CAGR, ROE/ROA/ROIC, NOPAT, DOL; nettó adósság, D/E, FCF-család, EBITDA; piaci érték, EV, P/E, P/FCF, P/S, P/B, EV/EBITDA, PEG, osztalék- és FCF-hozam (TTM osztalék pénznem-egyeztetéssel), MOS; reálhozam, EPS × P/E felbontás, elvárthozam-modell; drawdown/recovery, TER, tracking difference/error, total return, rendszeres befizetés FV; portfóliósúly, súlyozott hozam. DCF-konvenciók: `discountFactor`, `presentValue`, `gordonTerminalValue` (D-057).
+  - DATA_DICTIONARY 5. fejezet **végleges** (D-056, D-058), új 12. fejezet (motor-konvenciók).
+  - Ellenőrzés: `npm run check` exit 0; **553/553 teszt** (38 suite); lefedettség `src/calculations`: **99,56% sor, 97,91% ág, 100% függvény**.
+  - Rétegszabály: ESLint-zóna + `src/__tests__/calculations-purity.test.ts`.
+  - Új döntések: D-055…D-058. Új ismert problémák: KI-42…KI-49.
+- **A PHASE 06 kapcsolódási pontjai (PHASE 05-ből):**
+  - Kimutatás-tétel (`Metric<number>`) → `calculateMetric({ … }, { … }, képlet, { unit, calculatedAt, period })` → `toFinancialMetric(id, …, period)`.
+  - Jelentett elsőbbség: `preferReported(lineItems.grossProfit, () => calculateMetric(…))`; EPS: `selectEps` (a `basis` a címkéhez).
+  - N éves trend/CAGR: `cagrOverYears([{ fiscalYear, value | null }], N)`.
+  - **Teendő:** a `totalDebt` összerakása (KI-42), Q4/TTM és YTD-különbség (D-021, KI-18/19) – ezek nélkül a mérleg-alapú mutatók `MISSING`-ek maradnak.
 
 ### PHASE 06 – Részvény fundamentális elemzés
 - **Cél:** `analyzeStock` use case: alapadatok, kimutatások, mutatók, trendek, provenance.

@@ -50,6 +50,13 @@ const layerZones = [
     message: 'A contracts csak a domaint importálhatja.',
   },
   {
+    // PHASE 05 (D-055): a számítási motor tiszta – csak a domaint látja.
+    target: './src/calculations',
+    from: './src',
+    except: ['./calculations', './domain'],
+    message: 'A calculations csak a domaint importálhatja (tiszta képletek, ARCHITECTURE 3.).',
+  },
+  {
     target: './src/application',
     from: './src',
     except: ['./application', './domain', './contracts', './calculations', './scoring'],
@@ -160,6 +167,24 @@ module.exports = defineConfig([
     },
   },
   {
+    // Calculations (PHASE 05): semmilyen külső csomag – csak relatív, `@/domain` és saját import.
+    files: ['src/calculations/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '^(?!\\.{1,2}/|@/domain(?:/|$)|@/calculations(?:/|$))',
+              message:
+                'A calculations nem importálhat külső csomagot (React, Expo, zod…) – tiszta TypeScript.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: [
       'src/contracts/**/*.{ts,tsx}',
       'src/application/**/*.{ts,tsx}',
@@ -178,6 +203,7 @@ module.exports = defineConfig([
     // Hálózati hívás csak az infrastructure (proxy kliens) és a jövőbeli src/server rétegben lehet.
     files: [
       'src/domain/**/*.{ts,tsx}',
+      'src/calculations/**/*.{ts,tsx}',
       'src/contracts/**/*.{ts,tsx}',
       'src/application/**/*.{ts,tsx}',
       'src/presentation/**/*.{ts,tsx}',
