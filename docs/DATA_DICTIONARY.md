@@ -7,6 +7,7 @@
 > - PHASE 04A (2026-11-21): új fejezetek 3.3 (jegyzés-jelölt), 4.4 (SEC-normalizálás), 8. (FX, megvalósítva), 11. (API-szerződés v1).
 > - PHASE 04B (2026-11-21): új fejezetek 3.4 (profil), 3.5 (keresés), 3.6 (ár, ártörténet-korrekció), 3.7 (osztalék); a 11. fejezet bővítve (új végpontok, `unavailableReason`).
 > - **PHASE 05 (2026-11-22): az 5. fejezet képletdefiníciói VÉGLEGESEK** (D-056…D-058), mindegyik mellett a megvalósító függvény (`src/calculations`). Új 12. fejezet: a számítási motor konvenciói (`CalcResult`, `Metric`-adapter). A 10. fejezet bővítve.
+> - **PHASE 06 (2026-11-22):** a `totalDebt` összerakva (4.2, 4.4, 5.2; D-059); `InstrumentProfile.beta` (3.4); új **13. fejezet**: a részvény fundamentális elemzés eredmény-modellje (eredet-címke, kimutatás-nézetek, Q4/TTM, időszaki mutatók, trend/CAGR, értékelés, minőségi modell; D-060…D-063).
 
 ## 1. Általános konvenciók
 
@@ -137,6 +138,7 @@ Lapos, forrásközeli profil egy jegyzéshez. Free csomagban **csak US** (FMP); 
 | `sector`, `industry`, `exchangeName`, `website` | string \| null | a forrás `""`-je `null` lesz |
 | `tradingCurrency` | CurrencyCode \| null | a profil-forrás szerint |
 | `description` | string \| null | megbízhatatlan szöveg, legfeljebb 4000 karakter |
+| `beta` | number \| null | **PHASE 06:** szolgáltatói (FMP) béta, `reported`, tájékoztató (a módszertan nem közölt); nem szám → `null`. Opcionális bemenet (a régi proxy-válasz is érvényes). Saját béta: PHASE 08 |
 
 ### 3.5 `InstrumentSearchResult` (PHASE 04B, D-054)
 
@@ -227,7 +229,7 @@ Kód: `src/server/providers/sec-edgar/sec-normalizer.ts`. Kimenet: `FinancialSta
 | Részvényszám | `CommonStockSharesOutstanding` az időszak végén; tartalék: a SAJÁT filing címlapja (dei), `asOf` = címlap dátuma | JNJ: nincs `CommonStockSharesOutstanding`; egy későbbi 10-Q címlapja hibás napot adott volna |
 | Kiáramlás < 0 | `INVALID_INPUT` | nem fordítunk előjelet csendben |
 | Hiány | `MISSING`, a keresett tagek felsorolásával; **soha nem 0** | BRK-B EPS, JPM negyedéves árbevétel |
-| `totalDebt` | szándékosan `MISSING` (összetett tétel, dupla számolás veszélye) | PHASE 05/06 dönt |
+| `totalDebt` | **PHASE 06 (D-059):** `nem rövid rész + rövid rész`, lejárat szerinti bontásból (`sec-debt.ts`); `calculated`, vagy `estimated`, ha egy rövid lejáratú komponensnek nincs ténye (0-nak véve, megnevezve); nem rövid rész nélkül `MISSING` | a `LongTermDebt` már tartalmazza a rövid részt; a JNJ `ShortTermBorrowings`-a ≈ `DebtCurrent` → a naiv összeadás dupla számolás |
 | Nincs adat | üres készlet + megjegyzés | XOM új CIK (nincs még 10-K); TSM negyedéves (20-F filer) |
 | Méret | max. 15 év / 20 negyedév | válaszméret |
 
@@ -244,7 +246,9 @@ Kód: `src/server/providers/sec-edgar/sec-normalizer.ts`. Kimenet: `FinancialSta
 | `dividendsPaid` | `PaymentsOfDividends`, `PaymentsOfDividendsCommonStock`, `ifrs:DividendsPaidClassifiedAsFinancingActivities` |
 | `debtRepayment` | `RepaymentsOfLongTermDebt`, `RepaymentsOfDebt`, `ifrs:RepaymentsOfBorrowings…` |
 
-**Ismert korlátok:** negyedéves Q2/Q3 cash flow hiányzik (a 10-Q YTD-t ad; a különbségképzés `calculated` → PHASE 06), Q4 nincs (D-021). Részletek: KNOWN_ISSUES KI-18…KI-20.
+**`totalDebt` komponensei (D-059, `SEC_DEBT_COMPONENT_TAGS`):** nem rövid rész: `LongTermDebtNoncurrent` → `LongTermDebtAndCapitalLeaseObligations` (lízinggel együtt, megjegyzés); rövid rész: `DebtCurrent`, vagy `LongTermDebtCurrent` / `LongTermDebtAndCapitalLeaseObligationsCurrent` + (`ShortTermBorrowings`, vagy `CommercialPaper` + `OtherShortTermBorrowings`). IFRS-tagek szándékosan nincsenek.
+
+**Ismert korlátok:** negyedéves Q2/Q3 cash flow hiányzik (a 10-Q YTD-t ad; a különbségképzés a normalizáló bővítését igényli – KI-18, nyitott). A Q4-et a PHASE 06 elemző rétege származtatja (13.3), nem a normalizáló. Részletek: KNOWN_ISSUES KI-18…KI-20.
 
 ## 5. Számított mutatók (`calculated`) – VÉGLEGES (PHASE 05, D-055…D-058)
 
@@ -287,7 +291,7 @@ Kód: `src/server/providers/sec-edgar/sec-normalizer.ts`. Kimenet: `FinancialSta
 | FCF after Dividend & Debt Repayment | `fcfAfterDividendAndDebtRepayment` | `FCF − dividendsPaid − debtRepayment` | ua. |
 | EBITDA (számított) | `ebitda` | `operatingIncome + depreciationAmortization` | D&A < 0 → `INVALID_INPUT`; eltérhet a szolgáltató EBITDA-jától |
 
-> **`totalDebt`:** a SEC-normalizáló szándékosan `MISSING`-et ad (D-043). Ezért a nettó adósság, az EV, a D/E, az IC és a ROIC a PHASE 06-ig `MISSING` – a képletek készen állnak, a tétel összerakása a PHASE 06 feladata.
+> **`totalDebt` (PHASE 06, D-059):** a SEC-adapter összerakja (4.4). Becsült (`estimated`) adósságnál a nettó adósság, az EV, a D/E és a ROIC is `estimated` eredetű; bankoknál, biztosítóknál és IFRS-filereknél `MISSING` marad.
 
 ### 5.3 Piaci és értékelési mutatók
 
@@ -494,3 +498,89 @@ Az `UNAVAILABLE` és az `ERROR` forrásoldali státusz: a motor nem állítja el
 
 ### 12.4 Tisztaság
 A `src/calculations` csak a `@/domain`-t importálhatja; nincs hálózat, óra (`Date.now`), véletlen, React/RN/Expo. Kikényszerítés: ESLint és a `src/__tests__/calculations-purity.test.ts`. Ugyanarra a bemenetre mindig ugyanaz a kimenet.
+
+**PHASE 06 bővítés:** `priceRange(points, asOf, options)` (`returns/price-range.ts`) – időszaki csúcs/mélypont napi záróárakból; az 52 hetes alapbeállítás `WEEK52_RANGE_OPTIONS` (365 nap, ≤ 10 nap rés az elején, ≥ 200 pont), különben `INSUFFICIENT_DATA` (D-061).
+
+## 13. Részvény fundamentális elemzés (PHASE 06, D-059…D-063)
+
+> Kód: domain-típusok `src/domain/analysis/stock-fundamentals.ts`; logika `src/application/stock-analysis/`; use case `src/application/use-cases/analyze-stock-fundamentals.ts` (`AppServices.analyzeStockFundamentals`). Minden képlet az 5. fejezet függvénye – itt csak a bemenetek kiválasztása és az időszak-konvenciók vannak.
+
+### 13.1 Eredet-címke (`MetricOrigin`, D-063)
+
+| Címke | Mikor |
+|---|---|
+| `reported` | `OK`, a forrás jelentette (pl. 10-K tétel, ár, FMP béta) |
+| `calculated` | `OK`, a saját motor számolta jelentett bemenetekből |
+| `estimated` | `OK`, de feltevésen alapul (pl. becsült `totalDebt` → nettó adósság, ROIC) |
+| `stale` | `OK`, de a forrás frissessége `STALE`/`EXPIRED` (elfedi a fajtát; a `provenance.kind` megmarad) |
+| `missing` | bármely nem-OK státusz `UNAVAILABLE` kivételével (`MISSING`, `NOT_MEANINGFUL`, `INSUFFICIENT_DATA`, `INVALID_INPUT`, `ERROR`, `NOT_APPLICABLE`) – a pontos ok a `status`-ban |
+| `unavailable` | `UNAVAILABLE` (csomag, kvóta, lefedettség – `unavailableReason`) |
+| `mock`, `user_input` | demóadat / felhasználói bevitel |
+
+`FundamentalMetric = { id, unit, formula, period | null, value: Metric<number>, origin, notes[] }`. Az `id` lehet `FinancialMetricId`, kimutatás-tétel vagy piaci azonosító (`price`, `beta`, `week52High`, `week52Low`, `dividendPerShareTtm`).
+
+### 13.2 Áttekintés (`StockOverview`)
+
+| Mező | Forrás / szabály |
+|---|---|
+| `ticker`, `mic` | a listing-azonosítóból (mindig ismert) |
+| `name` | profil; hiányában a kimutatás-készlet `entityName`-je; különben `null` |
+| `exchangeName`, `sector`, `industry`, `country` | profil (free: csak US); hiány → `null` |
+| `tradingCurrency` / `reportingCurrency` | az ár pénzneme / a legutóbbi FY (vagy mérleg) pénzneme – eltérhetnek (ADR) |
+| `latestFiscalYearEnd` | a legutóbbi FY záródátuma (eltérő év végek jelzésére) |
+| `price` | `reported`, a jegyzés frissességével (15 perc után `stale`: `QUOTE_FRESHNESS_POLICY`, ARCHITECTURE 11.; KI-54) |
+| `marketCap` | `price × sharesOutstanding` (legfrissebb mérlegnap) |
+| `sharesOutstanding` | jelentett, a legfrissebb mérlegből |
+| `beta` | szolgáltatói, `reported`, tájékoztató |
+| `week52High` / `week52Low` | `calculated`, `priceRange` napi záróárakból (D-061) |
+
+### 13.3 Kimutatás-nézetek, Q4 és TTM (D-060)
+
+- `StatementTable = { statementType, frequency, currency | null, periods[], derived[], rows: { item, unit, cells: Metric[] }[], notes }` – éves és negyedéves külön; a cellák az időszakokhoz igazítva; hiány = nem-OK `Metric` (soha nem 0). Több pénznem a készletben → `currency: null` + figyelmeztetés.
+- **Q4** = `FY − (Q1+Q2+Q3)` additív időszaki tételre, hézagmentes negyedévekkel, azonos pénznemben; EPS és átlagos részvényszám `MISSING`; negatív nemnegatív tétel → `INVALID_INPUT`; mérleg = FY mérleg. Jelölés: `derived: true`, provenance `calculated`.
+- **TTM** = utolsó 4 egymást követő negyedév összege; mérleg = utolsó negyedév; TTM EPS = 4 negyedéves EPS összege (ha bármelyik hiányzik → `MISSING`). `PeriodColumn.kind = 'TTM'`, `period: null`, `constituents` = a 4 negyedév.
+
+### 13.4 Időszaki mutatók (`PeriodMetricTable`, feladat 4.)
+
+Táblák: `annual` (FY-oszlopok), `quarterly` (Q1–Q4, a származtatott Q4-gyel), `ttm` (0 vagy 1 oszlop). Sorok (`PERIOD_METRIC_IDS`):
+
+| Sor | Definíció (5. fejezet) | Megjegyzés |
+|---|---|---|
+| `revenue`, `operatingIncome`, `netIncome`, `cashAndEquivalents`, `totalAssets`, `totalLiabilities`, `shareholdersEquity`, `operatingCashFlow`, `capitalExpenditure`, `sharesOutstanding` | jelentett tétel | `totalDebt`: összetett (D-059) |
+| `grossProfit` | jelentett, különben `revenue − costOfRevenue` | `preferReported` |
+| `grossMargin`, `operatingMargin`, `netMargin` | tétel / `revenue` | `revenue ≤ 0` → N/M |
+| `eps` | jelentett hígított → jelentett alap → `netIncome / weightedSharesDiluted` | a jelentett `reported` marad |
+| `revenueGrowth`, `netIncomeGrowth`, `epsGrowth` | `growthRate`; éves: előző FY; negyedéves: előző év azonos negyedéve | TTM: nincs (`MISSING`); EPS: split-gyanúnál N/M |
+| `netDebt`, `netCash`, `debtToEquity` | 5.2 | becsült adósság → `estimated` |
+| `fcf`, `fcfMargin`, `fcfConversion`, `ebitda` | 5.2 | |
+| `effectiveTaxRate`, `roe`, `roa`, `roic` | 5.1; átlag a nyitó (előző FY) és a záró értékből | csak éves; negyedéves/TTM: `NOT_APPLICABLE` |
+
+### 13.5 Trendek és CAGR (`TrendSeries`, D-061)
+
+Sorozatok: `revenue`, `grossProfit`, `operatingIncome`, `netIncome`, `eps`, `operatingCashFlow`, `fcf`, `sharesOutstanding` – FY-pontok növekvő sorrendben. CAGR horizontok: 1, 3, 5, 10 év; feltételek a D-061 szerint (végpontok megléte, azonos pénznem, azonos év vége ±7 nap, split-bázis). Az 1 éves CAGR = az éves növekedés.
+
+### 13.6 Értékelés (`valuation`, D-062)
+
+`marketCap`, `enterpriseValue`, `pe`, `ps`, `pb`, `pfcf`, `fcfYield`, `evToEbitda`, `peg`, `dividendYield`, `dividendPerShareTtm`. Alap: aktuális ár + legutóbbi FY + legfrissebb mérlegnap (a megjegyzés megnevezi). Eltérő jegyzési/beszámolói pénznem → az ár-alapú szorzók `MISSING` (KI-50). Osztalék: TTM, ismeretlen lefedettséggel → esemény nélkül `MISSING`.
+
+### 13.7 Minőségi modell (`QualityAnalysis`, D-063)
+
+| Téma | Bizonyíték | Állapot forrása |
+|---|---|---|
+| BUSINESS | név, szektor, iparág, ország (profil) + `revenue` | metaadat + bizonyíték elérhetősége |
+| GROWTH | `revenueGrowth`, `netIncomeGrowth`, `epsGrowth`, revenue CAGR 3/5, EPS CAGR 3, FCF CAGR 3 | elérhetőség |
+| PROFITABILITY | `grossMargin`, `operatingMargin`, `netMargin`, `roe`, `roic` | elérhetőség |
+| BALANCE_SHEET | `cashAndEquivalents`, `totalDebt`, `netDebt`, `debtToEquity`, `shareholdersEquity` | elérhetőség |
+| CASH_FLOW | `operatingCashFlow`, `fcf`, `fcfMargin`, `fcfConversion` | elérhetőség |
+| MOAT | kontextus: `grossMargin`, `roic` | **csak forrásolt lelet** |
+| MANAGEMENT | kontextus: részvényszám 3 éves CAGR | **csak forrásolt lelet** |
+| VALUATION | `pe`, `ps`, `pb`, `pfcf`, `evToEbitda`, `fcfYield`, `dividendYield`, `peg` | elérhetőség |
+
+Állapot: `EVIDENCE_AVAILABLE` (minden bizonyíték `OK`; a `NOT_APPLICABLE` nem hiány), `PARTIAL_EVIDENCE`, `INSUFFICIENT_DATA`. `QualitativeFinding = { theme, statement, sourceKind: filing | provider | user, sourceReference (kötelező), verifiableBy (kötelező), asOf, provenanceKind }`. **Nincs pontszám** (`scoring: 'NOT_SCORED'`).
+
+### 13.8 Adatminőség (`StockDataQuality`)
+
+- `completeness`: a fő mutatók (legutóbbi FY: `revenue`, `grossMargin`, `operatingMargin`, `netMargin`, `eps`, `revenueGrowth`, `fcf`, `netDebt`, `debtToEquity`, `roe`; értékelés: `marketCap`, `pe`, `ps`, `pb`, `evToEbitda`, `fcfYield`, `dividendYield`) alapján `COMPLETE` / `PARTIAL` / `INSUFFICIENT`. Nincs FY → az első hiány „Nincs teljes pénzügyi év”.
+- `sources[]`: erőforrásonként (`annualStatements`, `quarterlyStatements`, `quote`, `profile`, `prices`, `dividends`) a forrás, `fetchedAt`, `asOf`, frissesség és az esetleges `AppError`.
+- `warnings[]`: elavult forrás, elérhetetlen forrás, becsült adósság, eltérő pénznem, nem naptári pénzügyi év.
+- `disclaimer`: „Nem befektetési tanács, nem hozamígéret…”.

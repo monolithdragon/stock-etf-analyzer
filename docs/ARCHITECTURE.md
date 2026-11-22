@@ -297,6 +297,24 @@ scripts/record-sec-fixtures.mjs   SEC fixture-rögzítő (fejlesztői eszköz)
 
 **PHASE 05 (2026-11-22):** elkészült a `src/calculations/` (D-055): `core/` (`CalcResult`, numerikus konvenciók, `Metric`-adapter), `fundamentals/`, `valuation/` (szorzók + DCF-konvenciók), `returns/`, `etf/`, `portfolio/`, `definitions.ts`. Rétegszabály: csak a `domain`-t importálhatja (ESLint-zóna + `src/__tests__/calculations-purity.test.ts`). Még nem hívja use case – az első fogyasztó a PHASE 06 `analyzeStock`.
 
+**PHASE 06 (2026-11-22):** az első fogyasztó elkészült (D-059…D-063):
+```
+src/domain/analysis/stock-fundamentals.ts     eredmény-modell: MetricOrigin, FundamentalMetric, StockOverview,
+                                              StatementTable, PeriodMetricTable/PeriodColumn, TrendSeries,
+                                              QualityAnalysis (pontszám nélkül), QualitativeFinding, StockDataQuality
+src/application/stock-analysis/               tiszta elemző logika (a képletek a calculations-ből):
+  statement-periods.ts   időszakonkénti csoportosítás, Q4 = FY − (Q1+Q2+Q3), TTM, kimutatás-táblák
+  period-metrics.ts      időszaki mutatók (árrés, EPS, növekedés, adósság, FCF, ROE/ROA/ROIC)
+  trends.ts              1/3/5/10 éves CAGR összehasonlíthatósági ellenőrzéssel
+  valuation.ts           ár, piaci érték, béta, 52 hetes tartomány, szorzók, osztalékhozam
+  quality.ts             minőségi témák bizonyítékkal / hiánylistával
+  metric-helpers.ts, testing.ts (csak tesztekhez)
+src/application/use-cases/analyze-stock-fundamentals.ts   use case (AppServices.analyzeStockFundamentals)
+src/server/providers/sec-edgar/sec-debt.ts    totalDebt összerakása SEC-komponensekből (D-059)
+src/calculations/returns/price-range.ts       52 hetes csúcs/mélypont záróárakból (D-061)
+```
+Adatút: `analyzeStockFundamentals` → a meglévő use case-ek (`getFinancialStatements` ×2, `getListingQuote`, `getInstrumentProfile`, `getPriceHistory`, `getDividendHistory`; párhuzamosan, frissességgel) → `stock-analysis/*` → `StockFundamentalAnalysis`. Egy forrás kiesése nem dönti el az elemzést (D-063/5). UI még nincs (PHASE 12).
+
 **Még nem létező mappák** (a saját fázisuk hozza létre): `scoring/` (10), `explanation/` (11), `server/cache/` (13), `infrastructure/storage/` (13), `presentation/{hooks,formatters,view-models}` (12).
 
 ### 5.2 Tervezett teljes struktúra (PHASE 01 terv)

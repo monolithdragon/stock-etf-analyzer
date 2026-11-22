@@ -2,6 +2,7 @@
  * Alkalmazási réteg: use case-ek és portok. A UI csak ezen keresztül ér el adatot
  * (soha nem hív közvetlenül szolgáltatói API-t vagy `fetch`-et).
  */
+import type { AnalyzeStockFundamentals } from './use-cases/analyze-stock-fundamentals';
 import type { ConvertMoney } from './use-cases/convert-money';
 import type { GetListingQuote } from './use-cases/get-listing-quote';
 import type {
@@ -17,6 +18,7 @@ import type {
 import type { RecordTransaction } from './use-cases/record-transaction';
 
 export type * from './ports';
+export * from './use-cases/analyze-stock-fundamentals';
 export * from './use-cases/convert-money';
 export * from './use-cases/get-listing-quote';
 export * from './use-cases/get-market-data';
@@ -34,4 +36,6 @@ export interface AppServices {
   readonly searchInstruments: SearchInstruments;
   readonly convertMoney: ConvertMoney;
   readonly recordTransaction: RecordTransaction;
+  /** PHASE 06: részvény fundamentális elemzés (UI a PHASE 12-ben). */
+  readonly analyzeStockFundamentals: AnalyzeStockFundamentals;
 }

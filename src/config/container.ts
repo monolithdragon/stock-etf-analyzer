@@ -5,6 +5,7 @@
  * A UI a kész `AppServices`-t kapja (React Contexten át), az adaptereket nem ismeri.
  */
 import {
+  createAnalyzeStockFundamentals,
   createConvertMoney,
   createGetDividendHistory,
   createGetFinancialStatements,
@@ -99,19 +100,32 @@ export function createAppServices(
     ...depOverrides,
   };
   const market = { marketData: deps.marketData, clock: deps.clock };
+  const getListingQuote = createGetListingQuote(market);
+  const getFinancialStatements = createGetFinancialStatements(market);
+  const getPriceHistory = createGetPriceHistory(market);
+  const getInstrumentProfile = createGetInstrumentProfile(market);
+  const getDividendHistory = createGetDividendHistory(market);
   return {
-    getListingQuote: createGetListingQuote(market),
+    getListingQuote,
     getSecurityListings: createGetSecurityListings(market),
-    getFinancialStatements: createGetFinancialStatements(market),
-    getPriceHistory: createGetPriceHistory(market),
-    getInstrumentProfile: createGetInstrumentProfile(market),
-    getDividendHistory: createGetDividendHistory(market),
+    getFinancialStatements,
+    getPriceHistory,
+    getInstrumentProfile,
+    getDividendHistory,
     searchInstruments: createSearchInstruments(market),
     convertMoney: createConvertMoney({ fxGateway: deps.fx, clock: deps.clock }),
     recordTransaction: createRecordTransaction({
       portfolioRepository: deps.portfolioRepository,
       clock: deps.clock,
       ids: deps.ids,
+    }),
+    analyzeStockFundamentals: createAnalyzeStockFundamentals({
+      getFinancialStatements,
+      getListingQuote,
+      getInstrumentProfile,
+      getPriceHistory,
+      getDividendHistory,
+      clock: deps.clock,
     }),
   };
 }

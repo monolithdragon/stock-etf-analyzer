@@ -16,3 +16,4 @@ export * from './fx/fx-rate';
 export * from './fx/fx-conversion';
 export * from './portfolio/portfolio';
 export * from './analysis/analysis-result';
+export * from './analysis/stock-fundamentals';

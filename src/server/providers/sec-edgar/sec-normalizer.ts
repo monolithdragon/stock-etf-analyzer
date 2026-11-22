@@ -46,13 +46,16 @@ import {
   type StatementFrequency,
 } from '@/domain';
 
+import { composeTotalDebt, type DebtComponentFact } from './sec-debt';
 import { secConceptSchema, type SecCompanyFactsShell } from './sec-dto';
 import {
   SEC_ANNUAL_FORMS,
   SEC_BALANCE_TAGS,
   SEC_CASH_FLOW_TAGS,
+  SEC_DEBT_COMPONENT_TAGS,
   SEC_INCOME_TAGS,
   SEC_QUARTERLY_FORMS,
+  type SecDebtComponent,
   type SecLineItemMapping,
   type SecTagCandidate,
 } from './sec-tags';
@@ -71,12 +74,6 @@ const TAG_TABLES_MATCH_DOMAIN: [
   KeysWithin<typeof SEC_CASH_FLOW_TAGS, CashFlowItem>,
 ] = [true, true, true];
 void TAG_TABLES_MATCH_DOMAIN;
-
-/** Tételek, amelyeket a SEC-adapter szándékosan NEM állít elő – indoklással. */
-const UNMAPPED_REASONS: Partial<Record<BalanceSheetItem, string>> = {
-  totalDebt:
-    'Összetett tétel (rövid + hosszú lejáratú adósság); a SEC-adapter szándékosan nem állítja elő, mert a komponensek összeadása dupla számoláshoz vezethet (R-05). Döntés: PHASE 05/06.',
-};
 
 /** Legfeljebb ennyi időszakot adunk vissza (legfrissebb elöl) – válaszméret-korlát. */
 export const MAX_PERIODS: Readonly<Record<StatementFrequency, number>> = {
@@ -366,6 +363,15 @@ export function normalizeSecCompanyFacts(
       loaded[kind].set(item, result.value);
     }
   }
+  const debtComponents = new Map<SecDebtComponent, LoadedMapping>();
+  for (const [component, mapping] of Object.entries(SEC_DEBT_COMPONENT_TAGS) as [
+    SecDebtComponent,
+    SecLineItemMapping,
+  ][]) {
+    const result = loadMapping(shell, mapping, stats);
+    if (!result.ok) return result;
+    debtComponents.set(component, result.value);
+  }
   const everything = [
     ...loaded.income.values(),
     ...loaded.balance.values(),
@@ -471,8 +477,30 @@ export function normalizeSecCompanyFacts(
         if (statementFiled === null || fact.filed > statementFiled) statementFiled = fact.filed;
       }
 
-      for (const [item, reason] of Object.entries(UNMAPPED_REASONS)) {
-        if (kind === 'balance') lineItems[item] = metricMissing(reason);
+      if (kind === 'balance') {
+        // Összetett tétel explicit szabállyal (D-059); nem számít bele az okCount-ba, mert
+        // önmagában nem bizonyítja, hogy a mérleg létezik.
+        const picks = Object.fromEntries(
+          [...debtComponents].map(([component, entry]) => {
+            const picked = pickForPeriod(entry, candidate, currency);
+            const fact: DebtComponentFact | null =
+              picked === null
+                ? null
+                : {
+                    val: picked.fact.val,
+                    filed: picked.fact.filed,
+                    tag: picked.fact.tag.tag,
+                    reference: `${picked.fact.tag.taxonomy}:${picked.fact.tag.tag} accn=${picked.fact.accn} form=${picked.fact.form} filed=${picked.fact.filed}`,
+                  };
+            return [component, fact];
+          }),
+        ) as Record<SecDebtComponent, DebtComponentFact | null>;
+        lineItems.totalDebt = composeTotalDebt(picks, {
+          ...SEC_SOURCE,
+          fetchedAt: options.fetchedAt,
+          period: period.value,
+          currency,
+        });
       }
 
       if (okCount === 0) {

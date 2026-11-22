@@ -106,8 +106,11 @@ describe('normalizeSecCompanyFacts – invariánsok mind a 12 cégen', () => {
           s.lineItems as Readonly<Record<string, Metric<number>>>,
         )) {
           if (metric.status === 'OK') {
-            // 4) Minden érték nyomon követhető: tag + accession.
-            expect(metric.provenance.reference).toMatch(/^(us-gaap|ifrs-full|dei):\w+ accn=/);
+            // 4) Minden érték nyomon követhető: tag + accession (az összetett totalDebt a
+            //    komponensek listájával, D-059).
+            expect(metric.provenance.reference).toMatch(
+              /^(totalDebt = )?(us-gaap|ifrs-full|dei):\w+ accn=/,
+            );
             // 5) Pénzösszeg csak a kimutatás pénznemében.
             if (metric.provenance.unit === 'money')
               expect(metric.provenance.currency).toBe(s.currency);
@@ -117,8 +120,19 @@ describe('normalizeSecCompanyFacts – invariánsok mind a 12 cégen', () => {
             expect('value' in metric).toBe(false);
           }
         }
-        // 7) Az összetett totalDebt szándékosan MISSING, indoklással (nem 0, nem összeadott).
-        if (s.statementType === 'balance') expect(item(s, 'totalDebt')?.status).toBe('MISSING');
+        // 7) Az összetett totalDebt (D-059) vagy MISSING, vagy calculated/estimated – soha nem
+        //    „reported”, és mindig felsorolja a felhasznált tageket.
+        if (s.statementType === 'balance') {
+          const debt = item(s, 'totalDebt');
+          if (debt?.status === 'OK') {
+            expect(['calculated', 'estimated']).toContain(debt.provenance.kind);
+            expect(debt.provenance.inputs?.length).toBeGreaterThanOrEqual(1);
+            // Egyetlen komponens csak becslésként fogadható el (a rövid rész 0-nak véve).
+            if (debt.provenance.inputs?.length === 1) {
+              expect(debt.provenance.kind).toBe('estimated');
+            }
+          }
+        }
       }
     },
   );

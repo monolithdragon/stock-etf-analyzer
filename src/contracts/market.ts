@@ -75,6 +75,8 @@ export const instrumentProfileDtoSchema = withDomain(
     tradingCurrency: z.string().nullable(),
     website: z.string().nullable(),
     description: z.string().max(5000).nullable(),
+    /** PHASE 06: opcionális (régebbi proxy nem küldi) → `null`. */
+    beta: z.number().nullable().optional(),
     provenance: dataProvenanceSchema,
   }),
   createInstrumentProfile,

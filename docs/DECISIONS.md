@@ -502,7 +502,7 @@ A tulajdonos válaszai:
 - **Következmények:** a pénznemet egy árforrás tölti ki (PHASE 04B, EODHD). US részvénynél az ISIN-kérés csak kompozit sort ad (KI-21).
 
 ### D-043 – SEC companyfacts normalizálási szabályok
-- **Dátum:** 2026-11-21 · **Státusz:** Elfogadva (12 valós cég fixture-ján igazolva; részletek: DATA_DICTIONARY 4.4)
+- **Dátum:** 2026-11-21 · **Státusz:** Elfogadva (12 valós cég fixture-ján igazolva; részletek: DATA_DICTIONARY 4.4) · **Részben felváltva: D-059** (a `totalDebt` már nem szándékosan `MISSING`, hanem explicit szabállyal összerakott)
 - **Döntés:**
   1. **Pénznem:** a pénzösszeg-tények leggyakoribb egysége (TSM: TWD, mert az USD csak kényelmi átszámítás). Eltérő pénznemű tény nem kerül be.
   2. **Időszak:** a `start`/`end`-ből (D-021). FY 350–380, negyedév 80–100 nap. A D-037 sávja megerősítve: a 6/9 hónapos (YTD) tények kiesnek.
@@ -665,3 +665,52 @@ A tulajdonos válaszai:
   - **Tracking difference** = ETF − index hozam azonos időszakra. **Tracking error** = a különbségek minta szórása × √(évi periódusszám); a periódusszámot a hívó adja meg (napi 252 / heti 52 / havi 12).
   - **Drawdown:** a ±1e-12 alatti lebegőpontos zaj 0 (`snapToZero`). Szükséges recovery: DD > 0 → `INVALID_INPUT`, DD ≤ −1 → N/M.
   - **Portfóliósúly:** az árazott pozíciók összértékéhez viszonyítva; az ár nélküli pozíció külön listában (`unpriced`), nem 0 súllyal; eltérő pénznem → `INVALID_INPUT`; short nem támogatott. **Súlyozott hozam:** a súlyok összege 1 ± 1e-6; ≈ 100 esetén a hibaüzenet a „százalék vs. tört” tévedésre utal.
+
+## PHASE 06 – Részvény fundamentális elemzés (2026-11-22)
+
+### D-059 – `totalDebt` összerakása SEC-komponensekből, lejárat szerinti bontásban
+- **Dátum:** 2026-11-22 · **Státusz:** Elfogadva (felülírja a D-043 „`totalDebt` szándékosan `MISSING`” pontját)
+- **Kontextus:** a KI-42 miatt a nettó adósság, EV, D/E, IC, ROIC élő adattal mindig `MISSING` volt. Élő SEC-próba 12 cégen (2026-11-22): a `LongTermDebt` a rövid lejáratú részt IS tartalmazza; a JNJ `ShortTermBorrowings`-a ≈ `DebtCurrent` (benne a hosszú lejáratú adósság rövid része), így a PHASE 01-es `ShortTermBorrowings + LongTermDebtCurrent + LongTermDebtNoncurrent` vagy a `LongTermDebt + ShortTermBorrowings` képlet dupla számolást okozna (JNJ FY2025: 47,94 Mrd helyett 49,93 Mrd). A KO és az XOM 2023 óta a `LongTermDebtAndCapitalLeaseObligations…` tageket használja.
+- **Döntés:** `totalDebt = nem rövid rész + rövid rész`, operatív lízing nélkül (`src/server/providers/sec-edgar/sec-debt.ts`).
+  1. Nem rövid rész (kötelező): `LongTermDebtNoncurrent` → `LongTermDebtAndCapitalLeaseObligations` (utóbbinál megjegyzés: pénzügyi lízinggel együtt).
+  2. Rövid rész: `DebtCurrent`, ha van (mellé semmi); különben `LongTermDebtCurrent` / `LongTermDebtAndCapitalLeaseObligationsCurrent` + rövid hitel (`ShortTermBorrowings`, vagy annak hiányában `CommercialPaper` + `OtherShortTermBorrowings`).
+  3. Ha a 2. ágban egy komponenscsoportnak nincs ténye erre a napra → 0-nak vesszük, DE az eredmény `estimated`, és a provenance megnevezi a csoportot `[FELTÉTELEZÉS]` (az XBRL-mérleg minden sorát tageli, így a tag hiánya jellemzően azt jelenti, hogy nincs ilyen sor).
+  4. Nincs nem rövid komponens → `MISSING` (bankok, biztosítók – pl. JPM, BRK-B – és IFRS-filerek: a TSM kötvényei külön tagben vannak, a „borrowings” csak részösszeg lenne).
+  5. Az eredmény provenance-e `calculated`/`estimated` (nem `reported`); a `reference` felsorolja a komponens-tageket accession számmal, az `inputs` a tagneveket.
+- **Fixture:** a meglévő 10 fixture-be csak az új tagek kerültek be (`node scripts/record-sec-fixtures.mjs --add-new-tags`, `filed <=` az eredeti rögzítés napja); a régi tények bitre változatlanok (ellenőrizve).
+- **Következmény:** a mérleg-alapú mutatók élő adattal számolhatók; a becsült adósság a teljes láncon (nettó adósság, EV, D/E, ROIC) `estimated` eredetként látszik.
+
+### D-060 – Időszakok kezelése: oszlopok, Q4-származtatás, TTM, frissesség
+- **Dátum:** 2026-11-22 · **Státusz:** Elfogadva (megvalósítja a D-021 4–5. pontját)
+- **Döntés:**
+  1. Egy oszlop = egy pénzügyi időszak a `start`/`end` alapján; éves és negyedéves adat soha nem keveredik egy táblában. A TTM külön oszlopfajta (`PeriodColumn.kind = 'TTM'`), mert nem jelentett `FiscalPeriod`.
+  2. **Q4 = FY − (Q1+Q2+Q3)** csak additív időszaki tételre; csak ha a negyedévek hézagmentesen lefedik az évet (Q1 kezdete = FY kezdete, egymást követő negyedévek), azonos pénznemben, és csak ha az FY-nak és mindhárom negyedévnek van az adott kimutatása. EPS és átlagos részvényszám → `MISSING` (nem additív). Nemnegatív tétel (árbevétel, COGS, D&A, CapEx, osztalék, törlesztés) negatív Q4-e → `INVALID_INPUT` (restatement-ellentmondás). A Q4 mérlege = az FY mérlege (ugyanaz az időpont). A jelentett Q4-et nem írjuk felül.
+  3. **TTM** = az utolsó 4 egymást követő negyedév összege (a származtatott Q4-gyel); mérlegtétel a legutolsó negyedévből. 4 hézagmentes negyedév nélkül nincs TTM. A TTM EPS a 4 negyedéves EPS összege – ha bármelyik hiányzik (a származtatott Q4-é mindig), `MISSING`.
+  4. **A Q2/Q3 YTD cash flow különbségképzése NEM készült el:** a normalizáló a 6/9 hónapos tényeket eldobja (D-043); a különbségképzéshez a SEC-adapter bővítése kell → KI-18 nyitva marad.
+  5. **Frissesség:** a készlet-szintű frissességet (a use case saját órájával számolja) ráírjuk az `UNKNOWN` frissességű tételekre, így az elavult készletből számolt mutató is `stale` eredetű.
+  6. **Negyedéves növekedés:** az előző év azonos negyedévéhez képest (YoY). ROE/ROA/ROIC csak éves oszlopban (negyedéves/TTM: `NOT_APPLICABLE`, mert évesítés nélkül félrevezető).
+
+### D-061 – Összehasonlíthatóság: CAGR-feltételek, split-gyanú, 52 hetes tartomány
+- **Dátum:** 2026-11-22 · **Státusz:** Elfogadva
+- **Döntés:**
+  1. **CAGR (1/3/5/10 év)** csak ha: mindkét végpont-év létezik és `OK`; azonos beszámolási pénznem; azonos pénzügyi év vége (±7 nap az 52/53 hetes év miatt, `FISCAL_YEAR_END_TOLERANCE_DAYS`); részvényenkénti/részvényszám-sornál az ablak minden egymást követő évpárján nincs split-gyanú. Különben `INSUFFICIENT_DATA` / `NOT_MEANINGFUL` indokkal. Az évek száma = a pénzügyi év-címkék különbsége.
+  2. **Split-gyanú** (`SPLIT_SUSPECT_RATIO = 1,5`): ha a hígított átlagos részvényszám (EPS-nél) vagy a kint lévő részvényszám két egymást követő időszak között 1,5×-nél többet változik, a bázis valószínűleg eltér → `NOT_MEANINGFUL`. Indok: a SEC a régi évek EPS-ét csak a split utáni filingekben korrigálja, így a „legkésőbb beadott” szabály vegyes bázist adhat (NVDA 2024-es 10:1 split: valós fixture-ön kimutatva). Heurisztika: nagy akvizíciós részvénykibocsátás téves riasztást adhat (KI-53).
+  3. **52 hetes csúcs/mélypont** saját számítás napi záróárakból (`priceRange`, `(asOf − 365 nap, asOf]`), csak ha az ártörténet lefedi az ablakot (≤ 10 nap rés az elején, ≥ 200 pont); különben `INSUFFICIENT_DATA`. A megjegyzés jelzi, hogy eltérhet a szolgáltató intraday értékétől, és hogy osztalékkorrigált sorozatból számoltuk.
+
+### D-062 – Értékelési alap, béta, pénznem-őr
+- **Dátum:** 2026-11-22 · **Státusz:** Elfogadva
+- **Döntés:**
+  1. Pontszerű szorzók: **aktuális ár** + **legutóbbi teljes FY** eredmény/cash flow + **legfrissebb mérlegnap** (adósság, pénz, saját tőke, részvényszám). A megjegyzés megnevezi az FY-t és a mérlegnapot. TTM-alapú szorzó: PHASE 07 (a negyedéves CF hiányos, KI-18).
+  2. Piaci érték = ár × a legfrissebb mérleg részvényszáma (az eltérő dátumot a `marketCap` megjegyzése jelzi). Az FMP által közölt `marketCap` nem kerül be: a saját, nyomonkövethető számítás az elsődleges (AAPL-en a kettő egyezik: 4 978 Mrd USD).
+  3. **Béta:** a szolgáltatói érték (FMP `beta`) `reported`, tájékoztató megjegyzéssel (a módszertan nem közölt). Domain: `InstrumentProfile.beta: number | null` (opcionális bemenet, a régi proxy-válasz is érvényes). Saját béta: PHASE 08.
+  4. **Pénznem-őr:** ha a jegyzés és a beszámoló pénzneme eltér (pl. ADR), az ár-alapú szorzók `MISSING` + figyelmeztetés; az FX-átváltás a szorzókhoz: KI-50.
+  5. **Osztalékhozam:** TTM osztalék (D-056/12) ismeretlen lefedettséggel (`coverageStart: null`), mert a free források történeti mélységét nem ismerjük biztosan → esemény nélkül `MISSING`, nem 0% (KI-55).
+
+### D-063 – Minőségi elemzés adatmodell és eredet-címke
+- **Dátum:** 2026-11-22 · **Státusz:** Elfogadva
+- **Döntés:**
+  1. **`MetricOrigin`** (feladat 9.): `reported` / `calculated` / `estimated` / `stale` / `missing` / `unavailable` (+ `mock`, `user_input`). Elsőbbség: unavailable → missing → mock → stale → fajta. A `missing` gyűjtőcímke; a pontos ok (`MISSING`, `NOT_MEANINGFUL`, `INSUFFICIENT_DATA`, `INVALID_INPUT`, `ERROR`) a `Metric.status`-ban marad.
+  2. **Minőségi témák:** BUSINESS, GROWTH, PROFITABILITY, BALANCE_SHEET, CASH_FLOW, MOAT, MANAGEMENT, VALUATION. Témánként: numerikus bizonyíték (hivatkozott mutatók eredettel), forrásolt leletek, a hiányzó elemek listája, állapot (`EVIDENCE_AVAILABLE` / `PARTIAL_EVIDENCE` / `INSUFFICIENT_DATA`). **Nincs pontszám és nincs minősítés** (`scoring: 'NOT_SCORED'`) – ez a PHASE 10 feladata.
+  3. **MOAT és MANAGEMENT** állapota KIZÁRÓLAG forrásolt `QualitativeFinding`-ből jön (kötelező `sourceReference` és `verifiableBy`; `filing` / `provider` → `reported`, `user` → `user_input`). A numerikus kontextus (bruttó árrés, ROIC, részvényszám-változás) látszik, de önmagában nem bizonyíték → lelet nélkül `INSUFFICIENT_DATA`.
+  4. A numerikus mutatók (`periodMetrics`, `valuation`, `trends`) és a kvalitatív rész (`quality`) külön szerkezetben vannak; a kvalitatív rész csak hivatkozik a mutatókra.
+  5. **Részleges hibatűrés:** a use case egy forrás kiesésénél is eredményt ad; csak érvénytelen bemenet (listing-azonosító, kvalitatív lelet) ad `VALIDATION` hibát. A hibák a `dataQuality.sources[].error`-ban és a mutatók státuszában látszanak.
