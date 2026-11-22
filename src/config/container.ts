@@ -6,6 +6,8 @@
  */
 import {
   createAnalyzeStockFundamentals,
+  createAnalyzeStockValuation,
+  createRecalculateStockValuation,
   createConvertMoney,
   createGetDividendHistory,
   createGetFinancialStatements,
@@ -105,6 +107,14 @@ export function createAppServices(
   const getPriceHistory = createGetPriceHistory(market);
   const getInstrumentProfile = createGetInstrumentProfile(market);
   const getDividendHistory = createGetDividendHistory(market);
+  const analyzeStockFundamentals = createAnalyzeStockFundamentals({
+    getFinancialStatements,
+    getListingQuote,
+    getInstrumentProfile,
+    getPriceHistory,
+    getDividendHistory,
+    clock: deps.clock,
+  });
   return {
     getListingQuote,
     getSecurityListings: createGetSecurityListings(market),
@@ -119,13 +129,11 @@ export function createAppServices(
       clock: deps.clock,
       ids: deps.ids,
     }),
-    analyzeStockFundamentals: createAnalyzeStockFundamentals({
-      getFinancialStatements,
-      getListingQuote,
-      getInstrumentProfile,
-      getPriceHistory,
-      getDividendHistory,
+    analyzeStockFundamentals,
+    analyzeStockValuation: createAnalyzeStockValuation({
+      analyzeStockFundamentals,
       clock: deps.clock,
     }),
+    recalculateStockValuation: createRecalculateStockValuation({ clock: deps.clock }),
   };
 }

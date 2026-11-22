@@ -14,8 +14,8 @@
 | 04 | Adatforrások, proxy és deviza – **két chatben: 04A + 04B** (D-028) | **KÉSZ** (04A és 04B, 2026-11-21) | **M2 Adat a csövön ✅** |
 | 05 | Pénzügyi calculation engine | **KÉSZ** (2026-11-22) | |
 | 06 | Részvény fundamentális elemzés | **KÉSZ** (2026-11-22) | |
-| 07 | Értékelés és DCF | **KÖVETKEZIK** | |
-| 08 | ETF-elemzés | NEM KEZDŐDÖTT | |
+| 07 | Értékelés és DCF | **KÉSZ** (2026-11-22) | |
+| 08 | ETF-elemzés | **KÖVETKEZIK** | |
 | 09 | Portfólió és kockázat | NEM KEZDŐDÖTT | |
 | 10 | Score és döntési engine | NEM KEZDŐDÖTT | M3 Elemzőmotor kész |
 | 11 | AI-magyarázó engine | NEM KEZDŐDÖTT | |
@@ -271,6 +271,18 @@ Minden fázis közös lezárása (CLAUDE.md):
   - Normál, boundary és invalid tesztek.
   - Nincs DCF-számítás UI-komponensben.
   - Minden feltevés az outputban látszik.
+- **Eredmény (2026-11-22): KÉSZ.**
+  - Motor (`src/calculations/valuation/`): `runDcf` (explicit évek PV-je, Gordon TV, PV_TV, EV, equity, IV/részvény, MOS), `runDcfScenarios` (Bear/Base/Bull), `dcfSensitivityTable` + `sensitivityAxis` (minden cella `runDcf`), `valuation-bands.ts` (konfigurálható MOS- és szorzó-küszöbök) – D-064, D-065.
+  - Alkalmazás (`src/application/valuation/`): DCF-bemeneti modell forrással/eredettel/időszakkal és felülírással; kiinduló feltevések (alapeset 5 év, 3 éves támogatott); magyarázható kimenet (képletek, konvenciók, történeti kontextus, időbélyegek, figyelmeztetések, nyilatkozat); megjelenítési javaslat hamis pontosság nélkül.
+  - Use case-ek: `analyzeStockValuation`, `recalculateStockValuation` (`AppServices`). Forward P/E új mutató, csak forrásolt előrejelzésből (ma `MISSING`).
+  - Őrteszt: `src/app` és `src/presentation` nem hív DCF-függvényt.
+  - Ellenőrzés: `npm run check` exit 0; **783/783 teszt** (52 suite; +122); új motor 100% sor, új alkalmazási modulok ~97% sor.
+  - **Nem készült el (tudatosan):** FX-átváltás a szorzókhoz/MOS-hoz (KI-50 → 09), TTM-szorzók (KI-52, elvetve), WACC/CAPM (KI-59), EV-bővítés (KI-44), UI (12).
+  - Új döntések: D-064, D-065 (D-022 véglegesítve). Új ismert problémák: KI-58…KI-64.
+- **A későbbi fázisok kapcsolódási pontjai (PHASE 07-ből):**
+  - PHASE 10 (score): `valuation.dcf.scenarios[].category` és `valuation.multiples.bands` – mindkettő küszöbbel és nyilatkozattal; a score súlyozása ne kezelje ezeket objektív igazságként.
+  - PHASE 11 (AI): a `valuation.explanation` (képletek, konvenciók) és a `warnings` adható át magyarázatra; számot az AI nem állíthat elő.
+  - PHASE 12 (UI): `recalculateStockValuation(fundamentals, options)` a feltevés-szerkesztőhöz; megjelenítéshez a `display` mezők; a feltevések mindig az eredmény mellett.
 
 ### PHASE 08 – ETF-elemzés
 - **Cél:** ETF-specifikus modell és use case, a részvénylogikától elválasztva.

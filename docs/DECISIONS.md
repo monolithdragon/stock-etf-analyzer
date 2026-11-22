@@ -231,7 +231,7 @@
   - Split-bázist egyeztetni kell.
 
 ### D-022 – DCF alapbeállítások
-- **Dátum:** 2026-11-21 · **Státusz:** Javasolt (PHASE 07)
+- **Dátum:** 2026-11-21 · **Státusz:** Elfogadva – véglegesítve: D-064 (PHASE 07, 2026-11-22)
 - **Döntés:**
   - FCF = OCF − CapEx, mint FCFF-közelítés; az egyszerűsítés a UI-ban jelölve van.
   - Javasolt alapeset 5 év explicit időszak; 3 év támogatott; legfeljebb 10.
@@ -714,3 +714,32 @@ A tulajdonos válaszai:
   3. **MOAT és MANAGEMENT** állapota KIZÁRÓLAG forrásolt `QualitativeFinding`-ből jön (kötelező `sourceReference` és `verifiableBy`; `filing` / `provider` → `reported`, `user` → `user_input`). A numerikus kontextus (bruttó árrés, ROIC, részvényszám-változás) látszik, de önmagában nem bizonyíték → lelet nélkül `INSUFFICIENT_DATA`.
   4. A numerikus mutatók (`periodMetrics`, `valuation`, `trends`) és a kvalitatív rész (`quality`) külön szerkezetben vannak; a kvalitatív rész csak hivatkozik a mutatókra.
   5. **Részleges hibatűrés:** a use case egy forrás kiesésénél is eredményt ad; csak érvénytelen bemenet (listing-azonosító, kvalitatív lelet) ad `VALIDATION` hibát. A hibák a `dataQuality.sources[].error`-ban és a mutatók státuszában látszanak.
+
+---
+
+## PHASE 07 – Értékelés és DCF (2026-11-22)
+
+### D-064 – DCF-motor, bemeneti modell, forgatókönyvek és szenzitivitás (véglegesíti: D-022)
+- **Dátum:** 2026-11-22 · **Státusz:** Elfogadva
+- **Kontextus:** a D-022 javaslatot és a D-057 konvenciókat kellett teljes, tesztelt, magyarázható DCF-fé alakítani úgy, hogy a forgatókönyvek és a tábla ugyanazt az engine-t használják, és a UI ne számoljon.
+- **Döntés:**
+  1. **Szerkezet:** tiszta motor a `src/calculations/valuation/` alatt (`dcf.ts`: `runDcf`; `dcf-scenarios.ts`: `runDcfScenarios`, `dcfSensitivityTable`, `sensitivityAxis`; `valuation-bands.ts`, lásd D-065); összerakás a `src/application/valuation/`-ban (`buildDcfInputModel`, `buildStockValuation`); use case-ek: `analyzeStockValuation` (lekéréssel) és `recalculateStockValuation` (hálózat nélkül, új feltevésekkel – a UI ezt hívja).
+  2. **Képletek:** `FCF_t = FCF_{t−1}(1+g_t)`; `PV_t = FCF_t/(1+r)^t` (év végi, D-057); `TV = FCF_n(1+g)/(r−g)`; `PV_TV = TV/(1+r)^n`; `EV = ΣPV + PV_TV`; `Equity = EV − totalDebt + cash`; `IV/részvény = Equity/sharesOutstanding`; `MOS = (IV − ár)/IV`.
+  3. **Időtáv:** alapeset **5 év** (D-022); 1–10 év támogatott, a 3 éves eset tesztelt (`explicitYears: 3`). Évente eltérő növekedési ráta megengedett (`growthRates[]`).
+  4. **Érvénytelen bemenetek:** `r ≤ g` → `INVALID_INPUT` emberi magyarázattal (mit jelent, mit kell állítani); nem véges szám → `INVALID_INPUT`; hiányzó adósság/pénz → `MISSING` („a hiány nem 0; ha valóban 0, add meg explicit módon”); részvényszám ≤ 0, negatív adósság/pénz, `r ∉ (0, 1]`, növekedés `∉ (−1, 1]` → `INVALID_INPUT` (százalék-tipp). **Kiinduló FCF ≤ 0 → `NOT_MEANINGFUL`** (a DATA_DICTIONARY 5.4 korábbi `INVALID_INPUT` javaslatát pontosítja: a bemenet nem hibás, csak a modell félrevezető – konzisztens a P/FCF N/M szabályával); csak felhasználói (normalizált) FCF-felülírással fut.
+  5. **MOS:** ha az IV/részvény ≤ 0 → `NOT_MEANINGFUL` (a PHASE 05 `marginOfSafety` függvény `INVALID_INPUT`-ja változatlan, a DCF-modul előtte szűr); ha nincs azonos pénznemű ár → `MISSING` a konkrét okkal; a DCF ettől még érvényes.
+  6. **Bemenetek (alapértelmezés):** FCF = legutóbbi FY `fcf` (D-062-vel azonos); adósság/pénz = a legfrissebb mérlegnap (éves vs. negyedéves tábla első oszlopa, egyezésnél éves); részvényszám = áttekintő (legfrissebb mérleg, nem hígított); ár = aktuális jegyzés, csak azonos pénznemben. Minden bemenet: érték, státusz, `MetricOrigin`, forrás, `asOf`, `fetchedAt`, időszak, pénznem; a becsült adósság (`estimated`) figyelmeztetést ad. Felülírás bemenetenként (`user_input`, az eredeti érték a megjegyzésben).
+  7. **Kiinduló feltevések** (`DEFAULT_DCF_SCENARIOS`): Bear 2% növekedés / r 10% / g 1,5%; Base 5% / 9% / 2,5%; Bull 8% / 8% / 3%. **Nem a cégre kalibrált**, szándékosan kerek, mind felülírható; a kimenet jelöli (`source: 'default' | 'user'`). Mellettük történeti kontextus látszik (FCF/árbevétel CAGR, FCF-árrés, béta), de automatikusan nem kerül be.
+  8. **Diszkontráta:** felhasználói feltevés; WACC/CAPM-et nem számolunk (nincs forrásolt kockázatmentes hozam és kockázati prémium). Az FCF (OCF − CapEx) FCFF-közelítés marad (D-022), a konvenciókban kimondva.
+  9. **Szenzitivitás:** a Base bemenetein, r ± 2 × 1 pp és g ± 2 × 0,5 pp (5 × 5); egyedi tengely megadható (1–11 érték, véges, egyedi). Minden cella `runDcf`; cellahiba (pl. `r ≤ g`) a cellában marad, a tábla többi része érvényes.
+  10. **Hamis pontosság ellen:** a motor nem kerekít (nyomonkövethetőség); a kimenet `display` javaslatot ad (IV 3 értékes jegy, MOS egész %). Megjegyzés jelzi, ha a TV-arány > 75%, ha `g > 4%`, vagy ha `r − g < 2 pp`. Nem monoton Bear/Base/Bull sorrend → megjegyzés.
+- **Következmény:** a DCF minden része unit- és integrációs teszttel fedett (zárt alakú kézi képlettel ellenőrizve, valós AAPL/BRK-B/MSFT/XOM fixture-ön). Egy őrteszt kikényszeríti, hogy az `src/app` és `src/presentation` ne hívjon DCF-függvényt.
+
+### D-065 – Értékelési kategóriák, Forward P/E, nyitott szorzó-döntések
+- **Dátum:** 2026-11-22 · **Státusz:** Elfogadva
+- **Döntés:**
+  1. **Kategóriák konfigurálható küszöbökkel** (`valuation-bands.ts`): MOS → `DISCOUNT_TO_MODEL` (≥ 25%) / `NEAR_MODEL` / `PREMIUM_TO_MODEL` (< −10%); szorzó-sávok `LOW` / `MODERATE` / `HIGH` (P/E, Forward P/E, P/FCF 15/25; P/S 2/6; P/B 1,5/4; EV/EBITDA 10/16; PEG 1/2; FCF-hozam 3%/6%, ott a magasabb az olcsóbb). A küszöbök **elemzési konvenciók, nem objektív igazságok**: felülírhatók, a kimenet a ténylegesen használt küszöböt és a nyilatkozatot adja vissza. Nem BUY/HOLD/SELL (az a PHASE 10).
+  2. **Forward P/E** új `FinancialMetricId` (`forwardPe`): CSAK forrásolt elemzői EPS-előrejelzésből (`ValuationInput.forwardEps`). A jelenlegi adatforrásokból nem kérünk le ilyet → ma mindig `MISSING` indokkal; saját becslésből soha nem töltjük ki.
+  3. **TTM-alapú szorzók (KI-52):** nem vezetjük be; a szorzók FY-alapúak maradnak (D-062). A „TTM NI / utolsó negyedéves részvényszám” becsült EPS nem kerül be, mert a TTM cash flow is hiányos (KI-18) és vegyes alapú szorzókat adna.
+  4. **FX a szorzókhoz és a MOS-hoz (KI-50):** nem került be ebben a fázisban; a DCF a beszámolói pénznemben számol, eltérő jegyzési pénznemnél a MOS `MISSING` (az ár felülírással megadható). A `convertMoney` bekötése aszinkron FX-lekérést igényel → PHASE 09 (többdevizás értékelés).
+  5. **EV-egyszerűsítés (KI-44):** változatlan; a DCF EV → equity hídja is csak adósság és pénz. A konvenciók kimondják.

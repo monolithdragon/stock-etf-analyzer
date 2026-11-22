@@ -6,6 +6,7 @@ import {
   createPriceSeries,
   createQuote,
   err,
+  metricOk,
   parseListingId,
   type AppError,
   type CurrencyCode,
@@ -21,7 +22,7 @@ import {
 
 import { groupByPeriod, type PeriodStatements } from './statement-periods';
 import { TEST_FETCHED_AT, fullYear, statementSet, type PeriodSpec } from './testing';
-import { computeValuation, type ValuationInput } from './valuation';
+import { FORWARD_EPS_MISSING_REASON, computeValuation, type ValuationInput } from './valuation';
 
 const LISTING: ListingId = (() => {
   const id = parseListingId('TEST@XNYS');
@@ -243,5 +244,34 @@ describe('computeValuation – áttekintő piaci mutatók', () => {
     });
     expect(get('marketCap').origin).toBe('unavailable');
     expect(get('dividendYield').value.status).not.toBe('OK');
+  });
+});
+
+describe('computeValuation – Forward P/E (PHASE 07, D-065)', () => {
+  it('forrásolt EPS-előrejelzés nélkül MISSING indokkal – nincs saját becslés', () => {
+    const { get } = run();
+    const fpe = get('forwardPe');
+    expect(fpe.value.status).toBe('MISSING');
+    expect(fpe.value.status !== 'OK' && fpe.value.reason).toContain(FORWARD_EPS_MISSING_REASON);
+  });
+
+  it('ha a forward EPS ténylegesen elérhető (forrásolt), P/E = ár / forward EPS', () => {
+    const forwardEps = metricOk(2.2, {
+      ...prov({ sourceId: 'estimates-test', sourceName: 'Teszt konszenzus' }),
+      unit: 'money_per_share',
+      currency: 'USD' as CurrencyCode,
+    });
+    const { get } = run({ forwardEps });
+    expect(v(get('forwardPe'))).toBeCloseTo(33 / 2.2, 12);
+    expect(get('forwardPe').formula).toContain('forwardEps');
+  });
+
+  it('negatív forward EPS → NOT_MEANINGFUL', () => {
+    const forwardEps = metricOk(-1, {
+      ...prov(),
+      unit: 'money_per_share',
+      currency: 'USD' as CurrencyCode,
+    });
+    expect(run({ forwardEps }).get('forwardPe').value.status).toBe('NOT_MEANINGFUL');
   });
 });
