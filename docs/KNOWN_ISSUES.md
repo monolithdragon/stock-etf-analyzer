@@ -1,10 +1,22 @@
 # Ismert problémák, kockázatok, ismeretlenek – Stock & ETF Analyzer
 
-> Frissítve: 2026-11-22 (PHASE 08 vége). Valószínűség (V) és hatás (H) skálája: **A** = Alacsony, **K** = Közepes, **M** = Magas.
+> Frissítve: 2026-11-22 (PHASE 09 vége). Valószínűség (V) és hatás (H) skálája: **A** = Alacsony, **K** = Közepes, **M** = Magas.
 
 ## Blokkolók
 
-**Nincs blokkoló a PHASE 09 indításához.** A PHASE 09 (portfólió) a PHASE 05 portfólió-képleteire, a 04A FX-rétegére és a PHASE 08 kockázati függvényeire (`risk.ts`) építhet; az ETF-holdings-alapú look-through csak holdings-forrással működik (KI-65, KI-66).
+**Nincs blokkoló a PHASE 10 indításához.** A PHASE 10 (score és döntés) a PHASE 06–09 kimeneteire épít: részvény-mutatók, DCF, `EtfAnalysis.features` és a `PortfolioAnalysis` (koncentráció, kitettség, kockázat a `reliability` címkével). A hiányzó értékek mindenhol nem-OK státuszok okkal – a score-nak nem szabad 0-nak venni őket.
+
+## PHASE 09 – ismert problémák és leletek (2026-11-22)
+
+| ID | Leírás | Hatás | Állapot / teendő | Fázis |
+|---|---|---|---|---|
+| KI-76 | **Hívásköltség:** egy portfólióelemzés nyitott pozíciónként 1 árfolyam + (alapból) jegyzésenként 1 profil + historikus módban jegyzésenként 1–2 ártörténet. 10 pozíciónál a free EODHD napi 20 hívása (nem US jegyzéseknél) gyorsan elfogy; az FX az ECB-ből jön (kvóta nélkül). | K | Enyhítés: `fetchProfiles: false`, a historikus elemzés csak kérésre. Megoldás: proxy-cache (PHASE 13, KI-68-cal együtt). | 13 |
+| KI-77 | **Nincs napi FX-idősor végpont:** a többdevizás portfólió historikus elemzése csak hívó által adott FX-idősorral (`history.fxSeries`) fut, különben `MISSING`. Egydevizás (vagy bázisdevizás) portfóliónál működik. | K | Teendő: ECB idősor-lekérés (`/api/v1/fx/series?from&to&quotes`) a proxyban + `FxGateway.getRateSeries`, valós fixture-rel. A mai rátával visszaszámolás tudatosan tiltott. | 13 |
+| KI-78 | **Egyszerűsített hozam- és osztalékmodell:** nincs készpénzszámla (az osztalék kikerül a portfólióból, nincs újrabefektetés), nincs pénzsúlyozott hozam (IRR/MWR), az osztalék bruttó (forrásadó nélkül), a FEE tranzakció a TWR-be nem számít bele. | K | Dokumentált (D-072/4, /8). Bővítés: `withholdingTax` mező a DIVIDEND-en, készpénz-pozíció, XIRR. | 14+ |
+| KI-79 | **Csak átlagár-módszer;** a FIFO és a magyar adószabály szerinti (MNB-árfolyamos) számítás nincs. | K | Tudatos (D-012, D-072/1); a kimenet `taxWarning`-ot ad. A motor (`averageCostLedger`) mellé egy `fifoLedger` illeszthető ugyanazzal az eseménymodellel. | később |
+| KI-80 | **Look-through csak kézi holdings-szal** (KI-65, KI-74); az egyedi részvénykitettség és az ETF-átfedés csak **ISIN** szerint párosít, ISIN nélküli holdings-tétel kimarad (súlya a megjegyzésben). A közvetlen ország-/szektorkitettség csak részvényre van (az ETF domicilje nem kitettség). | K | Tudatos (D-072/6–7). A holdings-fájl import (PHASE 13) javítja. | 13 |
+| KI-81 | **Azonos napi tranzakciók sorrendje** = a rögzítés (tárolási) sorrendje; időpont nincs a tranzakcióban. Ha a felhasználó ugyanazon a napon előbb az eladást rögzíti, mint a vételt, `OVERSELL` lesz. | A | Elfogadva (D-072/9); a `recordTransaction` ezt rögzítéskor jelzi. Lehetőség: opcionális időpont/sorszám mező (PHASE 13 séma). | 13 |
+| KI-82 | **Historikus naptár:** a jegyzések kereskedési napjainak uniója (forward-fill ≤ 7 nap), ezért többpiacú portfóliónál egy évben > 252 megfigyelés lehet, miközben az évesítés √252 – a volatilitás így enyhén (~1–2%) felülbecsült lehet. A korreláció a teljes ársorból, natív devizában készül (nem csak az elemzési ablakból). | A | Dokumentált (`history.conventions`). | – |
 
 ## PHASE 08 – ismert problémák és leletek (2026-11-22)
 
@@ -19,7 +31,7 @@
 | KI-71 | A **disztribúciós total return** (korrigált sor hiányában) újrabefektetés nélküli közelítés; hosszú ablakon kissé alulbecsül. Az EODHD `adjusted_close` (korrigált sor) elérhető, így ez csak tartalék-út. | A | Dokumentált (D-069/4, megjegyzés a kimenetben). | – |
 | KI-72 | A **régió-levezetés** heurisztika (80% / 5% / 3 régió, MSCI EM lista); határesetben (pl. fejlett ex-US) `OTHER`. A fedezett osztály devizakockázata a teljes fedezés feltevésével 0. | A | Dokumentált (D-067/5, D-068/3); a megadott régió elsőbbséget élvez. | – |
 | KI-74 | **Kibocsátói holdings-fájl import még nincs** (D-071): a UCITS ETF-ek holdingsa ma csak kézi `EtfHoldingsSnapshot`-ként adható meg. | K | Tervezett: kibocsátónként formátum-adapter (iShares, Vanguard, Xtrackers), valós megvágott fixture, a meglévő `createEtfHoldingsSnapshot` validáció; ismeretlen formátum → hiba. | 13 |
-| KI-75 | A **rövid ablakos kockázati mutatók** (126–239 napi hozam) elkészülnek, de zajosabbak; a free EODHD-vel nem US ETF-nél jellemzően ez az eset. | A | Kezelve (D-070): `reliability = 'short_window'` címke + megjegyzés; a PHASE 10 ennek alapján súlyozhat. | 09, 10 |
+| KI-75 | A **rövid ablakos kockázati mutatók** (126–239 napi hozam) elkészülnek, de zajosabbak; a free EODHD-vel nem US ETF-nél jellemzően ez az eset. | A | Kezelve (D-070): `reliability = 'short_window'` címke + megjegyzés; **PHASE 09: a portfólió-kockázat is ezt használja**; a PHASE 10 ennek alapján súlyozhat. | 10 |
 | KI-73 | A **kategória-validáció** (régió, méret, stílus, súlyozás) csak enum-tagságot ellenőriz; azt, hogy a kategória illik-e a benchmarkhoz, forrás nélkül nem lehet ellenőrizni. | A | Elfogadva; a forrás és a dátum a provenance-ben látszik. | 12 |
 
 ## PHASE 07 – ismert problémák és leletek (2026-11-22)
@@ -38,7 +50,7 @@
 
 | ID | Probléma / lelet | Hatás | Állapot / teendő | Felelős fázis |
 |---|---|---|---|---|
-| KI-50 | **Eltérő jegyzési és beszámolói pénznem** (ADR, pl. TSM: TWD kimutatás, USD ár) esetén az ár-alapú szorzók (P/E, P/S, P/B, P/FCF, FCF-hozam, EV/EBITDA, PEG) `MISSING`. | K | Tudatos (D-062/4): nincs csendes FX. **PHASE 07 (D-065/4):** nem került be; a DCF a beszámolói pénznemben számol, eltérő jegyzési pénznemnél a MOS `MISSING` (ár felülírással megadható). **Teendő:** a `convertMoney` bekötése (aszinkron FX-lekérés, dátum + forrás rögzítve) a többdevizás értékeléssel együtt. | 09 |
+| KI-50 | **Eltérő jegyzési és beszámolói pénznem** (ADR, pl. TSM: TWD kimutatás, USD ár) esetén az ár-alapú szorzók (P/E, P/S, P/B, P/FCF, FCF-hozam, EV/EBITDA, PEG) `MISSING`. | K | Tudatos (D-062/4): nincs csendes FX. **PHASE 07 (D-065/4):** nem került be; a DCF a beszámolói pénznemben számol, eltérő jegyzési pénznemnél a MOS `MISSING` (ár felülírással megadható). **PHASE 09:** a többdevizás PORTFÓLIÓ-értékelés elkészült (`analyzePortfolio`, D-072/3), de a részvény-szorzók FX-e nem a portfólió része → nem került be. **Teendő:** a `convertMoney` bekötése a részvény-értékelésbe (aszinkron FX, dátum + forrás) – PHASE 10 előtt vagy a PHASE 12 UI-val. | 10/12 |
 | KI-51 | **Becsült `totalDebt`:** ha egy rövid lejáratú komponensnek nincs ténye, 0-nak vesszük (`estimated`, megnevezve) – pl. MSFT FY2026, KO Q3 2026. **Bankoknál, biztosítóknál és IFRS-filereknél** (JPM, BRK-B, TSM) a `totalDebt` `MISSING`. | K | Dokumentált (D-059). Bővítés: további tagek (pl. `NotesPayable`, `LongTermDebtAndFinanceLeaseObligations`, IFRS `Bonds…`) valós fixture-rel igazolva. | 07, 15 |
 | KI-52 | **TTM EPS** gyakorlatilag mindig `MISSING`: a származtatott Q4 EPS nem additív (D-060/2), és a 10-K nem ad Q4 EPS-t. | K | Tudatos. A szorzók ezért a legutóbbi FY EPS-ével számolnak (D-062/1). **PHASE 07 döntés (D-065/3):** nem vezetjük be (vegyes alapú szorzót adna, a TTM cash flow is hiányos – KI-18); a szorzók FY-alapúak maradnak. | 13, 15 |
 | KI-53 | A **split-gyanú heurisztika** (részvényszám > 1,5× változás, D-061/2) nagy akvizíciós kibocsátásnál téves riasztást adhat (az EPS-növekedés / CAGR ekkor `NOT_MEANINGFUL`, nem hibás szám). | A | Elfogadva (konzervatív: inkább nincs érték, mint vegyes bázisú). Javítás: split-események forrásból (FMP `splits`) – PHASE 07/13. | 07, 13 |

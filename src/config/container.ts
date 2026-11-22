@@ -6,6 +6,7 @@
  */
 import {
   createAnalyzeEtf,
+  createAnalyzePortfolio,
   createAnalyzeStockFundamentals,
   createAnalyzeStockValuation,
   createRecalculateStockValuation,
@@ -142,6 +143,14 @@ export function createAppServices(
       getPriceHistory,
       getDividendHistory,
       getInstrumentProfile,
+      convertMoney,
+      clock: deps.clock,
+    }),
+    analyzePortfolio: createAnalyzePortfolio({
+      portfolioRepository: deps.portfolioRepository,
+      getListingQuote,
+      getInstrumentProfile,
+      getPriceHistory,
       convertMoney,
       clock: deps.clock,
     }),
