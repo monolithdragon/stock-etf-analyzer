@@ -68,7 +68,7 @@ Részletek: [../KNOWN_ISSUES.md](../KNOWN_ISSUES.md), „PHASE 12” szakasz.
 - KI-98 (vonaldiagram nincs), KI-99 (Unicode tab-ikonok), KI-102 (DCF-/score-szerkesztő nincs), KI-103 (Compare váz), KI-104 (Jest act-figyelmeztetés), KI-105 (egy portfólió, csak vétel/eladás), KI-106 (ETF blokkoló hiba), KI-107 (tesztszám-eltérés), KI-108 (`basedOn` nem kattintható).
 
 ## 6. Nyitott kérdések (a tulajdonos dönt)
-- **Commit:** a változások a `phase-12` branchen vannak, **commit nélkül**. Javasolt üzenet:
+- **Commit:** tulajdonosi kérésre commitolva a `phase-12` branchen (`80c5284`); a push, a PR és a merge a tulajdonos döntése. Üzenet:
   `feat: PHASE 12 – UI/UX és navigáció (tabok + Stack, részvény/ETF/portfólió képernyők külön view-modellel, közös formázók, AA kontraszt, állapotok, provenance-nézet, magyarázat-szekció, createPortfolio)`
 - **Eszközös ellenőrzés:** `npm run android` + a fázis-útmutató 14. fejezetének listája.
 - **Grafikon:** kell-e vonaldiagram (árfolyam/TWR) a PHASE 14-ben? (`react-native-svg` új függőség lenne.)

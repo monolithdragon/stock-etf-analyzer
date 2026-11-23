@@ -35,7 +35,7 @@ Mobilalkalmazás (Expo SDK 58, React Native, TypeScript) részvények, ETF-ek é
 | **Score és döntés** | **Kész** (PHASE 10, D-073…D-075): új `src/scoring` réteg (tiszta szabálymotor); külön részvény- (8 kategória, MOAT 0 súllyal) és ETF-score (9 kategória) konfigurált, automatikusan ellenőrzött súlyokkal; kategóriánkénti pont, indoklás, hiányok, adatminőség, frissesség; hiányzó adat: kimarad + újranormalizálás minimummal + confidence-csökkentés (soha nem 0); determinisztikus, többdimenziós döntés (kapu → szabályok → plafonok, szabálynyom), konfigurálható címkék; `AnalysisConfidence` (nem hozam-valószínűség); thesis risks + érvénytelenítés (DCF-árszinttel); `evaluateStock`, `evaluateEtf`. Az AI nem vesz részt. UI nincs (PHASE 12). |
 | **AI-magyarázat** | **Kész** (PHASE 11, D-076…D-078): szigorú `AiInputDto` hivatkozható `ref`-ekkel; strukturált, validált kimenet `basedOn`-nal; tartalmi őr (hivatkozás, számvisszakeresés, tiltott állítás, confidence) a szerveren és a kliensen; **`template` provider** (új réteg: `src/explanation`; ingyenes, offline, alapértelmezés); `explainAnalysis` (LLM-hibánál a template marad); `POST /api/v1/ai/explain`: `mock` és `anthropic` provider (hivatalos SDK 1.12.0), kill switch, napi keret, cache, timeout; részvény-, ETF- és portfólió-sablon; portfólió csak beleegyezéssel és összegek nélkül. **Az LLM alapból ki van kapcsolva; élő Claude-hívás nem volt (nincs kulcs).** UI nincs (PHASE 12). |
 | Tárolás, cache | **Nincs** – PHASE 13 (SQLite, proxy cache). A portfólió, a figyelőlista és a beállítások memóriában (KI-97). |
-| Git | `main`-en a PHASE 11 merge (`6a907d3`, PR #7); a PHASE 12 a **`phase-12`** branchen, **commit nélkül** (a tulajdonos dönt a commitról, push/PR/merge-ről) |
+| Git | `main`-en a PHASE 11 merge (`6a907d3`, PR #7); a PHASE 12 a **`phase-12`** branchen **commitolva** (`80c5284`); push/PR/merge: a tulajdonos dönt |
 
 Fázisonkénti állapot: [ROADMAP.md](ROADMAP.md).
 
@@ -145,7 +145,7 @@ Teljes lista: [DECISIONS.md](DECISIONS.md).
 | (04A) | A SEC User-Agent kapcsolattartó e-mailjét a tulajdonos a `.env.local`-ba írta |
 
 ## Nyitott kérdések
-- **Commit (PHASE 12):** a változások a `phase-12` branchen vannak, commit nélkül; a commit, a push és a PR a tulajdonos döntése.
+- **Commit (PHASE 12):** tulajdonosi kérésre commitolva a `phase-12` branchen (`80c5284`); a push és a PR a tulajdonos döntése.
 - **Eszközös ellenőrzés (KI-100):** az új UI-t emulátoron/telefonon meg kell nézni (fázis-útmutató, „Kézi ellenőrzés”).
 - **Commit (korábbi):** a PHASE 10 és 11 már a `main`-en (PR #6, PR #7).
 - **Ellentmondás-javítás:** a PHASE 09 végi PROJECT_STATE „PR #5 nyitva” állapotot írt; a PHASE 10 indulásakor a PR #5 már merge-ölve volt (`296eeba`).
