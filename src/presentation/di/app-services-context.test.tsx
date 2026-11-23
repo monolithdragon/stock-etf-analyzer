@@ -22,6 +22,7 @@ const fakeServices: AppServices = {
   analyzePortfolio: jest.fn(),
   evaluateStock: jest.fn(),
   evaluateEtf: jest.fn(),
+  explainAnalysis: jest.fn(),
 };
 
 describe('useAppServices', () => {

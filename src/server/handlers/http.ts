@@ -4,7 +4,7 @@
 import type { z } from 'zod';
 
 import { API_VERSION, type ApiErrorCode } from '@/contracts';
-import type { AppError, UnavailableReason } from '@/domain';
+import type { AiFailure, AppError, UnavailableReason } from '@/domain';
 
 /**
  * Kézi frissítés és cache (PHASE 04 feladat 10.): a PHASE 04-ben NINCS proxy cache, minden
@@ -29,6 +29,22 @@ export function errorResponse(
       ? { code, message, retryAfterSec }
       : { code, message, retryAfterSec, unavailableReason };
   return new Response(JSON.stringify({ apiVersion: API_VERSION, error }), { status, headers });
+}
+
+/** PHASE 11: az AI-hibák saját kódot kapnak; az app a szabályalapú összefoglalóval megy tovább. */
+function aiErrorToResponse(failure: AiFailure, message: string): Response {
+  switch (failure) {
+    case 'AI_DISABLED':
+      return errorResponse('AI_DISABLED', 503, message);
+    case 'AI_TIMEOUT':
+      return errorResponse('TIMEOUT', 504, message);
+    case 'AI_RATE_LIMITED':
+      return errorResponse('RATE_LIMITED', 429, message);
+    case 'AI_REFUSED':
+      return errorResponse('AI_REFUSED', 422, message);
+    case 'AI_INVALID_OUTPUT':
+      return errorResponse('AI_INVALID_OUTPUT', 502, message);
+  }
 }
 
 /** AppError → (HTTP státusz, API hibakód). A kliens `apiErrorToAppError`-ja a párja. */
@@ -71,9 +87,10 @@ export function appErrorToResponse(error: AppError): Response {
         null,
         error.reason,
       );
+    case 'AI':
+      return aiErrorToResponse(error.failure, error.message);
     case 'CALCULATION_INVALID':
     case 'STORAGE':
-    case 'AI':
       return errorResponse('INTERNAL', 500, 'Belső hiba.');
   }
 }

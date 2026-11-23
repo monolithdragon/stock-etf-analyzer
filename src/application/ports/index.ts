@@ -3,8 +3,9 @@
  * A konkrét megvalósítás (adapter) az `src/infrastructure`-ben van, a `src/config` köti össze.
  *
  * Csak olyan port létezik, amelyet ténylegesen használ egy use case (D-040).
- * Az `AiGateway` (PHASE 11) és a kliensoldali `Logger` a saját fázisában kerül be.
+ * PHASE 11: `AiGateway` (opcionális LLM-magyarázat a proxyn át). A kliensoldali `Logger` később.
  */
+import type { AiExplainRequestDto, AiExplanationDto } from '@/contracts';
 import type {
   AppError,
   CurrencyCode,
@@ -88,4 +89,13 @@ export interface PortfolioRepository {
   savePortfolio(portfolio: Portfolio): Promise<Result<void, AppError>>;
   listTransactions(portfolioId: PortfolioId): Promise<Result<readonly Transaction[], AppError>>;
   addTransaction(transaction: Transaction): Promise<Result<void, AppError>>;
+}
+
+/**
+ * Opcionális LLM-magyarázat a proxyn át (PHASE 11, D-078). A kulcs és a szolgáltató a szerveren
+ * van; a kliens csak a validált `AiInputDto`-t küldi. Hiba (kikapcsolt AI, timeout, rate limit,
+ * érvénytelen válasz) esetén `AI`/`TIMEOUT`/`RATE_LIMITED` AppError – az app ettől használható marad.
+ */
+export interface AiGateway {
+  explain(request: AiExplainRequestDto): Promise<Result<AiExplanationDto, AppError>>;
 }

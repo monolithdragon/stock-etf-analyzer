@@ -64,9 +64,23 @@ const layerZones = [
     message: 'A scoring csak a domaint és a calculations-t importálhatja (ARCHITECTURE 3.).',
   },
   {
+    // PHASE 11 (D-076): a szabályalapú magyarázat csak a közös szerződést és a domaint látja.
+    target: './src/explanation',
+    from: './src',
+    except: ['./explanation', './contracts', './domain'],
+    message: 'Az explanation csak a contracts-ot és a domaint importálhatja (ARCHITECTURE 3.).',
+  },
+  {
     target: './src/application',
     from: './src',
-    except: ['./application', './domain', './contracts', './calculations', './scoring'],
+    except: [
+      './application',
+      './domain',
+      './contracts',
+      './calculations',
+      './scoring',
+      './explanation',
+    ],
     message:
       'Az application nem függhet konkrét adaptertől, UI-tól vagy szervertől – portot használj.',
   },
@@ -213,6 +227,7 @@ module.exports = defineConfig([
     files: [
       'src/contracts/**/*.{ts,tsx}',
       'src/application/**/*.{ts,tsx}',
+      'src/explanation/**/*.{ts,tsx}',
       'src/server/**/*.{ts,tsx}',
     ],
     rules: { 'no-restricted-imports': ['error', { patterns: UI_AND_PLATFORM_PACKAGES }] },
@@ -230,6 +245,7 @@ module.exports = defineConfig([
       'src/domain/**/*.{ts,tsx}',
       'src/calculations/**/*.{ts,tsx}',
       'src/scoring/**/*.{ts,tsx}',
+      'src/explanation/**/*.{ts,tsx}',
       'src/contracts/**/*.{ts,tsx}',
       'src/application/**/*.{ts,tsx}',
       'src/presentation/**/*.{ts,tsx}',

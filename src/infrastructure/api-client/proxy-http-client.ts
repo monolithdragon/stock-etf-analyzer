@@ -18,6 +18,13 @@ export type ClientFetch = (input: string, init?: RequestInit) => Promise<Respons
 
 export interface ProxyHttpClient {
   get<S extends z.ZodType>(path: string, schema: S): Promise<Result<z.output<S>>>;
+  /** JSON-törzsű POST (PHASE 11: `/api/v1/ai/explain`); opcionálisan saját timeouttal. */
+  post<S extends z.ZodType>(
+    path: string,
+    body: unknown,
+    schema: S,
+    options?: { readonly timeoutMs?: number },
+  ): Promise<Result<z.output<S>>>;
 }
 
 export interface ProxyHttpClientOptions {
@@ -32,33 +39,56 @@ export const DEFAULT_PROXY_TIMEOUT_MS = 20_000;
 export function createProxyHttpClient(options: ProxyHttpClientOptions): ProxyHttpClient {
   const timeoutMs = options.timeoutMs ?? DEFAULT_PROXY_TIMEOUT_MS;
 
-  return {
-    async get(path, schema) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
-      let text: string;
-      try {
-        const response = await options.fetchImpl(`${options.baseUrl}${path}`, {
-          method: 'GET',
-          headers: { Accept: 'application/json' },
-          signal: controller.signal,
-        });
-        text = await response.text();
-      } catch {
-        return controller.signal.aborted
-          ? err(AppErrors.timeout(`A szerver nem válaszolt ${timeoutMs} ms alatt.`, timeoutMs))
-          : err(AppErrors.network('Nincs kapcsolat a szerverrel (offline vagy a proxy nem fut).'));
-      } finally {
-        clearTimeout(timer);
-      }
+  async function send<S extends z.ZodType>(
+    path: string,
+    init: { readonly method: 'GET' | 'POST'; readonly body?: string },
+    schema: S,
+    requestTimeoutMs: number,
+  ): Promise<Result<z.output<S>>> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
+    let text: string;
+    try {
+      const response = await options.fetchImpl(`${options.baseUrl}${path}`, {
+        method: init.method,
+        headers:
+          init.body === undefined
+            ? { Accept: 'application/json' }
+            : { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: init.body,
+        signal: controller.signal,
+      });
+      text = await response.text();
+    } catch {
+      return controller.signal.aborted
+        ? err(
+            AppErrors.timeout(
+              `A szerver nem válaszolt ${requestTimeoutMs} ms alatt.`,
+              requestTimeoutMs,
+            ),
+          )
+        : err(AppErrors.network('Nincs kapcsolat a szerverrel (offline vagy a proxy nem fut).'));
+    } finally {
+      clearTimeout(timer);
+    }
 
-      let json: unknown;
-      try {
-        json = JSON.parse(text) as unknown;
-      } catch {
-        return err(AppErrors.upstream('CONTRACT_MISMATCH', 'A szerver válasza nem JSON.', 'proxy'));
-      }
-      return parseApiResponse(json, schema);
-    },
+    let json: unknown;
+    try {
+      json = JSON.parse(text) as unknown;
+    } catch {
+      return err(AppErrors.upstream('CONTRACT_MISMATCH', 'A szerver válasza nem JSON.', 'proxy'));
+    }
+    return parseApiResponse(json, schema);
+  }
+
+  return {
+    get: (path, schema) => send(path, { method: 'GET' }, schema, timeoutMs),
+    post: (path, body, schema, postOptions) =>
+      send(
+        path,
+        { method: 'POST', body: JSON.stringify(body) },
+        schema,
+        postOptions?.timeoutMs ?? timeoutMs,
+      ),
   };
 }

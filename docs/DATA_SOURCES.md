@@ -1,6 +1,6 @@
 # Adatforrások – Stock & ETF Analyzer
 
-> Ellenőrzés dátuma: **2026-11-21** (PHASE 01; a SEC, az ECB/Frankfurter és az OpenFIGI a **PHASE 04A-ban**, az **FMP és az EODHD a PHASE 04B-ben** élő próbahívásokkal ellenőrizve, lásd 10. és 11. fejezet; a **SEC N-PORT a PHASE 08-ban, 2026-11-22**, lásd 13. fejezet). Az ingyenes keretek és feltételek gyakran változnak.
+> Ellenőrzés dátuma: **2026-11-21** (PHASE 01; a SEC, az ECB/Frankfurter és az OpenFIGI a **PHASE 04A-ban**, az **FMP és az EODHD a PHASE 04B-ben** élő próbahívásokkal ellenőrizve, lásd 10. és 11. fejezet; a **SEC N-PORT a PHASE 08-ban, 2026-11-22**, lásd 13. fejezet; az **AI-szolgáltatók a PHASE 11-ben, 2026-11-23**, lásd 14. fejezet). Az ingyenes keretek és feltételek gyakran változnak.
 > Kapcsolódó döntések: D-023 (lefedettség), D-024 (adapterek, routing), D-025 (Security/Listing), D-027 (fizetős bővítés nyitva), D-008 (csak saját használat).
 
 ## 1. Jelölések
@@ -365,3 +365,48 @@ Minden tény saját próbahívásból származik, a tulajdonos **free** kulcsaiv
 **Következtetés (D-069/9):** a N-PORT US ETF-ekre alkalmas holdings-forrás (súly, ország, ISIN, deviza), de szektorsúlyt nem ad, UCITS-ra nem jó, és ~2–5 hónapos. Az adapterhez XML-feldolgozás (függőség kompatibilitás-ellenőrzéssel), sorozat-kiválasztás és valós, megvágott fixture kell – ez külön lépés (KI-66).
 
 **D-071 (2026-11-22):** a N-PORT adapter nem készül. Ok: csak US-regisztrált alapokat fed le, az EU-s lakossági befektető a PRIIPs miatt jellemzően nem vehet KID nélküli US ETF-et `[ÁLTALÁNOS – brókerenként ellenőrizendő]`. Helyette a kibocsátói holdings-fájl import a terv (PHASE 13, KI-74): a felhasználó maga tölti le a fájlt (iShares, Vanguard, Xtrackers), az app csak beolvassa – nincs scraping, nincs automatikus letöltés a kibocsátói oldalakról.
+
+
+## 14. PHASE 11 – AI-szolgáltatók: lokális LLM vs. felhős API (2026-11-23, U-16)
+
+> Jelölések, mint az 1. fejezetben. Élő LLM-hívás ebben a fázisban **nem** történt: a `.env.local`-ban az `ANTHROPIC_API_KEY` üres, és `AI_PROVIDER=template`, `AI_ENABLED=false`. Az Anthropic-adatok a hivatalos API-dokumentáció 2026-11-03-i árlistájából és az SDK 1.12.0 típusaiból származnak. A harmadik fél szolgáltatóiról szóló állítások **nem igazoltak**: a free keretek gyakran változnak, ingyenességet vagy korlátlanságot ezekre nem ígérünk.
+
+### 14.1 Mi az „AI” ebben az appban – és mi nem
+
+Az AI **adatforrásnak nem számít.** Számot, mutatót vagy döntést nem állít elő, csak a már kiszámolt `AiInputDto`-t fogalmazza meg (D-076…D-078). Az alapértelmezés a **szabályalapú `template`**: ingyenes, offline, determinisztikus. Az LLM opcionális „plusz réteg”.
+
+### 14.2 Összehasonlítás
+
+| Szempont | `template` (alap) | Anthropic Claude (proxyn át) – megvalósítva | Lokális LLM (pl. Ollama / llama.cpp a tulajdonos gépén) – csak vizsgálva | Más felhős free keretek – csak vizsgálva |
+|---|---|---|---|---|
+| Licenc | saját kód | kereskedelmi API, ToS szerint `[IGAZOLT: hivatalos SDK, Apache-2.0]` | modellenként eltér: néhány nyílt súlyú modell Apache-2.0, másoknak saját közösségi licence van felhasználási korlátokkal `[ÁLTALÁNOS – modellenként ellenőrizendő]` | szolgáltatónként; a free kereteknél gyakran megengedett, hogy a bemenet a szolgáltatás fejlesztésére kerüljön `[NEM IGAZOLT]` |
+| Hardverigény | nincs (a telefonon fut) | nincs (felhő) | 7–8B paraméteres, kvantált modellhez kb. 6–8 GB RAM/VRAM; a telefonon, Expo Go alatt nem futtatható `[ÁLTALÁNOS]`. Gyakorlatban a proxy mellett, a tulajdonos PC-jén futna | nincs |
+| Adatvédelem | az adat nem hagyja el az eszközt | az `AiInputDto` az Anthropichoz kerül; portfólió csak beleegyezéssel, összegek nélkül (D-076/4) | az adat a saját gépen marad | harmadik félhez kerül; a free kereteknél jellemzően kevesebb adatvédelmi garancia `[NEM IGAZOLT]` |
+| Költség | 0 | tokenalapú: Opus 5.5 $4/$20, Sonnet 5.5 $2/$10, Haiku 5.5 $0.10/$0.50 per 1M input/output token (2026-11-03). ~6 000 + 1 500 tokennel magyarázatonként ≈ $0.054 / $0.027 / $0.0014; a gondolkodási tokenek miatt több lehet | áram és hardver; nincs tokendíj | free kerettel 0, de a keret napi/perces limites és visszavonható `[NEM IGAZOLT]` |
+| Tokenlimit | – | 1M kontextus a jelenlegi modelleken; a mi kérésünk ~5–10 ezer token (DTO ≤ 96 KB) | kis modelleknél jellemzően 8–32 ezer kontextus `[ÁLTALÁNOS]`; a DTO belefér, de a hosszú rendszerprompt + DTO a határ közelébe kerülhet | szolgáltatónként `[NEM IGAZOLT]` |
+| JSON-output | séma szerint, determinisztikus | strukturált kimenet JSON-sémával (`output_config.format`) `[IGAZOLT: SDK-típusok + tesztek]`; mi ráadásul újravalidálunk | egyes futtatók JSON-sémás / nyelvtan-alapú kimenetkényszert ismernek `[HARMADIK FÉL – nem igazolt]`; a magyar nyelvű minőség kis modelleken gyenge lehet | szolgáltatónként; van, ahol csak „JSON mode”, sémakényszer nélkül `[NEM IGAZOLT]` |
+| Hallucináció | nincs (csak bemenetből épít) | lehetséges → séma + tartalmi őr szűri (D-077) | kis modelleknél gyakoribb → ugyanaz az őr, várhatóan sok `AI_INVALID_OUTPUT` | lehetséges → ugyanaz az őr |
+| Elérhetőség | mindig (offline is) | hálózat + proxy kell; kill switch; napi keret | csak ha a tulajdonos gépe fut és elérhető | szolgáltatófüggő |
+
+### 14.3 Javaslat (a tulajdonos dönt, DP-04)
+
+1. **Marad a `template` alapértelmezésként.** Ez lefedi az elfogadási feltételeket („AI nélkül is működik”), és nincs költsége.
+2. **Ha LLM kell:** `AI_PROVIDER=anthropic`, `AI_ENABLED=true`, `AI_MODEL=claude-haiku-5-5` (a legolcsóbb), `AI_DAILY_LIMIT` alacsonyan (pl. 20). A kulcs **csak** a `.env.local`-ba (lokálisan) vagy az EAS secretbe (élesben) kerülhet; chatbe soha.
+   - Előtte az EAS Hosting runtime-on egy próbatelepítéssel igazolni kell az SDK működését (KI-90).
+   - Az alapértelmezett modell a D-016 szerint `claude-opus-5-5`; ennek választása a tulajdonos költségdöntése.
+3. **Lokális LLM:** akkor érdemes, ha az adatvédelem a legfontosabb, és a tulajdonos gépe a proxy mellett fut. Megvalósítás:
+   - új `AiProvider`-adapter (pl. `local-ai-provider.ts`), amely a lokális futtató HTTP API-ját hívja; ugyanazon a szolgáltatáson és őrön megy át;
+   - a futtató API-ja és JSON-sémakényszere a választott eszköz hivatalos dokumentációjából ellenőrizendő;
+   - külön döntés és élő próba kell hozzá. A kis modellek magyar nyelvű, sémahű kimenete kockázatos.
+4. **Más felhős free keret:** most nem javasolt. A keret és a feltételek változékonyak, a free csomagok adatvédelmi feltételei gyengébbek lehetnek, és minden új szolgáltató új titkot és új adaptert jelent. Ha mégis kell, a 14.2 sorait a szolgáltató hivatalos oldaláról kell igazolni, mielőtt adapter készül.
+
+### 14.4 Tények az Anthropic-integrációról (PHASE 11, igazolva)
+
+| Tény | Forrás / igazolás |
+|---|---|
+| Csomag: `@anthropic-ai/sdk` 1.12.0 (2026-11-20), Apache-2.0; függőségek: `standardwebhooks`, `json-schema-to-ts`, `@opentelemetry/api`; peer: `zod ^3.25 \|\| ^4` | `npm view` (2026-11-23) |
+| A szerver-bundle-be bekerül (`/api/v1/ai/explain`, ~2 MB route); a kliens-bundle-ben nincs SDK, kulcs vagy szerverkód | `expo export -p web` + szkennelés |
+| Az Expo lokális szerver-runtime-ja (`expo serve`) betölti; mock providerrel `POST` → 200, `GET` → 405 | füstpróba, 8083-as port |
+| Strukturált kimenet: `output_config.format` (`betaZodOutputFormat`), effort `low`; refusal: `stop_reason: "refusal"` | SDK 1.12.0 típusok + egységtesztek hamis klienssel |
+| Élő Claude-hívás | **nem történt** (nincs kulcs; tudatos) |
+| EAS Hosting runtime | `[NEM IGAZOLT]` (KI-90) |
