@@ -1,24 +1,42 @@
 # Ismert problémák, kockázatok, ismeretlenek – Stock & ETF Analyzer
 
-> Frissítve: 2026-11-23 (PHASE 11 vége). Valószínűség (V) és hatás (H) skálája: **A** = Alacsony, **K** = Közepes, **M** = Magas.
+> Frissítve: 2026-11-23 (PHASE 12 vége). Valószínűség (V) és hatás (H) skálája: **A** = Alacsony, **K** = Közepes, **M** = Magas.
 
 ## Blokkolók
 
-**Nincs blokkoló a PHASE 12 indításához.**
-- A PHASE 12 (UI) bemenetei: `AppServices.explainAnalysis` (`ExplanationOutcome`: `template`, `llm`, `display`), valamint `buildInstrumentAiInput` és `buildPortfolioAiInput`.
-- Az LLM alapból ki van kapcsolva; a UI-nak a szabályalapú magyarázattal kell teljesnek lennie.
+**Nincs blokkoló a PHASE 13 indításához.**
+- A PHASE 13 (tárolás) bemenetei a UI oldalán: `SettingsProvider` (`AppSettings`), `WatchlistProvider` (`WatchlistItem[]`) és a `PortfolioRepository` port – mindhárom ma memóriában (KI-97).
+- A fő folyamat (keresés → elemzés) Jest-ben igazolt, **emulátoron/telefonon nem** (KI-12, KI-100).
+
+## PHASE 12 – ismert problémák és leletek (2026-11-23)
+
+| ID | Leírás | Hatás | Állapot / teendő | Fázis |
+|---|---|---|---|---|
+| KI-97 | **A beállítások, a figyelőlista és a portfólió memóriában élnek:** az app újraindításakor elvesznek. A UI ezt kiírja (Figyelő, Beállítások, Portfólió üres állapot). | K | PHASE 13: kv-store a beállításokhoz és a figyelőlistához, SQLite `PortfolioRepository`. A hook- és port-interfészek változatlanok maradhatnak. | 13 |
+| KI-98 | **Nincs vonaldiagram** (árfolyam, portfólió-TWR): csak sávdiagram (allokáció, ország, szektor, deviza) natív `View`-kból. Grafikonkönyvtár nincs telepítve (D-080/8, U-11 nyitva). | A | PHASE 14: igény esetén `react-native-svg` (`npx expo install`) + egyszerű saját vonaldiagram, vagy chart-könyvtár SDK 58 / New Architecture kompatibilitás-ellenőrzéssel. | 14 |
+| KI-99 | **A tab-ikonok Unicode-jelek** (⌂ ⌕ ◔ ☆ ⚙): a megjelenésük a rendszer-betűtípustól függ, eszközön nem ellenőrizve. A felirat mindig látszik, így a navigáció ikon nélkül is egyértelmű. | A | Eszközös ellenőrzéskor (KI-100) megnézni; ha csúnya vagy hiányzik: `expo-symbols` (`{ ios, android }` név) – már telepítve, futásidőben tölt betűtípust. | 13 |
+| KI-100 | **Az új UI nem futott emulátoron/telefonon.** Igazolva: `tsc`, ESLint, Jest (15 navigációs smoke teszt a valódi `src/app` route-fán, `renderRouter`), `expo export` Android (Hermes) és web. Nem igazolva: tényleges megjelenés, TalkBack/VoiceOver felolvasás, nagy betűméret, billentyűzet-takarás az űrlapon, lehúzásos frissítés. | K | A tulajdonos: `npm run android` (emulátor), majd a fázis-útmutató „Kézi ellenőrzés” listája. Eredmény a PHASE 13 handoffba. | 13 |
+| KI-101 | **ETF-metaadat kézi beviteli űrlap nincs** (`EtfMetadataInput`, ROADMAP PHASE 08 → 12 javaslat): a free csomag nem ad ETF-metaadatot, így az ETF-képernyő szinte minden mezője „Nem elérhető” (okkal). | K | PHASE 13 (a kibocsátói holdings-fájl importtal együtt, D-071) vagy PHASE 14. A use case már fogadja a `metadata` opciót. | 13/14 |
+| KI-102 | **Nincs DCF-feltevés- és score-konfiguráció-szerkesztő** (`recalculateStockValuation`, `EvaluationOptions.scoreConfig/decisionConfig`): a képernyő az alapfeltevéseket mutatja, a felülírás csak kódból érhető el. | A | PHASE 14 (a felhasználói konfiguráció tárolása PHASE 13 után). | 14 |
+| KI-103 | **Az Összehasonlítás csak váz:** a figyelőlista elemeit típus szerint csoportosítja, számot nem mutat (az összehasonlíthatósági szabályok PHASE 14-ben készülnek). | A | Tudatos (ROADMAP). | 14 |
+| KI-104 | **Jest-zaj:** a navigációs tesztekben „An update to BottomTabView … not wrapped in act(…)” `console.error` jelenik meg (a tab-navigátor saját, aszinkron állapotfrissítése). A tesztek zöldek, az eredményt nem befolyásolja. | A | Megfigyelendő; ha zavaró: a tesztben a tab-sáv animációjának kikapcsolása vagy a figyelmeztetés célzott szűrése. | 15 |
+| KI-105 | **Egy portfólió (`main`), a bázispénznem a létrehozáskor rögzül:** a Beállítások bázispénzneme csak új portfóliónál és az ETF AUM-átváltásnál hat. A tranzakció-űrlap csak vételt/eladást rögzít (osztalék, díj, split és kézi FX-ráta nincs a UI-ban; a domain támogatja). | A | PHASE 13/14: több portfólió és teljes tranzakció-űrlap. | 13/14 |
+| KI-106 | **Ismeretlen ETF-jegyzésnél** az ETF-képernyő nem hibaállapotot, hanem „0/22 adatmező” részleges oldalt mutat (a részvényképernyőn ilyenkor blokkoló hiba jelenik meg, D-081/3). Az ETF-elemzés nem ad forrásonkénti hibalistát, ezért a szabály nem vihető át hamis hiba kitalálása nélkül. | A | PHASE 13/15: az `EtfAnalysis`-be forrás-összesítő (mint a részvénynél a `dataQuality.sources`), majd ugyanaz a szabály. | 13 |
+| KI-107 | **Tesztszám-eltérés a PHASE 11 handoffhoz képest:** a handoff 1307 tesztet ír; a PHASE 12 elején (a `main` `6a907d3` állapotán, új tesztek nélkül) a suite **1387** tesztet futtatott (77 suite). Az eltérés okát nem vizsgáltam (valószínűleg a handoff egy korábbi futás számát rögzítette). | A | Csak dokumentációs; a PHASE 12 utáni szám: 1447 (81 suite). | – |
+| KI-108 | **A `basedOn` hivatkozások nyers azonosítók** (pl. `decision:label`), nem kattinthatók a mutatóra; a szabályalapú szöveg technikai marad (KI-95). | A | PHASE 14: hivatkozás → mutató görgetés/kiemelés, felhasználóbarát szövegek. | 14 |
+| KI-109 | **Lehúzásos frissítés = új szolgáltatói hívások:** nincs kliens- és proxy-cache, így minden frissítés kvótát fogyaszt (vö. KI-68, KI-76; EODHD free: 20/nap). | K | PHASE 13: cache TTL-ek (ARCHITECTURE 11.). | 13 |
 
 ## PHASE 11 – ismert problémák és leletek (2026-11-23)
 
 | ID | Leírás | Hatás | Állapot / teendő | Fázis |
 |---|---|---|---|---|
-| KI-89 | **A tartalmi őr nem ért szemantikát:** ellenőrzi a hivatkozásokat, a számokat, a tiltott mintákat és a confidence-t. Egy szám nélküli, helyesen hivatkozott, de félrevezető vagy túlzó megfogalmazást nem ismer fel (pl. „kiemelkedő” egy átlagos pontra). | K | Tudatos (D-077). Enyhítés: az LLM-szöveg mindig „AI-értelmezés” jelölést kap, `basedOn` hivatkozásokkal, és a szabályalapú magyarázat is elérhető (PHASE 12 UI). | 12 |
+| KI-89 | **A tartalmi őr nem ért szemantikát:** ellenőrzi a hivatkozásokat, a számokat, a tiltott mintákat és a confidence-t. Egy szám nélküli, helyesen hivatkozott, de félrevezető vagy túlzó megfogalmazást nem ismer fel (pl. „kiemelkedő” egy átlagos pontra). | K | Tudatos (D-077). Enyhítés: az LLM-szöveg mindig „AI-értelmezés” jelölést kap, `basedOn` hivatkozásokkal, és a szabályalapú magyarázat is elérhető. **PHASE 12: a UI-címkézés megvalósítva** (D-081/5). | 12 ✅ (UI) |
 | KI-90 | **Az Anthropic SDK EAS Hosting runtime-on nem igazolt** (U-09). Lokálisan igazolt: `expo export` + `expo serve`, a route betölt, mock providerrel 200. | K | EAS próbatelepítés (a régóta nyitott EAS-próbával együtt), majd egy élő hívás a tulajdonos kulcsával – csak a tulajdonos jóváhagyásával, költségkorláttal. | 15 |
 | KI-91 | **AI-cache és napi keret memóriában, példányonként:** újraindításkor nullázódik; több szerverpéldány között nincs közös keret (vö. KI-23). | A | Saját használatnál elfogadható. Tartós cache/keret: PHASE 13 (szerver-cache) vagy külső KV. | 13 |
 | KI-92 | **Élő LLM-hívás nem volt:** a `.env.local`-ban az `ANTHROPIC_API_KEY` üres, `AI_PROVIDER=template`, `AI_ENABLED=false`. A strukturált kimenet sémájának elfogadását (a `betaZodOutputFormat` által generált JSON-séma) a szolgáltató élőben még nem igazolta. | K | A tulajdonos dönt az LLM-ről (DP-04). Bekapcsolás után az első élő hívásnál ellenőrizendő: 200, `stop_reason: end_turn`, és a válasz átmegy az őrön. Ha a séma valamely kulcsszavát a szolgáltató elutasítja, a `src/contracts/ai.ts` kimeneti sémáját kell egyszerűsíteni. | tulajdonos |
 | KI-93 | **Az LLM magyarázatai gyakran elbukhatnak az őrön** (pl. saját kerekítés, kiszámolt különbség, „kb. kétszeres” szám): ez szándékos szigor, de rontja a használhatóságot. | K | Mérés az első élő hívásokkal; ha szükséges, a prompt pontosítása (`PROMPT_VERSION` emelése) vagy a számszabály célzott lazítása, dokumentált döntéssel. A hamis pozitív nem okoz kárt: ilyenkor a szabályalapú magyarázat jelenik meg. | 12+ |
 | KI-94 | **A lokális LLM nem készült el** (csak vizsgálat, DATA_SOURCES 14.): hardverigény, licencenkénti eltérés, gyenge magyar és sémahű kimenet kis modelleken. | A | Külön döntéssel: `local` `AiProvider`-adapter a választott futtató hivatalos API-jával. | később |
-| KI-95 | **A szabályalapú magyarázat szövege egyszerű:** a motor szövegeit (drivers, kockázatok, érvénytelenítés) szó szerint idézi, technikai szabályazonosítókkal (pl. `stock-watch`). | A | PHASE 12: a megjelenítésnél felhasználóbarát szöveg vagy a szabálynyom összecsukása. | 12 |
+| KI-95 | **A szabályalapú magyarázat szövege egyszerű:** a motor szövegeit (drivers, kockázatok, érvénytelenítés) szó szerint idézi, technikai szabályazonosítókkal (pl. `stock-watch`). | A | PHASE 12: a szakaszok összecsukhatók, a szöveg változatlan → KI-108. | 14 |
 | KI-96 | **`npm install`: blokkolt install-szkript** (`@parcel/watcher`, node-gyp) az npm 12 `allowScripts` szabálya miatt. Nem a PHASE 11 csomagja; a tesztek, a lint és az export nem igényli. | A | Megfigyelendő; ha a watch-mód hibázik: `npm install-scripts approve @parcel/watcher`. | – |
 
 ## PHASE 10 – ismert problémák és leletek (2026-11-22)
@@ -138,7 +156,7 @@
 | ID | Probléma / lelet | Hatás | Állapot / teendő | Felelős fázis |
 |---|---|---|---|---|
 | KI-11 | **A PHASE 02 route-tesztjei kisbetűs meghajtójú munkakönyvtárból (`c:\…`, pl. VS Code terminál, Git Bash) pirosak voltak** (5/15: „Invalid hook call”). Ok: a Jest a modulokat `c:\` és `C:\` kulccsal kétszer töltötte be, így két React-példány keletkezett. PowerShellből (`C:\…`) zöldek voltak, ezért a PHASE 02 „15/15” eredménye csak onnan igaz. | K: hamis piros teszt a VS Code-ban | **Megoldva:** `jest.config.js` kanonikus `rootDir`-rel (D-041). Igazolva: kisbetűs útvonalról 98/98 zöld. | – |
-| KI-12 | A PHASE 03-ban az appot **nem** indítottuk el emulátoron. Ellenőrizve: typecheck, lint, tesztek (a route-tesztek a valódi `_layout`-ot renderelik a Providerrel), `npx expo export --platform android` (Hermes bundle sikeres). Látható UI-változás nem történt. | A | **Nyitott.** A PHASE 04A-ban sem futtattuk emulátoron (nincs UI-változás); ellenőrizve: `npx expo export --platform android` (Hermes bundle, 3,6 MB) és a route-tesztek. Következő UI-változásnál: `npm run android`. | 12 |
+| KI-12 | A PHASE 03-ban az appot **nem** indítottuk el emulátoron. Ellenőrizve: typecheck, lint, tesztek (a route-tesztek a valódi `_layout`-ot renderelik a Providerrel), `npx expo export --platform android` (Hermes bundle sikeres). Látható UI-változás nem történt. | A | **Nyitott.** A PHASE 04A-ban sem futtattuk emulátoron (nincs UI-változás); ellenőrizve: `npx expo export --platform android` (Hermes bundle, 3,6 MB) és a route-tesztek. **PHASE 12:** a UI elkészült, de emulátoron most sem futott; Android Hermes bundle 4,3 MB, 15 navigációs smoke teszt zöld → KI-100. | 13 |
 | KI-13 | A portfólió-tároló memóriában él (`InMemoryPortfolioRepository`): az app újraindításakor az adatok elvesznek. | A most (nincs portfólió-UI) | **Tudatos (D-040).** SQLite: PHASE 13. | 13 |
 | KI-14 | `live` adatmódban az árfolyam-lekérés `UPSTREAM / NOT_IMPLEMENTED` hibát ad. | A | **Megoldva (04B):** élő árfolyam FMP-ből (US) és EODHD-ből (US tartalék, Európa); proxy URL nélkül továbbra is őszinte `NOT_IMPLEMENTED`. Korábban (04A): `live` módban a proxy gateway-ek futnak (kimutatás, jegyzés, FX). Az árfolyamhoz nincs még élő forrás: `CAPABILITY_UNAVAILABLE` → `MISSING_DATA(['source'])`; proxy URL nélkül `NOT_IMPLEMENTED`. Árforrás: PHASE 04B. | 04B |
 | KI-15 | A lokális ID-generátor `Math.random`-ot és időbélyeget használ (nem kriptográfiai UUID). Egy eszközön belül egyedi, eszközök között nem garantáltan. | A | **Nyitott.** Tartós tárolásnál felülvizsgálandó (pl. `expo-crypto` `randomUUID`). | 13 |
@@ -218,8 +236,8 @@ A DP-01…DP-04 döntési pontokra 2026-11-21-én megjött a válasz. A DP-05 tu
 | U-07 | SEC `company_tickers.json` (ticker → CIK) elérhetősége és formátuma | **Lezárva (04A):** elérhető, `{ "0": { cik_str, ticker, title } }`, 10 399 sor; User-Agent nélkül 403. |
 | ~~U-08~~ | A SEC N-PORT használhatósága US ETF holdingsra | **Megválaszolva (PHASE 08, élő próba):** használható; negyedéves (nyilvános a negyedév-végi hónap), ~60 nap késleltetés, teljes lista súllyal, országgal, ISIN-nel, devizával; szektor nincs; UCITS nincs (DATA_SOURCES 13.) |
 | U-09 | A `@anthropic-ai/sdk` futása az EAS Hosting runtime-on | **Részben (PHASE 11):** a lokális Expo szerver-runtime-ban igazolt (export + serve); EAS-en nem → KI-90 |
-| U-10 | `Intl` (hu-HU) támogatás Hermesen mindkét platformon | PHASE 12 |
-| U-11 | Grafikonkönyvtár kompatibilitása SDK 58 / RN 0.88 / New Architecture mellett | PHASE 12 |
+| ~~U-10~~ | `Intl` (hu-HU) támogatás Hermesen | **Megkerülve (PHASE 12, D-080/1):** a formázás kézi, `Intl` nélkül – a kérdés már nem releváns |
+| U-11 | Grafikonkönyvtár kompatibilitása SDK 58 / RN 0.88 / New Architecture mellett | **Elhalasztva (PHASE 12, D-080/8):** nincs grafikonkönyvtár; döntés a PHASE 14-ben (KI-98) |
 | ~~U-12~~ | **Lezárva (PHASE 02):** `npx create-expo-app@5.0.0 <név> --template default@sdk-58` (SDK 58 changelog; `expo-template-default` `sdk-58` = 58.0.35) | – |
 | U-13 | A meglévő FMP és EODHD kulcs csomagszintje (free vagy fizetős) | **Megválaszolva (04B):** mindkettő free (DATA_SOURCES 11.) |
 | U-14 | EODHD free: mely végpontok érhetők el (fundamentum? live/delayed?), történetmélység | **Megválaszolva (04B):** EOD (1 év), késleltetett live, osztalék, keresés igen; fundamentum 403 (DATA_SOURCES 11.2) |

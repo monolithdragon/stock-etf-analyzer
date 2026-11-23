@@ -1,6 +1,6 @@
 # Roadmap – Stock & ETF Analyzer
 
-> Frissítve: 2026-11-23 (PHASE 11 vége). Minden fázis külön chatben fut, a `stock_etf_analyzer_prompts` csomag `NN_*.md` promptja alapján.
+> Frissítve: 2026-11-23 (PHASE 12 vége). Minden fázis külön chatben fut, a `stock_etf_analyzer_prompts` csomag `NN_*.md` promptja alapján.
 > **Fázisszabály:** a következő fázis csak akkor indul, ha az előző befejezési feltételei teljesültek, vagy a hiányok a KNOWN_ISSUES-ban dokumentálva vannak.
 > **Verzió:** a promptok egy része SDK 57-et említ. Mindenhol **SDK 58** értendő (D-020).
 
@@ -19,8 +19,8 @@
 | 09 | Portfólió és kockázat | **KÉSZ** (2026-11-22) | |
 | 10 | Score és döntési engine | **KÉSZ** (2026-11-22) | **M3 Elemzőmotor kész ✅** |
 | 11 | AI-magyarázó engine | **KÉSZ** (2026-11-23) | |
-| 12 | UI/UX és navigáció | **KÖVETKEZIK** | |
-| 13 | Tárolás, cache, offline | NEM KEZDŐDÖTT | **M4 MVP** |
+| 12 | UI/UX és navigáció | **KÉSZ** (2026-11-23) | |
+| 13 | Tárolás, cache, offline | **KÖVETKEZIK** | **M4 MVP** |
 | 14 | Compare, watchlist, screener, alerts | NEM KEZDŐDÖTT | |
 | 15 | Integráció, QA, biztonság | NEM KEZDŐDÖTT | |
 | 16 | Release és dokumentáció | NEM KEZDŐDÖTT | **M5 v1.0 (személyes)** |
@@ -435,6 +435,16 @@ Minden fázis közös lezárása (CLAUDE.md):
   - A ticker keresés → elemzés megnyitása folyamat működik.
   - A Stock, ETF és Portfolio képernyő külön logikát használ.
   - A navigációs smoke tesztek lefutnak.
+- **Eredmény (2026-11-23):** mind teljesült (Jest + Metro bundle; emulátoron nem futott – KI-100). D-079…D-081.
+  - Navigáció: Stack + 5 tab (Kezdőlap, Keresés, Portfólió, Figyelő, Beállítások) + Stack-képernyők (részvény, ETF, összehasonlítás, A projektről).
+  - Közös formázók (`src/presentation/format`), téma (világos/sötét/rendszer, AA kontraszt teszttel, ≥ 48 dp érintés, betűméret-skálázás).
+  - Állapotok: betöltés, üres, demó, elavult, részleges, hiba + újrapróbálás, frissítés folyamatban; provenance-nézet minden mutatónál.
+  - Külön view-model a részvényhez, ETF-hez, portfólióhoz; új use case: `createPortfolio`.
+  - Grafikon: nincs könyvtár, natív sávdiagram (D-080/8).
+  - Nincs benne (dokumentálva): ETF-metaadat űrlap (KI-101), DCF-/score-szerkesztő (KI-102), vonaldiagram (KI-98), Compare csak váz (KI-103).
+- **A későbbi fázisok kapcsolódási pontjai (PHASE 12-ből):**
+  - PHASE 13 (tárolás): `SettingsProvider` és `WatchlistProvider` kv-store-ra (az `AppSettings` / `WatchlistItem` alak marad); SQLite `PortfolioRepository`; cache, hogy a lehúzásos frissítés ne fogyassza a kvótát (KI-109); a `useAsyncResult` `refreshing` állapota alkalmas a „cache-ből, frissítés folyamatban” jelzésre; ETF forrás-összesítő (KI-106); eszközös kézi ellenőrzés (KI-100).
+  - PHASE 14: Compare a figyelőlistából (azonos típus, azonos hozam-alap); ETF-metaadat űrlap (KI-101); DCF-/score-szerkesztő (KI-102); vonaldiagram (KI-98); kattintható `basedOn` (KI-108).
 
 ### PHASE 13 – Tárolás, cache, offline → **MVP**
 - **Cél:** tartós portfólió, watchlist és beállítások; adattípusonkénti cache; őszinte offline mód.

@@ -405,7 +405,19 @@ Adatút: `evaluateStock` (vagy `evaluateEtf`, `analyzePortfolio`) → `buildInst
 
 ### 5.2 Tervezett teljes struktúra (PHASE 01 terv)
 
-> A `(tabs)/` csoport a PHASE 12-ben készül; addig gyökér-`Stack` van (D-034). A sablon konvenciója (`src/app`) egyezett a tervvel (D-029).
+> **PHASE 12 (D-079):** a `(tabs)/` csoport elkészült: `index`, `search`, `portfolio`, `watchlist`, `settings`; Stack-képernyők: `stock/[listingId]`, `etf/[listingId]`, `compare`, `about`. A sablon konvenciója (`src/app`) egyezett a tervvel (D-029).
+>
+> **A presentation réteg belső felépítése (PHASE 12):**
+> ```
+> src/app/**            vékony route: paraméter / nyilvános env → képernyő (csak itt olvasható @/config/env)
+> presentation/screens  elrendezés + useAsyncResult (loading/error/success/reload)
+> presentation/view-models  TISZTA leképezés use case-kimenet → megjelenítés (stock / etf / portfolio KÜLÖN)
+> presentation/format   közös formázók (hu-HU, N/A/N/M, AppError → üzenet)
+> presentation/analysis közös elemzés-blokkok (döntéskártya, score-részletek, magyarázat)
+> presentation/components  témázott építőelemek (MetricRow provenance-szel, Section, állapotok, sávdiagram)
+> presentation/state    beállítások, figyelőlista (MVP: memóriában → PHASE 13)
+> ```
+> Adat csak `useAppServices()`-en át (use case-ek); a képernyő nem számol pontot, nem formáz saját szabállyal, és nem hív `fetch`-et (ESLint).
 
 ```
 stock-etf-analyzer/

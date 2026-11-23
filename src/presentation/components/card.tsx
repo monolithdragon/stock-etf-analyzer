@@ -7,15 +7,19 @@ import { AppText } from './app-text';
 
 export interface CardProps {
   readonly title?: string;
+  /** Rövid magyarázó sor a cím alatt. */
+  readonly subtitle?: string;
   readonly children: ReactNode;
+  readonly testID?: string;
 }
 
 /** Keretes, téma szerinti felület egy összetartozó tartalomblokkhoz. */
-export function Card({ title, children }: CardProps) {
+export function Card({ title, subtitle, children, testID }: CardProps) {
   const theme = useTheme();
 
   return (
     <View
+      testID={testID}
       style={{
         backgroundColor: theme.colors.surface,
         borderColor: theme.colors.border,
@@ -25,9 +29,16 @@ export function Card({ title, children }: CardProps) {
         gap: theme.spacing.md,
       }}>
       {title !== undefined && (
-        <AppText variant="heading" accessibilityRole="header">
-          {title}
-        </AppText>
+        <View style={{ gap: theme.spacing.xs }}>
+          <AppText variant="heading" accessibilityRole="header">
+            {title}
+          </AppText>
+          {subtitle !== undefined && (
+            <AppText variant="caption" tone="textSecondary">
+              {subtitle}
+            </AppText>
+          )}
+        </View>
       )}
       {children}
     </View>

@@ -15,6 +15,7 @@ const fakeServices: AppServices = {
   searchInstruments: jest.fn(),
   convertMoney: jest.fn(),
   recordTransaction: jest.fn(),
+  createPortfolio: jest.fn(),
   analyzeStockFundamentals: jest.fn(),
   analyzeStockValuation: jest.fn(),
   recalculateStockValuation: jest.fn(),

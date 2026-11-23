@@ -14,6 +14,7 @@ import {
   createAnalyzeStockValuation,
   createRecalculateStockValuation,
   createConvertMoney,
+  createCreatePortfolio,
   createGetDividendHistory,
   createGetFinancialStatements,
   createGetInstrumentProfile,
@@ -157,6 +158,11 @@ export function createAppServices(
     searchInstruments: createSearchInstruments(market),
     convertMoney,
     recordTransaction: createRecordTransaction({
+      portfolioRepository: deps.portfolioRepository,
+      clock: deps.clock,
+      ids: deps.ids,
+    }),
+    createPortfolio: createCreatePortfolio({
       portfolioRepository: deps.portfolioRepository,
       clock: deps.clock,
       ids: deps.ids,

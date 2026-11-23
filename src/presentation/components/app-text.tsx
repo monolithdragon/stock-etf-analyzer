@@ -14,10 +14,17 @@ export interface AppTextProps extends TextProps {
   readonly tone?: TextTone;
 }
 
-/** Témához igazodó szöveg. Közvetlen `<Text>` helyett ezt használd. */
+/**
+ * Témához igazodó szöveg. Közvetlen `<Text>` helyett ezt használd.
+ * A rendszer-betűméretet követi (felső korlát: `maxFontSizeMultiplier`).
+ */
 export function AppText({ variant = 'body', tone = 'text', style, ...rest }: AppTextProps) {
   const theme = useTheme();
   return (
-    <Text style={[theme.typography[variant], { color: theme.colors[tone] }, style]} {...rest} />
+    <Text
+      maxFontSizeMultiplier={theme.maxFontSizeMultiplier}
+      style={[theme.typography[variant], { color: theme.colors[tone] }, style]}
+      {...rest}
+    />
   );
 }
