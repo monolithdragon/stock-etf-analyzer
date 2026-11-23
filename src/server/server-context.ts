@@ -2,7 +2,13 @@
  * A proxy composition rootja: env → szolgáltatók → handlerek. Csak itt dől el, hogy élő vagy
  * mock szolgáltatók futnak (soha nem vegyesen).
  */
+import { parseAiConfig, type AiConfig, type RawAiEnv } from './ai/ai-config';
+import { createAiExplainService, type AiExplainService } from './ai/ai-explain-service';
+import type { AiProvider } from './ai/ai-provider';
+import { createAnthropicAiProvider, createSdkMessagesClient } from './ai/anthropic-ai-provider';
+import { createMockAiProvider } from './ai/mock-ai-provider';
 import { parseServerEnv, type RawServerEnv, type ServerEnvIssue } from './env';
+import { createAiExplainHandler } from './handlers/ai-handler';
 import { createApiHandlers, type ApiHandlers } from './handlers/api-handlers';
 import type { FetchLike } from './http/request-json';
 import { consoleServerLogger, type ServerLogger } from './logging';
@@ -21,7 +27,9 @@ import { createProviderRouter, type ProviderRouter } from './routing/provider-ro
 import { createDailyQuota, type QuotaGuard } from './routing/quota';
 
 export interface ServerContextOptions {
-  readonly rawEnv: RawServerEnv;
+  readonly rawEnv: RawServerEnv & RawAiEnv;
+  /** Tesztben: kész AI-provider (élő hívás nélkül); különben az env alapján épül. */
+  readonly aiProvider?: AiProvider | null;
   readonly fetchImpl: FetchLike;
   readonly now?: () => Date;
   readonly logger?: ServerLogger;
@@ -31,12 +39,36 @@ export interface ServerContext {
   readonly registry: ProviderRegistry;
   readonly router: ProviderRouter;
   readonly handlers: ApiHandlers;
+  /** PHASE 11: AI-magyarázat (`POST /api/v1/ai/explain`). */
+  readonly ai: {
+    readonly service: AiExplainService;
+    readonly explain: (request: Request) => Promise<Response>;
+  };
   readonly envIssues: readonly ServerEnvIssue[];
+}
+
+/** Az env-ből: `null`, ha az LLM ki van kapcsolva (alapállapot, D-026). */
+function createAiProviderFromConfig(config: AiConfig): AiProvider | null {
+  if (!config.enabled) return null;
+  if (config.provider === 'mock') return createMockAiProvider();
+  if (config.provider === 'anthropic' && config.anthropicApiKey !== null) {
+    return createAnthropicAiProvider({
+      model: config.model,
+      effort: config.effort,
+      client: createSdkMessagesClient({
+        apiKey: config.anthropicApiKey,
+        timeoutMs: config.timeoutMs,
+      }),
+    });
+  }
+  return null;
 }
 
 export function createServerContext(options: ServerContextOptions): ServerContext {
   const now = options.now ?? (() => new Date());
-  const { env, issues } = parseServerEnv(options.rawEnv);
+  const { env, issues: dataIssues } = parseServerEnv(options.rawEnv);
+  const { config: aiConfig, issues: aiIssues } = parseAiConfig(options.rawEnv);
+  const issues = [...dataIssues, ...aiIssues];
   const quotas = new Map<string, QuotaGuard>();
   let providers: MarketDataProvider[];
   if (env.dataMode === 'mock') {
@@ -84,10 +116,20 @@ export function createServerContext(options: ServerContextOptions): ServerContex
     );
   }
   const router = createProviderRouter(registry);
+  const aiService = createAiExplainService({
+    config: aiConfig,
+    provider:
+      options.aiProvider === undefined ? createAiProviderFromConfig(aiConfig) : options.aiProvider,
+    now,
+  });
   return {
     registry,
     router,
     handlers: createApiHandlers({ registry, router, quotas, now, logger }),
+    ai: {
+      service: aiService,
+      explain: createAiExplainHandler({ service: aiService, logger, now }),
+    },
     envIssues: issues,
   };
 }
@@ -112,6 +154,14 @@ export function getServerContext(): ServerContext {
       FMP_PLAN: process.env.FMP_PLAN,
       EODHD_API_KEY: process.env.EODHD_API_KEY,
       EODHD_PLAN: process.env.EODHD_PLAN,
+      AI_PROVIDER: process.env.AI_PROVIDER,
+      AI_ENABLED: process.env.AI_ENABLED,
+      ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+      AI_MODEL: process.env.AI_MODEL,
+      AI_EFFORT: process.env.AI_EFFORT,
+      AI_MAX_OUTPUT_TOKENS: process.env.AI_MAX_OUTPUT_TOKENS,
+      AI_DAILY_LIMIT: process.env.AI_DAILY_LIMIT,
+      AI_TIMEOUT_MS: process.env.AI_TIMEOUT_MS,
     },
     fetchImpl: (input, init) => fetch(input, init),
   });

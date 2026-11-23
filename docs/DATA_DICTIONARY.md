@@ -1,7 +1,7 @@
 # Adatszótár – Stock & ETF Analyzer
 
 > Állapot: **kiinduló definíciók** (PHASE 01) + **domain típusok a kódban** (PHASE 03, 2026-11-21). A mezők és a kód közti leképezés: [10. fejezet](#10-kód-leképezés-phase-03).
-> - A képletdefiníciókat a **PHASE 05** véglegesíti, a DCF-et a **PHASE 07**, az ETF-mutatókat a **PHASE 08**, a portfóliót a **PHASE 09**, a score-t és a döntést a **PHASE 10** (16. fejezet).
+> - A képletdefiníciókat a **PHASE 05** véglegesíti, a DCF-et a **PHASE 07**, az ETF-mutatókat a **PHASE 08**, a portfóliót a **PHASE 09**, a score-t és a döntést a **PHASE 10** (16. fejezet), az AI-magyarázat bemenetét és kimenetét a **PHASE 11** (17. fejezet).
 > - Definíció csak dokumentált indokkal változtatható (DECISIONS.md-be bejegyzés kell).
 > - Az XBRL tag-nevek a 4.1–4.2-ben **jelöltek** (PHASE 01). A ténylegesen használt, 12 valós cégen igazolt prioritási lista: **4.4** és `src/server/providers/sec-edgar/sec-tags.ts` (PHASE 04A).
 > - PHASE 04A (2026-11-21): új fejezetek 3.3 (jegyzés-jelölt), 4.4 (SEC-normalizálás), 8. (FX, megvalósítva), 11. (API-szerződés v1).
@@ -506,7 +506,7 @@ Példa (valós ECB 2026-11-20, számítással ellenőrizve): 100 USD → HUF = 1
 | `AiInputDto` | csak számított metrikák (érték + státusz + provenance kivonat), feltevések, score, döntés, időbélyegek. **Nincs** benne szabad szöveg a felhasználótól; a szolgáltatói szöveg hosszkorlátos |
 | `AnalysisResult` (PHASE 03 váz) | `subject` (`stock`/`etf`: `securityId` + `listingId`; `portfolio`: `portfolioId`), `generatedAt`, `metrics[]` (`FinancialMetric`), `completeness` (`COMPLETE` \| `PARTIAL` \| `INSUFFICIENT` – adatteljesség, NEM valószínűség; a `NOT_APPLICABLE` nem hiány), `dataGaps[]` (`metricId`, `status`, `reason`). A score és a döntés a PHASE 10-ben, a magyarázat a PHASE 11-ben kerül mellé. |
 | `FinancialMetric` (PHASE 03) | `id` (a 5. fejezet mutatói, `FINANCIAL_METRIC_IDS`), `unit`, `value` (`Metric<number>`), `formula` (olvasható képlet), `period` (vagy `null` piaci mutatónál), `inputs[]`. **Szabály:** `OK` értékű mutató provenance-e nem lehet `ai_interpretation`. |
-| `AiAnalysis` | `summary`, `positives[]`, `negatives[]`, `keyRisks[]`, `valuationExplanation`, `dcfAssumptionsNote`, `dataGaps[]`, `reviewTriggers[]`, `thesisInvalidators[]`, `claims[]` (`{ text, basedOn: metricId[] }`), `provider` (`template` \| `anthropic` \| `local` …), `model?`, `generatedAt`, `inputHash`, `kind`: `calculated` a szabályalapú `template` providernél, `ai_interpretation` LLM-nél (D-026) |
+| `AiAnalysis` | `summary`, `positives[]`, `negatives[]`, `keyRisks[]`, `valuationExplanation`, `dcfAssumptionsNote`, `dataGaps[]`, `reviewTriggers[]`, `thesisInvalidators[]`, `claims[]` (`{ text, basedOn: metricId[] }`), `provider` (`template` \| `anthropic` \| `local` …), `model?`, `generatedAt`, `inputHash`, `kind`: `calculated` a szabályalapú `template` providernél, `ai_interpretation` LLM-nél (D-026) **Megvalósítva (PHASE 11): 17. fejezet.** |
 
 ## 10. Kód-leképezés (PHASE 03)
 
@@ -946,3 +946,73 @@ A kiinduló súlyok és horgonyok: D-073/6–7, `src/scoring/config/stock-config
 ### 16.7 Teljes kimenet (`InstrumentEvaluation`)
 
 `subjectKind`, `listingId`, `evaluatedAt` (a bemeneti elemzés időbélyege – a motor nem olvas órát), `configs` (score és döntés: `id`, `version`), `features` (a motor ténylegesen kapott bemenetei), `score`, `confidence`, `decision`, `thesis`, `aiInvolvement: 'none'`, `warnings`, `disclaimer`.
+
+
+## 17. AI-magyarázat (PHASE 11, D-076…D-078)
+
+> Kód: `src/contracts/ai.ts` (sémák), `src/contracts/ai-guards.ts` (tartalmi őr), `src/application/explanation/build-ai-input.ts` (DTO-építő), `src/explanation/template-explainer.ts` (szabályalapú), `src/server/ai/*` (LLM). A 9. fejezet `AiAnalysis` terve ezzel valósult meg: a `claims[]` helyett szakaszonkénti állításlisták, mindegyik `basedOn`-nal.
+
+### 17.1 Bemenet: `AiInputDto` (schemaVersion `1`)
+
+| Mező | Tartalom | Szabály |
+|---|---|---|
+| `kind` | `stock` \| `etf` \| `portfolio` | részvény/ETF: `evaluation` kötelező; ETF: `dcf = null`; portfólió: `portfolio` kötelező, `evaluation = dcf = null` |
+| `subject` | `id` (jegyzés-azonosító vagy `portfolio`), `displayName` (tisztított szolgáltatói név vagy `null`) | |
+| `analysisGeneratedAt` | a felhasznált elemzés időbélyege | nem a hívásé |
+| `metrics[]` (`AiInputMetric`, ≤ 120) | `ref` (`metric:<featureId>`), `label`, `value` (szám/kategória vagy `null`), `display` (pl. „24,5%”, „31,2x”, „98,50 Mrd USD”), `unit`, `currency`, `status` (Metric-státusz vagy `NO_FEATURE`), `reason`, `categoryRef`, `score` (0–100), `asOf`, `freshness`, `source` (`sourceId`, `sourceName`, `kind`, `fetchedAt`) | hiány: `value = null` + `status` + `reason`, soha nem 0 |
+| `evaluation` | `totalScore` (`score:total`), `categories[]` (`category:<id>`, pont, státusz, súly, lefedettség, adatminőség, indoklás), `decision` (`decision:label`, címkekulcs + szöveg, alapcímke, `otherLabelTexts`, `matchedRule` (`rule:<id>`), `appliedCaps[]` (`cap:<id>`), `drivers`, `disclaimer`), `confidence` (`confidence:analysis`, szint, pont, okok, jelentés), `thesis` (`risks[]` → `risk:<id>`, `invalidation[]` → `invalidation:<id>`) | a PHASE 10 kimenetéből, változatlanul |
+| `dcf` (csak részvény) | `provenanceKind: 'estimated'`, `currency`, `inputs[]` (`dcfinput:<id>`), `scenarios[]` (`dcf:<bear\|base\|bull>`: forrás `default`/`user`, évek, növekedési ráták, diszkontráta, terminális növekedés, `display`, státusz, belső érték/részvény, MOS %), `notes` | becslés, nem tény |
+| `portfolio` (csak portfólió) | `baseCurrency`, `openPositionCount`, `positions[]` (`position:<listingId>`, típus, státusz, súly, `weightDisplay`) | nincs összeg, darabszám, ár, név |
+| `dataGaps[]` | `gap:<id>`, `label`, `reason` – minden nem-OK mutató, adathiányos kategória, hiányzó DCF-bemenet | csak „nincs elég adat” állítás alapja |
+| `warnings[]`, `disclaimer` | tisztított szöveg | portfóliónál a figyelmeztetésekből csak a darabszám |
+
+Minden szöveg: ≤ 600 karakter (rövid mezők ≤ 160), nincs vezérlőkarakter és `<`/`>`. Minden `ref` egyedi, mintája `^[a-z]+:[A-Za-z0-9_.@:-]{1,100}$`.
+
+### 17.2 Kimenet: `AiExplanationContent`
+
+| Mező | Típus |
+|---|---|
+| `schemaVersion`, `kind` | `'1'`; a bemenet `kind`-ja |
+| `summary` | egy állítás |
+| `positives`, `negatives`, `keyRisks`, `valuationExplanation`, `dcfAssumptions`, `dataGaps`, `reviewTriggers`, `thesisInvalidators` | állítások listája (≤ 8) |
+| `confidence` | `level` (= a bemenet szintje; portfóliónál `NOT_APPLICABLE`), `explanation` |
+
+Egy állítás: `text` (1–600 karakter), `basedOn[]` (≤ 12 `ref`), `support`:
+- `data`: legalább egy adatot hordozó `ref`;
+- `insufficient_data`: az AI kimondja, hogy nincs elég adat.
+
+### 17.3 Megjelenítési DTO: `AiExplanationDto`
+
+A `content` mellett a `meta` mező:
+- `provider` (`template` | `anthropic` | `mock`);
+- `model`;
+- `provenanceKind`:
+  - `calculated` – szabályalapú; UI-címke: „Szabályalapú összefoglaló”;
+  - `ai_interpretation` – LLM; UI-címke: „AI-értelmezés”;
+  - `mock`;
+- `generatedAt`;
+- `inputHash` (SHA-256; a kliens template-nél `null`);
+- `cached`.
+
+### 17.4 Kérés és hibák
+
+`POST /api/v1/ai/explain` törzse: `{ input: AiInputDto, consent: { shareWithAiProvider: true } | null }`.
+- Portfóliónál a `consent` kötelező.
+- A törzs legfeljebb 96 KB lehet.
+- Ismeretlen mező → `VALIDATION_FAILED`.
+
+| Helyzet | AppError | HTTP / kód |
+|---|---|---|
+| kikapcsolt LLM, nincs kulcs, 401/403 | `AI / AI_DISABLED` | 503 `AI_DISABLED` |
+| timeout | `AI / AI_TIMEOUT` | 504 `TIMEOUT` |
+| szolgáltatói 429/529/503, saját napi keret | `AI / AI_RATE_LIMITED` | 429 `RATE_LIMITED` |
+| `stop_reason: refusal` | `AI / AI_REFUSED` | 422 `AI_REFUSED` |
+| csonka, nem JSON, sémahiba, tartalmi őr | `AI / AI_INVALID_OUTPUT` | 502 `AI_INVALID_OUTPUT` |
+| egyéb szolgáltatói hiba | `UPSTREAM / HTTP_ERROR` | 502 `UPSTREAM_ERROR` |
+
+### 17.5 Tartalmi őr – szabályok
+
+A szabályokat és az indoklásukat a D-077/2 tartalmazza. Hibakódok:
+- `KIND_MISMATCH`, `UNKNOWN_REF`, `NO_SUPPORTING_DATA`;
+- `UNGROUNDED_NUMBER`, `FORBIDDEN_CLAIM`, `CONFIDENCE_MISMATCH`;
+- `DCF_NOT_APPLICABLE`, `DATA_GAPS_OMITTED`.

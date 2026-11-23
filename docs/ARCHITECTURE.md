@@ -1,6 +1,6 @@
 # Architektúra – Stock & ETF Analyzer
 
-> Állapot: **részben megvalósítva** (PHASE 04B, 2026-11-21; az 5.1 a PHASE 10-ig frissítve, 2026-11-22). A 3., 4.4–4.5, 5., 6.3 (a 10 végpont), 6.4 (ProviderRouter, kvóta, csomagmátrix) és 7. fejezet a **tényleges kódot** írja le; a cache (11.) és az offline működés (12.) még terv.
+> Állapot: **részben megvalósítva** (PHASE 04B, 2026-11-21; az 5.1 a PHASE 11-ig frissítve, 2026-11-23). A 3., 4.4–4.5, 5., 6.3 (a 10 végpont), 6.4 (ProviderRouter, kvóta, csomagmátrix) és 7. fejezet a **tényleges kódot** írja le; a cache (11.) és az offline működés (12.) még terv.
 > Kapcsolódó dokumentumok: [DECISIONS.md](DECISIONS.md), [DATA_SOURCES.md](DATA_SOURCES.md), [DATA_DICTIONARY.md](DATA_DICTIONARY.md), [REQUIREMENTS.md](REQUIREMENTS.md).
 
 ## 1. Alapelvek
@@ -383,7 +383,25 @@ src/calculations/…                             + netDebtToEbitda (balance-cash
 
 Adatút: `evaluateStock` → `analyzeStockValuation` (06 + 07) → `buildStockFeatures` + `buildStockFlags` → `evaluateScoring` (validáció → `buildScoreCard` → `assessConfidence` → `decide` → `assessThesis`) → `InstrumentEvaluation`. ETF: `evaluateEtf` → `analyzeEtf` → `buildEtfFeatures` → ugyanaz a motor, `etf-default` konfigurációval. A UI nem pontoz (őrteszt); az AI nem vesz részt.
 
-**Még nem létező mappák** (a saját fázisuk hozza létre): `explanation/` (11), `server/cache/` (13), `infrastructure/storage/` (13), `presentation/{hooks,formatters,view-models}` (12).
+**PHASE 11 (2026-11-23):** AI-magyarázó engine (D-076…D-078) – új réteg: `src/explanation` (csak `contracts` + `domain`; ESLint-zóna, próbafájllal igazolva):
+
+```
+src/contracts/ai.ts                            AiInputDto, kimeneti séma, AiExplanationDto, kérés (consent), citableRefs, sanitizeAiText
+src/contracts/ai-guards.ts                     validateAiExplanation – tartalmi őr (ref, szám, tiltott állítás, confidence)
+src/contracts/ai-testing.ts                    CSAK teszt: kézi DTO-fixture-ök (a szerver tesztjeihez)
+src/explanation/template-explainer.ts          szabályalapú magyarázat (D-026 alapértelmezés; részvény/ETF és portfólió sablon)
+src/application/explanation/build-ai-input.ts  InstrumentEvaluation (+ DCF) / PortfolioAnalysis → AiInputDto
+src/application/use-cases/explain-analysis.ts  explainAnalysis: template mindig + opcionális LLM, kliensoldali újra-ellenőrzés
+src/application/ports (AiGateway)              port; adapter: src/infrastructure/api-client/proxy-ai-gateway.ts (+ disabledAiGateway)
+src/server/ai/                                 ai-config (env), ai-provider (port), mock-ai-provider, anthropic-ai-provider (SDK),
+                                               prompts (3 sablon, PROMPT_VERSION), ai-explain-service (kill switch, cache, keret, timeout, validáció)
+src/server/handlers/ai-handler.ts              POST /api/v1/ai/explain (méret, JSON, strict séma, beleegyezés, adatmentes napló)
+src/app/api/v1/ai/explain+api.ts               vékony route
+```
+
+Adatút: `evaluateStock` (vagy `evaluateEtf`, `analyzePortfolio`) → `buildInstrumentAiInput` / `buildPortfolioAiInput` → `explainAnalysis` → `explainWithTemplate` (mindig) + [kérésre] `AiGateway` → proxy → `AiExplainService` → `AiProvider` → JSON → séma → őr → kliens: séma + őr újra → `display`. Az AI nem módosít pontot, címkét vagy confidence-t.
+
+**Még nem létező mappák** (a saját fázisuk hozza létre): `server/cache/` (13), `infrastructure/storage/` (13), `presentation/{hooks,formatters,view-models}` (12).
 
 ### 5.2 Tervezett teljes struktúra (PHASE 01 terv)
 
@@ -465,7 +483,7 @@ Nem tárol portfóliót, nincs felhasználói fiók, nem számol mutatót, nem p
 | GET | `/api/v1/etfs/{id}/profile` | ETF metaadat (TER, AUM… ha elérhető) | 08 |
 | GET | `/api/v1/etfs/{id}/holdings` | csak ha van igazolt forrás | 08 |
 | GET | `/api/v1/fx?base=EUR&date=` | ECB referencia-árfolyamok | 04 |
-| POST | `/api/v1/ai/explain` | `{ kind: 'stock'\|'etf'\|'portfolio', input: AiInputDto }` | 11 |
+| POST | `/api/v1/ai/explain` | `{ input: AiInputDto, consent }` → `AiExplanationDto` (**megvalósítva**, PHASE 11; a `kind` a DTO-ban) | 11 |
 
 **Azonosítók** (D-025, javaslat a PHASE 03-nak):
 - **Listing** (tőzsdei jegyzés, ehhez tartozik az ár): `{symbol}@{MIC}`, pl. `AAPL@XNAS`, `VWCE@XETR`. MIC = ISO 10383 tőzsdekód.
@@ -508,10 +526,11 @@ Hibakódok: `VALIDATION_FAILED`, `NOT_FOUND`, `UNSUPPORTED_MARKET`, `RATE_LIMITE
 | `EODHD_API_KEY` | szerver | **igen** | EODHD (a tulajdonosnak megvan) |
 | `FMP_PLAN`, `EODHD_PLAN` | szerver | nem | csomagszint: FMP `free` \| `starter`, EODHD `free` \| `eod-all-world`; ebből épül a képességmátrix, a kvóta és az ártörténet-ablak (D-027, D-051). Ismeretlen érték → `free` + figyelmeztetés. PHASE 04B |
 | `OPENFIGI_API_KEY` | szerver | **igen** (opcionális) | magasabb limit |
-| `AI_PROVIDER` | szerver + kliens | nem | `template` (alap, ingyenes) \| `anthropic` \| `local` … (D-026) |
-| `AI_MODEL` | szerver | nem | LLM esetén, pl. `claude-opus-5-5` vagy a legolcsóbb `claude-haiku-5-5` |
-| `ANTHROPIC_API_KEY` | szerver | **igen** | csak ha az `anthropic` provider be van kapcsolva |
-| `AI_ENABLED`, `AI_MAX_OUTPUT_TOKENS` | szerver | nem | kill switch, költségkorlát |
+| `AI_PROVIDER` | szerver | nem | `template` (alap: LLM ki, a kliens szabályalapon magyaráz) \| `anthropic` \| `mock` (D-026, D-078). A kliens nem olvassa: az LLM-et a felhasználó kéri (`mode: 'llm'`), a szerver dönt. |
+| `AI_ENABLED` | szerver | nem | kill switch (alap `false`; csak `true` mellett fut LLM) |
+| `AI_MODEL` | szerver | nem | alap `claude-opus-5-5` (D-016); a legolcsóbb `claude-haiku-5-5` |
+| `ANTHROPIC_API_KEY` | szerver | **igen** | csak ha `AI_PROVIDER=anthropic`; nélküle az LLM kikapcsol |
+| `AI_EFFORT`, `AI_MAX_OUTPUT_TOKENS`, `AI_DAILY_LIMIT`, `AI_TIMEOUT_MS` | szerver | nem | költség- és időkorlát: `low`, 8000, 50/nap, 60 000 ms (D-078/5) |
 
 **Kulcskezelés:**
 - Lokálisan `.env.local` (a `.gitignore`-ban, PHASE 02), élesben EAS environment variable (secret).
@@ -569,7 +588,10 @@ Hibakódok: `VALIDATION_FAILED`, `NOT_FOUND`, `UNSUPPORTED_MARKET`, `RATE_LIMITE
 |---|---|
 | Kulcs kinyerése az APK/IPA-ból | Nincs titok a kliensen. `EXPO_PUBLIC_` csak nem titkos értéket tartalmazhat. |
 | Proxy visszaélés (valaki más használja a végpontot) | Allowlist, kérésenkénti validáció, rate limit, cache, AI napi keret és kill switch. Később opcionálisan app attestation (R-07). |
-| Szolgáltatói adat mint támadási felület / prompt injection | Szolgáltatói szöveg (cégleírás stb.) adatként kezelve, mezőhossz-korlát. Az AI-promptban elválasztva, „adat, nem utasítás”. Az AI kimenete séma szerint validált. Az AI nem változtathat szabályt és nem kérhet titkot. |
+| Szolgáltatói adat mint támadási felület / prompt injection | **PHASE 11, megvalósítva (D-077):** nyers szolgáltatói szöveg nem kerül az AI-ba; a DTO minden szövege tisztítva (`sanitizeAiText`), a séma tiltja a `<`/`>`-t és az ismeretlen mezőt; a rendszerprompt rögzített; az adat `<analysis_data>` blokkban, „adat, nem utasítás”, a JSON `<`/`>` escape-elve; a kimenet séma + tartalmi őr (injection-/titok-/URL-minták, ismeretlen hivatkozás, nem visszakereshető szám) – a szerveren ÉS a kliensen. Az AI nem változtathat szabályt, pontot, címkét vagy confidence-t, és nem kap eszközt vagy titkot. |
+| AI-hallucináció megjelenítése | **PHASE 11 (D-077):** `basedOn` kötelező hivatkozás, számvisszakeresés, `support: 'insufficient_data'` adathiánynál; sértésnél a teljes válasz elutasítva, a szabályalapú magyarázat marad. Korlát: szemantikai félrevezetést nem ismer fel (KI-89). |
+| AI-költség elszabadulása / proxy-visszaélés | **PHASE 11 (D-078):** alapból kikapcsolva (`AI_ENABLED=false`), napi keret (`AI_DAILY_LIMIT`), `AI_MAX_OUTPUT_TOKENS`, timeout, cache a bemenet-hash-re, kérés-méretkorlát (96 KB). Korlát: a keret és a cache példányonként, memóriában (KI-23, KI-91). |
+| Portfólióadat a LLM-szolgáltatónál | **PHASE 11 (D-076/4):** explicit `consent` nélkül a séma elutasítja; összeg, darabszám, ár, név nem kerül át; a napló sem tartalmaz bemenetet vagy választ (teszt). |
 | Hamis/hibás adat megjelenítése | Kétoldali zod-validáció, provenance, státuszok. Nincs csendes pótlás. |
 | Naplózott érzékeny adat | Napló-redakció: kulcs, token, e-mail és portfólióérték nem kerül naplóba. |
 | Függőségi kockázat | Csak szükséges csomag, `npx expo install`, lockfile commitolva, `npm audit` a PHASE 15-ben. |

@@ -1,6 +1,6 @@
 # Roadmap – Stock & ETF Analyzer
 
-> Frissítve: 2026-11-22 (PHASE 10 vége). Minden fázis külön chatben fut, a `stock_etf_analyzer_prompts` csomag `NN_*.md` promptja alapján.
+> Frissítve: 2026-11-23 (PHASE 11 vége). Minden fázis külön chatben fut, a `stock_etf_analyzer_prompts` csomag `NN_*.md` promptja alapján.
 > **Fázisszabály:** a következő fázis csak akkor indul, ha az előző befejezési feltételei teljesültek, vagy a hiányok a KNOWN_ISSUES-ban dokumentálva vannak.
 > **Verzió:** a promptok egy része SDK 57-et említ. Mindenhol **SDK 58** értendő (D-020).
 
@@ -18,8 +18,8 @@
 | 08 | ETF-elemzés | **KÉSZ** (2026-11-22) | |
 | 09 | Portfólió és kockázat | **KÉSZ** (2026-11-22) | |
 | 10 | Score és döntési engine | **KÉSZ** (2026-11-22) | **M3 Elemzőmotor kész ✅** |
-| 11 | AI-magyarázó engine | **KÖVETKEZIK** | |
-| 12 | UI/UX és navigáció | NEM KEZDŐDÖTT | |
+| 11 | AI-magyarázó engine | **KÉSZ** (2026-11-23) | |
+| 12 | UI/UX és navigáció | **KÖVETKEZIK** | |
 | 13 | Tárolás, cache, offline | NEM KEZDŐDÖTT | **M4 MVP** |
 | 14 | Compare, watchlist, screener, alerts | NEM KEZDŐDÖTT | |
 | 15 | Integráció, QA, biztonság | NEM KEZDŐDÖTT | |
@@ -404,6 +404,20 @@ Minden fázis közös lezárása (CLAUDE.md):
   - Tesztek: hibás JSON, hiányzó mező, timeout, rate limit, refusal.
   - AI-hiba esetén az app használható.
   - Kulcs csak szerveren.
+- **Eredmény (2026-11-23): KÉSZ.**
+  - **Szerződés** (`src/contracts/ai.ts`, `ai-guards.ts`): szigorú `AiInputDto` hivatkozható `ref`-ekkel; strukturált kimenet (összefoglaló, pozitív/negatív tényezők, kulcskockázatok, értékelés, DCF-feltevések, adathiányok, újraértékelés, érvénytelenítés, confidence); tartalmi őr (hivatkozás, számvisszakeresés, tiltott állítás, confidence-egyezés) – D-076, D-077.
+  - **`template` provider** (`src/explanation`, új réteg): ingyenes, offline, determinisztikus; ugyanazon az őrön megy át (AAPL, MSFT, NVDA, JPM, ETF, portfólió).
+  - **Alkalmazás:** `buildInstrumentAiInput`, `buildPortfolioAiInput` (adatminimalizált), `AiGateway` port, `explainAnalysis` use case (template mindig + opcionális LLM + kliensoldali újra-ellenőrzés; hibánál a template marad).
+  - **Proxy:** `POST /api/v1/ai/explain`; `AiProvider` port, `mock` és `anthropic` (hivatalos SDK 1.12.0, strukturált kimenet, refusal, szerveroldali fallback); `AiExplainService`: kill switch, cache (bemenet-hash), napi keret, timeout, JSON → séma → őr; adatmentes napló – D-078.
+  - Részvény-, ETF- és portfólió-sablon külön; prompt injection elleni védelem (rögzített rendszerprompt, `<analysis_data>` adatblokk escape-pel, DTO-tisztítás).
+  - LLM-opciók vizsgálata: DATA_SOURCES 14. (U-16 megválaszolva).
+  - Ellenőrzés: `npm run check` exit 0; **1307/1307 teszt** (77 suite; +121). Az új modulok lefedettsége 95,7% sor / 86,6% ág. `expo export`: 11 API route; a kliens-bundle-ben nincs SDK és nincs kulcs; `expo serve` füstpróba mock providerrel: 200.
+  - **Nem készült el (tudatosan):** UI (12); élő Claude-hívás (nincs kulcs, KI-92); EAS-en futás (KI-90); `local` provider (KI-94); tartós AI-cache (KI-91).
+  - Új döntések: D-076…D-078. Új ismert problémák: KI-89…KI-96.
+- **A későbbi fázisok kapcsolódási pontjai (PHASE 11-ből):**
+  - PHASE 12 (UI): „Magyarázat” szekció; alapból a `display` (template, „Szabályalapú összefoglaló” címke); „AI-magyarázat kérése” gomb → `explainAnalysis({ mode: 'llm' })`. Portfóliónál beleegyezés-párbeszéd → `consent`. LLM-nél „AI-értelmezés” címke, időbélyeg, `basedOn` hivatkozások a mutatókra; `llm.status = 'failed'` esetén érthető üzenet a hibáról, a template marad. Beállítások: LLM be/ki (a szerveren is kikapcsolható).
+  - PHASE 13: tartós AI-cache/keret (KI-91); a felhasználói beleegyezés tárolása.
+  - PHASE 15: EAS-próbatelepítés + élő hívás (KI-90, KI-92); `npm audit` az új csomagra.
 
 ### PHASE 12 – UI/UX és navigáció
 - **Cél:** a fő képernyők a meglévő use case-ekre építve.

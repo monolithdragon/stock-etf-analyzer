@@ -1,10 +1,25 @@
 # Ismert problémák, kockázatok, ismeretlenek – Stock & ETF Analyzer
 
-> Frissítve: 2026-11-22 (PHASE 10 vége). Valószínűség (V) és hatás (H) skálája: **A** = Alacsony, **K** = Közepes, **M** = Magas.
+> Frissítve: 2026-11-23 (PHASE 11 vége). Valószínűség (V) és hatás (H) skálája: **A** = Alacsony, **K** = Közepes, **M** = Magas.
 
 ## Blokkolók
 
-**Nincs blokkoló a PHASE 11 indításához.** A PHASE 11 (AI-magyarázó) bemenete az `InstrumentEvaluation` (score-kártya, szabálynyom, `drivers`, confidence, thesis) + a PHASE 06–09 mutatói. Az AI csak magyaráz: a pontot, a címkét és a confidence-t nem módosíthatja (`aiInvolvement: 'none'` a PHASE 10 kimenetében).
+**Nincs blokkoló a PHASE 12 indításához.**
+- A PHASE 12 (UI) bemenetei: `AppServices.explainAnalysis` (`ExplanationOutcome`: `template`, `llm`, `display`), valamint `buildInstrumentAiInput` és `buildPortfolioAiInput`.
+- Az LLM alapból ki van kapcsolva; a UI-nak a szabályalapú magyarázattal kell teljesnek lennie.
+
+## PHASE 11 – ismert problémák és leletek (2026-11-23)
+
+| ID | Leírás | Hatás | Állapot / teendő | Fázis |
+|---|---|---|---|---|
+| KI-89 | **A tartalmi őr nem ért szemantikát:** ellenőrzi a hivatkozásokat, a számokat, a tiltott mintákat és a confidence-t. Egy szám nélküli, helyesen hivatkozott, de félrevezető vagy túlzó megfogalmazást nem ismer fel (pl. „kiemelkedő” egy átlagos pontra). | K | Tudatos (D-077). Enyhítés: az LLM-szöveg mindig „AI-értelmezés” jelölést kap, `basedOn` hivatkozásokkal, és a szabályalapú magyarázat is elérhető (PHASE 12 UI). | 12 |
+| KI-90 | **Az Anthropic SDK EAS Hosting runtime-on nem igazolt** (U-09). Lokálisan igazolt: `expo export` + `expo serve`, a route betölt, mock providerrel 200. | K | EAS próbatelepítés (a régóta nyitott EAS-próbával együtt), majd egy élő hívás a tulajdonos kulcsával – csak a tulajdonos jóváhagyásával, költségkorláttal. | 15 |
+| KI-91 | **AI-cache és napi keret memóriában, példányonként:** újraindításkor nullázódik; több szerverpéldány között nincs közös keret (vö. KI-23). | A | Saját használatnál elfogadható. Tartós cache/keret: PHASE 13 (szerver-cache) vagy külső KV. | 13 |
+| KI-92 | **Élő LLM-hívás nem volt:** a `.env.local`-ban az `ANTHROPIC_API_KEY` üres, `AI_PROVIDER=template`, `AI_ENABLED=false`. A strukturált kimenet sémájának elfogadását (a `betaZodOutputFormat` által generált JSON-séma) a szolgáltató élőben még nem igazolta. | K | A tulajdonos dönt az LLM-ről (DP-04). Bekapcsolás után az első élő hívásnál ellenőrizendő: 200, `stop_reason: end_turn`, és a válasz átmegy az őrön. Ha a séma valamely kulcsszavát a szolgáltató elutasítja, a `src/contracts/ai.ts` kimeneti sémáját kell egyszerűsíteni. | tulajdonos |
+| KI-93 | **Az LLM magyarázatai gyakran elbukhatnak az őrön** (pl. saját kerekítés, kiszámolt különbség, „kb. kétszeres” szám): ez szándékos szigor, de rontja a használhatóságot. | K | Mérés az első élő hívásokkal; ha szükséges, a prompt pontosítása (`PROMPT_VERSION` emelése) vagy a számszabály célzott lazítása, dokumentált döntéssel. A hamis pozitív nem okoz kárt: ilyenkor a szabályalapú magyarázat jelenik meg. | 12+ |
+| KI-94 | **A lokális LLM nem készült el** (csak vizsgálat, DATA_SOURCES 14.): hardverigény, licencenkénti eltérés, gyenge magyar és sémahű kimenet kis modelleken. | A | Külön döntéssel: `local` `AiProvider`-adapter a választott futtató hivatalos API-jával. | később |
+| KI-95 | **A szabályalapú magyarázat szövege egyszerű:** a motor szövegeit (drivers, kockázatok, érvénytelenítés) szó szerint idézi, technikai szabályazonosítókkal (pl. `stock-watch`). | A | PHASE 12: a megjelenítésnél felhasználóbarát szöveg vagy a szabálynyom összecsukása. | 12 |
+| KI-96 | **`npm install`: blokkolt install-szkript** (`@parcel/watcher`, node-gyp) az npm 12 `allowScripts` szabálya miatt. Nem a PHASE 11 csomagja; a tesztek, a lint és az export nem igényli. | A | Megfigyelendő; ha a watch-mód hibázik: `npm install-scripts approve @parcel/watcher`. | – |
 
 ## PHASE 10 – ismert problémák és leletek (2026-11-22)
 
@@ -170,11 +185,11 @@ A DP-01…DP-04 döntési pontokra 2026-11-21-én megjött a válasz. A DP-05 tu
 | R-06 | Az SDK 58-as Expo Go store-elérhetősége nem igazolt; a `create-expo-app` alapból SDK 57-et adhat. **PHASE 02: kezelve.** Explicit `--template default@sdk-58`; emulátoron az Expo CLI telepítette az Expo Go 58.0.5-öt. Saját telefonhoz lásd KI-08. | A | K | Explicit SDK 58 sablon; Expo Go CLI-ből Android emulátorra; szükség esetén development build | 02 ✅ |
 | R-07 | **Proxy visszaélés:** fiók nélkül bárki hívhatja a végpontot, aki ismeri az URL-t. | K | K | Allowlist, validáció, rate limit, cache, AI kill switch és napi keret; később app attestation | 04, 11, 15 |
 | R-08 | Az EAS Hosting rate-limit/KV képessége nem ismert (U-03). | K | K | Spike a 04-ben; tartalék: Cloudflare Workers (D-004) **04A:** U-03 megválaszolva: nincs KV/rate-limit primitív → memóriabeli limiter (KI-23); a Cloudflare-tartalék indoka erősödött. | 04 |
-| R-09 | AI-költség és hallucináció. | K | M | Strukturált kimenet + zod; `basedOn`; csak számított bemenet; cache; költségkorlát; az AI opcionális | 11 |
+| R-09 | AI-költség és hallucináció. | K | M | Strukturált kimenet + zod; `basedOn`; csak számított bemenet; cache; költségkorlát; az AI opcionális. **PHASE 11: megvalósítva** (D-077, D-078): alapból kikapcsolt LLM, napi keret, tokenkorlát, timeout, cache; séma + tartalmi őr a szerveren és a kliensen; sértésnél a szabályalapú magyarázat. Maradék: KI-89, KI-93. | 11 ✅ |
 | R-10 | Jogi: a BUY/SELL címkék nyilvános kiadásnál befektetési ajánlásnak minősülhetnének (MiFID II / MAR, jogi ellenőrzés kellene). **Saját használatnál nem releváns** (D-008); csak akkor, ha a DP-02 megváltozik. | A | A | Jogi nyilatkozat; konfigurálható címkék. **PHASE 10: megvalósítva** – a címkeszöveg konfigurálható, minden értékelés `disclaimer`-t ad (elemzési kategória, nem előrejelzés, nem tanács), `NOT_RATED` adathiánynál. | 10 ✅ |
 | R-11 | Késői integráció: a UI csak a 12-ben jön, így a hibák későn derülnek ki. | K | K | Use case-integrációs tesztek a 04-től; opcionális dev-diagnosztika képernyő (ROADMAP kiegészítések 2.) | 04–11 |
 | R-12 | Lebegőpontos kerekítési hiba. | A | K | Kerekítés csak a megjelenítésnél; tűréses tesztek; D-009 felülvizsgálata a 09-ben | 05, 09 |
-| R-13 | Adatvédelem: a portfólió összetétele AI-hívással az LLM-szolgáltatóhoz kerül. | K | K | Explicit, egyszeri beleegyezés; minimális DTO (súlyok és típusok, összegek nélkül, ha elég) | 11 |
+| R-13 | Adatvédelem: a portfólió összetétele AI-hívással az LLM-szolgáltatóhoz kerül. | K | K | Explicit, egyszeri beleegyezés; minimális DTO (súlyok és típusok, összegek nélkül, ha elég). **PHASE 11: megvalósítva** (D-076/4): kérésenkénti `consent` kötelező (séma); csak súly, típus és százalékos mutató megy át; a napló adatmentes (teszt). A beleegyezés UI-ja: PHASE 12. | 11 ✅ |
 | R-14 | Strict TypeScript API (RN 0.87+): harmadik fél csomagjai típushibát okozhatnak. | K | A | Csak kompatibilis csomag; a `customConditions` opt-out csak végső esetben, dokumentálva (RN 0.89 után megszűnik) | 02, 12 |
 | R-15 | Windows környezet: az `ANDROID_HOME` nincs beállítva, az `adb` nincs a PATH-ban. **PHASE 02: az Expo CLI nélküle is működik** (alapértelmezett SDK-hely); az opcionális javítás dokumentálva (KI-04). | A | A | Lépésenkénti útmutató a 02-ben (fázisútmutató 13.2) | 02 ✅ |
 | R-16 | A `sharesOutstanding` (címlap) dátuma eltér az ár dátumától, ami torzítja a market capet. | K | A | `asOf` megjelenítése; a dátumeltérés jelzése | 06 |
@@ -202,14 +217,14 @@ A DP-01…DP-04 döntési pontokra 2026-11-21-én megjött a válasz. A DP-05 tu
 | U-06 | ~~Tiingo lefedettség~~ – nem releváns, amíg nincs Tiingo adapter (D-024) | – |
 | U-07 | SEC `company_tickers.json` (ticker → CIK) elérhetősége és formátuma | **Lezárva (04A):** elérhető, `{ "0": { cik_str, ticker, title } }`, 10 399 sor; User-Agent nélkül 403. |
 | ~~U-08~~ | A SEC N-PORT használhatósága US ETF holdingsra | **Megválaszolva (PHASE 08, élő próba):** használható; negyedéves (nyilvános a negyedév-végi hónap), ~60 nap késleltetés, teljes lista súllyal, országgal, ISIN-nel, devizával; szektor nincs; UCITS nincs (DATA_SOURCES 13.) |
-| U-09 | A `@anthropic-ai/sdk` futása az EAS Hosting runtime-on | PHASE 11 |
+| U-09 | A `@anthropic-ai/sdk` futása az EAS Hosting runtime-on | **Részben (PHASE 11):** a lokális Expo szerver-runtime-ban igazolt (export + serve); EAS-en nem → KI-90 |
 | U-10 | `Intl` (hu-HU) támogatás Hermesen mindkét platformon | PHASE 12 |
 | U-11 | Grafikonkönyvtár kompatibilitása SDK 58 / RN 0.88 / New Architecture mellett | PHASE 12 |
 | ~~U-12~~ | **Lezárva (PHASE 02):** `npx create-expo-app@5.0.0 <név> --template default@sdk-58` (SDK 58 changelog; `expo-template-default` `sdk-58` = 58.0.35) | – |
 | U-13 | A meglévő FMP és EODHD kulcs csomagszintje (free vagy fizetős) | **Megválaszolva (04B):** mindkettő free (DATA_SOURCES 11.) |
 | U-14 | EODHD free: mely végpontok érhetők el (fundamentum? live/delayed?), történetmélység | **Megválaszolva (04B):** EOD (1 év), késleltetett live, osztalék, keresés igen; fundamentum 403 (DATA_SOURCES 11.2) |
 | U-15 | FMP free: van-e nem US lefedettség, ETF-adat | **Megválaszolva (04B):** nincs (402); a keresés viszont nem US jegyzéseket is listáz (DATA_SOURCES 11.1) |
-| U-16 | Ingyenes LLM-lehetőségek (lokális modell, más szolgáltatók free kerete) | PHASE 11 |
+| U-16 | Ingyenes LLM-lehetőségek (lokális modell, más szolgáltatók free kerete) | **Megválaszolva (PHASE 11):** DATA_SOURCES 14. – az ingyenes alap a szabályalapú `template`; a lokális LLM lehetséges, de hardver- és minőségfüggő (KI-94); harmadik fél free keretei nem igazoltak, nem javasoltak |
 
 ## Promptcsomag-ellentmondások (feloldva: D-020)
 

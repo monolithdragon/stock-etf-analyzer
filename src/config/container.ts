@@ -8,6 +8,7 @@ import {
   createAnalyzeEtf,
   createEvaluateEtf,
   createEvaluateStock,
+  createExplainAnalysis,
   createAnalyzePortfolio,
   createAnalyzeStockFundamentals,
   createAnalyzeStockValuation,
@@ -21,6 +22,7 @@ import {
   createGetSecurityListings,
   createRecordTransaction,
   createSearchInstruments,
+  type AiGateway,
   type AppServices,
   type Clock,
   type FxGateway,
@@ -32,6 +34,10 @@ import {
   notImplementedFxGateway,
   notImplementedMarketDataGateway,
 } from '@/infrastructure/api-client/not-implemented-market-data-gateway';
+import {
+  createProxyAiGateway,
+  disabledAiGateway,
+} from '@/infrastructure/api-client/proxy-ai-gateway';
 import {
   createProxyFxGateway,
   createProxyMarketDataGateway,
@@ -53,6 +59,8 @@ export interface AppDependencies {
   readonly marketData: MarketDataGateway;
   readonly fx: FxGateway;
   readonly portfolioRepository: PortfolioRepository;
+  /** PHASE 11: opcionális LLM-magyarázat (demó módban / proxy nélkül kikapcsolt). */
+  readonly aiGateway: AiGateway;
 }
 
 /** A globális fetch, késleltetve feloldva (tesztben a `fetchImpl` felülírható). */
@@ -81,16 +89,23 @@ export function createDefaultDependencies(
       ...base,
       marketData: createMockMarketDataGateway(clock),
       fx: createMockFxGateway(clock),
+      aiGateway: disabledAiGateway,
     };
   }
   if (env.apiBaseUrl === null) {
-    return { ...base, marketData: notImplementedMarketDataGateway, fx: notImplementedFxGateway };
+    return {
+      ...base,
+      marketData: notImplementedMarketDataGateway,
+      fx: notImplementedFxGateway,
+      aiGateway: disabledAiGateway,
+    };
   }
   const http = createProxyHttpClient({ baseUrl: env.apiBaseUrl, fetchImpl });
   return {
     ...base,
     marketData: createProxyMarketDataGateway(http),
     fx: createProxyFxGateway(http),
+    aiGateway: createProxyAiGateway(http),
   };
 }
 
@@ -160,5 +175,6 @@ export function createAppServices(
     }),
     evaluateStock: createEvaluateStock({ analyzeStockValuation }),
     evaluateEtf: createEvaluateEtf({ analyzeEtf }),
+    explainAnalysis: createExplainAnalysis({ aiGateway: deps.aiGateway, clock: deps.clock }),
   };
 }

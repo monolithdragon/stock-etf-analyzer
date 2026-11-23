@@ -190,6 +190,7 @@
 
   Az árak a 2026-11-03-i Anthropic-árlista szerint. A modellválasztás költségdöntés, ami a tulajdonosra tartozik (DP-04).
 - **Nyitott:** az SDK futása EAS Hosting runtime-on `[NEM IGAZOLT]`, ezt a PHASE 11 spike-kal ellenőrzi.
+- **PHASE 11 (2026-11-23):** megvalósítva a D-078 szerint. A hivatalos SDK (`@anthropic-ai/sdk` 1.12.0) a lokális Expo szerver-runtime-ban (`expo export` + `expo serve`) igazoltan betölt; EAS Hostingon továbbra is `[NEM IGAZOLT]` (KI-90).
 
 ### D-017 – FX-kezelés
 - **Dátum:** 2026-11-21 · **Státusz:** Elfogadva
@@ -877,3 +878,116 @@ A tulajdonos válaszai:
   10. **AI:** nem vesz részt (`aiInvolvement: 'none'`); a scoring nem hivatkozik AI-gatewayre (őrteszt).
 - **Elvetett alternatívák:** csak összpontszám-küszöbök (a prompt tiltja; elrejti, ha egy dimenzió kritikusan gyenge); súlyozott „döntési pont” (kevésbé magyarázható, mint a sorrendezett szabályok); ismeretlen jelzés `false`-ként kezelése (az adathiányt ténynek venné).
 - **Következmények:** a UI a `ruleTrace`/`drivers`/`thesis` mezőket jeleníti meg (PHASE 12); a felhasználói súly- és küszöbszerkesztés a konfiguráció felülírásával történik (`EvaluationOptions.scoreConfig/decisionConfig`), validációval.
+
+## PHASE 11 – AI-magyarázó engine (2026-11-23)
+
+### D-076 – AI-bemenet: szigorú, hivatkozható `AiInputDto` a determinisztikus motor kimenetéből
+- **Dátum:** 2026-11-23 · **Státusz:** Elfogadva
+- **Kontextus:** az AI csak a már validált, strukturált eredményt értelmezheti, nem számolhat újra, és nem találhat ki inputot (pipeline: Provider → Validation → Calculation → Score/Decision → **AI Explanation** → UI).
+- **Döntés:**
+  1. **Egyetlen bemenet:** `AiInputDto` (`src/contracts/ai.ts`; zod `strictObject` mindenhol, ismeretlen mező → hiba). Tartalma:
+     - számított mutatók: érték **vagy** státusz + ok (hiány ≠ 0), `display` (az AI csak ezt idézheti), egység, pénznem, forrás, `asOf`, frissesség;
+     - kategória-pontok és -indoklás;
+     - döntés: címke, alapcímke, illeszkedő szabály, plafonok, `drivers`, `otherLabelTexts`;
+     - confidence és thesis (kockázatok, érvénytelenítés);
+     - DCF (`estimated`): bemenetek, forgatókönyvek feltevéssel és eredménnyel;
+     - adathiányok (`dataGaps`), figyelmeztetések, jogi nyilatkozat.
+
+     **Nincs benne:** nyers szolgáltatói szöveg (cégleírás, hír), számítási szabály, titok.
+  2. **Hivatkozhatóság:** minden elemnek egyedi `ref` azonosítója van (`metric:roe`, `category:GROWTH`, `rule:stock-watch`, `cap:…`, `risk:…`, `invalidation:…`, `dcf:base`, `dcfinput:…`, `position:…`, `gap:…`, `score:total`, `decision:label`, `confidence:analysis`). Duplikált `ref` → séma-hiba. A `citableRefs` megmondja, mely ref mögött van tényleges adat.
+  3. **Építés:** `buildInstrumentAiInput(evaluation, { valuation, displayName, labels })` (részvény/ETF) és `buildPortfolioAiInput(portfolio)` (`src/application/explanation`); a kimenetet a séma is ellenőrzi.
+     - Minden szöveg a `sanitizeAiText`-en megy át: vezérlőkarakter ki, `<`/`>` → `‹`/`›`, hosszkorlát.
+     - A séma a `<`/`>` karaktert eleve tiltja.
+  4. **Portfólió – adatminimalizálás (R-13, NFR-04):**
+     - Csak súly, típus, státusz, jegyzés-azonosító és százalékos mutatók kerülnek át.
+     - **Nincs:** pénzösszeg, darabszám, ár, tranzakció, portfólió-név; a figyelmeztetésekből csak a darabszám.
+     - LLM-hez **explicit beleegyezés** (`consent.shareWithAiProvider: true`) kell; a séma kikényszeríti.
+  5. **Új réteg: `src/explanation`** (csak `contracts` + `domain`; ESLint-zóna, próbafájllal igazolva). A szabályalapú sablon itt él; az application importálhatja.
+- **Elvetett alternatívák:**
+  - a teljes `InstrumentEvaluation` átadása: túl nagy, a belső szerkezet kiszivárog, és nincs stabil hivatkozás;
+  - szabad szöveges összefoglaló bemenetként: nem visszakövethető.
+
+### D-077 – Strukturált kimenet, tartalmi őr (hallucináció-szűrés) és prompt injection elleni védelem
+- **Dátum:** 2026-11-23 · **Státusz:** Elfogadva
+- **Döntés:**
+  1. **Kimeneti séma** (`aiExplanationContentSchema`):
+     - szakaszok: `summary`, `positives`, `negatives`, `keyRisks`, `valuationExplanation`, `dcfAssumptions`, `dataGaps`, `reviewTriggers`, `thesisInvalidators`;
+     - mindegyik `{ text, basedOn[], support: 'data' | 'insufficient_data' }` állítás, szakaszonként legfeljebb 8;
+     - plusz `confidence { level, explanation }`.
+
+     Az LLM ugyanezt kapja JSON-sémaként (`output_config.format`).
+  2. **Tartalmi őr** (`validateAiExplanation`, `src/contracts/ai-guards.ts`; a szerver ÉS a kliens is futtatja):
+     - **Hivatkozások:** ismeretlen `ref` → hiba. A `support: 'data'` állításhoz legalább egy adatot hordozó ref kell; hiányzó mutató vagy `gap:` ehhez nem elég.
+     - **Számok:** minden szám visszakereshető a bemenetből. Elfogadott forrás: nyers érték, ×100 százalékos alak, a bemenet szövegeiben szereplő szám, listahossz; a szövegben használt tizedesre kerekítve. Kivétel: 0–10 közötti egész szám mértékegység nélkül. Dátum csak a bemenetből jöhet.
+     - **Tiltott állítások:** hozamgarancia, „biztosan emelkedik”, százalékos esély/valószínűség, felszólító vételi/eladási tanács, URL, kulcs/jelszó/token, rendszerprompt- vagy injection-nyom.
+     - **Más döntési címke:** az ítéletet hordozó szakaszokban (összefoglaló, pozitív/negatív, adathiány, confidence) tilos. A szabálynyomot magyarázó szakaszokban (értékelés, kockázat, érvénytelenítés) megengedett, mert a motor saját szövegei is említik (pl. „alapszabály: Watch → plafon: Hold”). A szabály-azonosító (`stock-watch`) nem számít címkének.
+     - **Szerkezeti szabályok:** `confidence.level` = a bemenet szintje (portfóliónál `NOT_APPLICABLE`); ETF-nél üres `dcfAssumptions`; ha a bemenetben van adathiány, a `dataGaps` nem lehet üres.
+  3. **Elutasítás, nem javítás:** bármely sértés → a teljes válasz `AI_INVALID_OUTPUT`. Nincs részleges megjelenítés, automatikus javítás vagy újrapróbálás. Okok: költség, determinizmus, és hogy ne jelenjen meg megbízhatónak látszó, kitalált állítás.
+  4. **Prompt injection elleni védelem:**
+     - rögzített, verziózott rendszerprompt (`PROMPT_VERSION`);
+     - az adat a user üzenet `<analysis_data>` blokkjában van, JSON-ként, „adat, nem utasítás” jelöléssel;
+     - a JSON-ban `<`/`>` → `<`/`>` (a DTO-tiltás mellett kettős védelem);
+     - a modell nem kap eszközt, hálózatot vagy titkot; a kimenetet a séma és az őr szűri;
+     - az AI nem változtathat szabályt, pontot, címkét vagy confidence-t.
+  5. **Sablonok:**
+     - részvény;
+     - ETF (DCF nem alkalmazható);
+     - portfólió (nincs pont vagy címke, nincs minősítés, nincs átsúlyozási tanács).
+
+     Mindhárom külön szerepleírást kap, a szabályok közösek.
+  6. **Confidence:** adatteljesség és -minőség, soha nem az árfolyam-emelkedés valószínűsége (a prompt is előírja, az őr is ellenőrzi).
+- **Ismert korlát (KI-89):** a minta- és számalapú őr nem ért szemantikát. Egy szám nélküli, helyesen hivatkozott, de félrevezető megfogalmazást nem szűr ki. Ezért a UI-ban az LLM-szöveg mindig „AI-értelmezés” jelölést és `basedOn` hivatkozásokat kap (PHASE 12).
+
+### D-078 – Providerek: `template` alapértelmezés a kliensen, opcionális LLM a proxyn (Anthropic SDK), költségkorlát, kill switch
+- **Dátum:** 2026-11-23 · **Státusz:** Elfogadva (a D-016 és a D-026 megvalósítása)
+- **Döntés:**
+  1. **`template` provider** (`explainWithTemplate`; kliens, offline, ingyenes, `calculated`): ugyanazt a sémát adja, és ugyanazon az őrön megy át (teszt: AAPL, MSFT, NVDA, JPM, ETF, portfólió). **Az app LLM nélkül is teljes.**
+  2. **`explainAnalysis` use case:**
+     - a template MINDIG elkészül;
+     - `mode: 'llm'` esetén a proxy hívása után a kliens újra lefuttatja a sémát és az őrt;
+     - hibánál `llm.status = 'failed'` + az ok, és a `display` a template. Hibának számít: `AI_DISABLED`, timeout, rate limit, refusal, érvénytelen kimenet, hálózati hiba, hamis eredet-jelölés;
+     - demó módban vagy proxy nélkül a gateway hálózat nélkül `AI_DISABLED`-et ad.
+  3. **Szerver:** az `AiProvider` port csak szöveget állít elő. Az `AiExplainService` lépései sorrendben:
+     1. kill switch;
+     2. cache: kulcs = SHA-256 bemenet-hash + provider + modell + promptverzió; 24 óra, legfeljebb 200 elem, memóriában;
+     3. napi keret (`AI_DAILY_LIMIT`, alapból 50, UTC éjfélkor nullázódik);
+     4. hívás saját timeouttal (`AI_TIMEOUT_MS`, alapból 60 s) – akkor is, ha a provider nem figyeli az AbortSignalt;
+     5. `max_tokens` leállás → csonka válasz, hiba;
+     6. JSON → séma → őr.
+
+     Érvénytelen választ nem cache-elünk.
+
+     A `POST /api/v1/ai/explain` végpont: méretkorlát (96 KB), strict séma, beleegyezés. A napló csak útvonalat, státuszt, késleltetést, providert és hibafajtát tartalmaz.
+  4. **Providerek:**
+     - `mock`: teszt és demó (`AI_PROVIDER=mock`).
+     - `anthropic`: a hivatalos **`@anthropic-ai/sdk` 1.12.0** (Apache-2.0, zod 4 peer, nincs natív függőség). Csak a `src/server` importálja; a kliens-bundle-ben nincs benne (exporttal szkennelve).
+       - Hívás: `beta.messages.create`, `output_config: { effort, format: betaZodOutputFormat(séma) }`, gondolkodási és mintavételi paraméter nélkül, `maxRetries: 1`.
+       - Szerveroldali `fallbacks: "default"` (béta `server-side-fallback-2026-07-01`) a támogatott modelleknél (Opus 5.5/5, Sonnet 5.5, Fable 5.1/5.2); Haikun nem.
+       - SDK-hibák leképezése: timeout/abort → `AI_TIMEOUT`; 429/529/503 → `AI_RATE_LIMITED`; 401/403 → `AI_DISABLED`; kapcsolati hiba → `NETWORK`; egyéb → `UPSTREAM`. A szolgáltató hibaüzenete nem jut el a klienshez.
+  5. **Környezeti változók:**
+
+     | Változó | Alapérték | Megjegyzés |
+     |---|---|---|
+     | `AI_PROVIDER` | `template` | `template` \| `anthropic` \| `mock` |
+     | `AI_ENABLED` | `false` | kill switch |
+     | `ANTHROPIC_API_KEY` | – | TITOK, csak szerveren |
+     | `AI_MODEL` | `claude-opus-5-5` | a D-016 szerint; a legolcsóbb a `claude-haiku-5-5`; a választás a tulajdonosé (DP-04) |
+     | `AI_EFFORT` | `low` | |
+     | `AI_MAX_OUTPUT_TOKENS` | 8000 | |
+     | `AI_DAILY_LIMIT` | 50 | |
+     | `AI_TIMEOUT_MS` | 60000 | |
+
+     Érvénytelen érték → alapérték + figyelmeztetés (az értéket nem naplózzuk). `anthropic` kulcs nélkül → kikapcsolva.
+  6. **`local` provider:** nem készült. Vizsgálat és javaslat: DATA_SOURCES 14. Később adapterrel köthető az `AiProvider` port mögé.
+  7. **HTTP-leképezés:** `AI_DISABLED` → 503; `AI_INVALID_OUTPUT` → 502; `AI_REFUSED` → 422; AI-timeout → 504 `TIMEOUT`; AI-rate limit → 429 `RATE_LIMITED`.
+- **Elvetett alternatívák:**
+  - kézi `fetch` az Anthropic API-ra: a projekt TypeScript, van hivatalos SDK, és a D-016 is az SDK-t írja elő;
+  - LLM a kliensen: a kulcs a bundle-be kerülne;
+  - automatikus LLM-futtatás: az UF-06 szerint csak explicit felhasználói műveletre fut;
+  - hibás válasz automatikus újrakérése: dupla költség, ugyanaz a hibaforrás.
+- **Költség:** a D-016 feltevésével (~6 000 input + ~1 500 output token; a gondolkodás kimenetként számlázódik, így a valós költség magasabb lehet), az Anthropic 2026-11-03-i árlistája szerint, magyarázatonként:
+  - Opus 5.5 ≈ $0.054;
+  - Sonnet 5.5 ≈ $0.027;
+  - Haiku 5.5 ≈ $0.0014.
+
+  Napi felső korlát alapbeállítással: 50 hívás. **Nem ingyenes és nem korlátlan.**

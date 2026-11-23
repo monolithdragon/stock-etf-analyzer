@@ -11,6 +11,7 @@ import type {
 } from './use-cases/analyze-stock-valuation';
 import type { ConvertMoney } from './use-cases/convert-money';
 import type { EvaluateEtf, EvaluateStock } from './use-cases/evaluate-instrument';
+import type { ExplainAnalysis } from './use-cases/explain-analysis';
 import type { GetListingQuote } from './use-cases/get-listing-quote';
 import type {
   GetDividendHistory,
@@ -63,6 +64,14 @@ export {
 } from './scoring/stock-evaluation';
 export { buildEtfEvaluation, buildEtfFeatures } from './scoring/etf-evaluation';
 export { portfolioWeightFeature } from './scoring/portfolio-context';
+export * from './use-cases/explain-analysis';
+export {
+  aiRef,
+  buildInstrumentAiInput,
+  buildPortfolioAiInput,
+  formatAiDisplay,
+  type InstrumentAiInputOptions,
+} from './explanation/build-ai-input';
 
 /** A UI számára elérhető szolgáltatások – a composition root (`src/config/container.ts`) állítja elő. */
 export interface AppServices {
@@ -89,4 +98,9 @@ export interface AppServices {
   readonly evaluateStock: EvaluateStock;
   /** PHASE 10: ETF-score és döntés (külön konfiguráció, a részvénytől elválasztva). */
   readonly evaluateEtf: EvaluateEtf;
+  /**
+   * PHASE 11: magyarázat. Alapból szabályalapú (offline, ingyenes); `mode: 'llm'` esetén a proxyn
+   * át LLM is – hibánál a szabályalapú marad megjelenítve.
+   */
+  readonly explainAnalysis: ExplainAnalysis;
 }
