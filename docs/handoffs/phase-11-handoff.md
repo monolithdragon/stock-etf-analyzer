@@ -108,7 +108,7 @@ Részletek: [../KNOWN_ISSUES.md](../KNOWN_ISSUES.md), „PHASE 11” szakasz.
 - **KI-94 (A):** nincs `local` provider. **KI-95 (A):** a template-szöveg technikai. **KI-96 (A):** blokkolt `@parcel/watcher` install-szkript.
 
 ## 6. Nyitott kérdések (a tulajdonos dönt)
-- **Commit:** a változások a `phase-11` branchen vannak, **nincs commitolva**. Javasolt üzenet:
+- **Commit:** tulajdonosi kérésre commitolva a `phase-11` branchen (`3c83c01`); a push, a PR és a merge a tulajdonos döntése. Üzenet:
   `feat: PHASE 11 – AI-magyarázó engine (AiInputDto + strukturált, validált kimenet basedOn-nal, tartalmi őr, template provider, explainAnalysis, POST /api/v1/ai/explain mock és Anthropic providerrel, kill switch, napi keret, cache)`
 - **LLM bekapcsolása (DP-04):** marad-e a díjmentes `template`, vagy legyen `anthropic` (javaslat: `claude-haiku-5-5`, `AI_DAILY_LIMIT=20`)? Az alapértelmezett modell a D-016 szerint `claude-opus-5-5`; ez költségdöntés. A kulcs csak a `.env.local`-ba kerülhet.
 - **Lokális LLM:** kell-e (adatvédelem kontra hardver és minőség)? Lásd DATA_SOURCES 14.3.
