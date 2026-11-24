@@ -34,6 +34,12 @@ export function createAiExplainHandler(deps: {
       log(405, 'METHOD');
       return errorResponse('VALIDATION_FAILED', 405, 'Csak POST engedélyezett.');
     }
+    // PHASE 15: ha a kliens megadta a méretet, a törzs beolvasása ELŐTT utasítunk el (memória).
+    const declared = Number(request.headers.get('Content-Length') ?? '');
+    if (Number.isFinite(declared) && declared > AI_LIMITS.requestBytes) {
+      log(413, 'VALIDATION');
+      return errorResponse('VALIDATION_FAILED', 413, 'A kérés túl nagy.');
+    }
     const body = await request.text();
     if (body.length > AI_LIMITS.requestBytes) {
       log(413, 'VALIDATION');

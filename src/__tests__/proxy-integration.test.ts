@@ -230,9 +230,20 @@ describe('kliens HTTP-hibák', () => {
     expect(result).toMatchObject({ ok: false, error: { kind: 'NETWORK' } });
   });
 
-  it('nem JSON válasz (pl. hoszt HTML-hibalapja) → CONTRACT_MISMATCH', async () => {
+  // PHASE 15 (D-090): a hoszt HTML-hibalapja a HTTP-státusz szerint képeződik le.
+  it('a hoszt HTML-hibalapja (502) → UPSTREAM HTTP_ERROR', async () => {
     const result = await services(
       async () => new Response('<html>502</html>', { status: 502 }),
+    ).getSecurityListings('IE00BK5BQT80');
+    expect(result).toMatchObject({
+      ok: false,
+      error: { kind: 'UPSTREAM', failure: 'HTTP_ERROR' },
+    });
+  });
+
+  it('nem JSON válasz 200-zal → CONTRACT_MISMATCH', async () => {
+    const result = await services(
+      async () => new Response('<html>ok?</html>', { status: 200 }),
     ).getSecurityListings('IE00BK5BQT80');
     expect(result).toMatchObject({
       ok: false,

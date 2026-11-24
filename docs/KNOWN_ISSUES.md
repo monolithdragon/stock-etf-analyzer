@@ -1,12 +1,28 @@
 # Ismert problémák, kockázatok, ismeretlenek – Stock & ETF Analyzer
 
-> Frissítve: 2026-11-24 (PHASE 14 vége). Valószínűség (V) és hatás (H) skálája: **A** = Alacsony, **K** = Közepes, **M** = Magas.
+> Frissítve: 2026-11-24 (PHASE 15 vége). Valószínűség (V) és hatás (H) skálája: **A** = Alacsony, **K** = Közepes, **M** = Magas.
 
 ## Blokkolók
 
-**Nincs blokkoló a PHASE 15 indításához.**
-- A PHASE 13 és 14 Jestben (valódi SQL, valódi route-fa) és `expo export`-tal igazolt, **eszközön nem** (KI-117, KI-129).
-- A PHASE 14 a `phase-14` branchen van (a `main`-ből, amelyen a PHASE 13 már merge-ölve, PR #8).
+**Nincs blokkoló a PHASE 16 indításához.**
+- A PHASE 15 a `phase-15` branchen van, **commit nélkül** (a tulajdonos dönt).
+- A PHASE 16 éles proxy-telepítése előtt döntés kell a nyilvános proxy védelméről (KI-135, SECURITY.md R-S1).
+
+## PHASE 15 – ismert problémák és leletek (2026-11-24)
+
+| ID | Leírás | Hatás | Állapot / teendő | Fázis |
+|---|---|---|---|---|
+| KI-132 | **Eszközös ellenőrzés csak részleges:** Android emulátoron (API 37, Expo Go, demó mód) a Kezdőlap, a részvény-, ETF- és Figyelő képernyő, valamint a figyelőlista force-stop utáni megmaradása (valódi `expo-sqlite`) igazolt. Nem futott: repülőgép-mód élő módban, portfólió-, screener- és riasztás-űrlap kézi bevitele, kis kijelző (KI-131), iOS. **Maestro: BLOCKED** (nincs telepítve, nincs flow). | K | A tulajdonos: fázis-útmutató 9. lépés. KI-117 és KI-129 ennek részeként részben teljesült. | 16 |
+| KI-133 | **`npm audit`: 22 moderate** (0 high/critical) – `minimatch`/`glob` a jest-eszközláncban és az `expo` → `@expo/fingerprint` build-eszközben. A javasolt fix visszaminősítés (expo 52, jest 29). | A | Elfogadva; a futásidejű app nem érintett. Expo/Jest javító kiadások követése; a CI high-küszöbbel véd (D-089). | folyamatos |
+| KI-134 | **A CI GitHubon még nem futott** (nincs push). Helyben tiszta checkouton minden lépés exit 0 (kivéve `npm ci` és a Node 26 runner-telepítés). | A | Push / PR után az első futás eredményét a QA_REPORT-ba kell írni. Ha a runneren nincs Node 26: `node-version: 24` (az `engines` megengedi; a `node:sqlite` Node 24-ben is elérhető – ellenőrizendő). | 16 |
+| KI-135 | **A proxy nyilvános és hitelesítés nélküli** (a cím a bundle-ben): bárki fogyaszthatja a szolgáltatói kvótát és az AI-keretet. Van kvótaőr, AI napi keret + kill switch, allowlist, inputvalidáció, méretkorlát (D-091); **nincs** IP-/kliensalapú limit és példányok közt megosztott kvóta (KI-23, KI-114). | K | PHASE 16 telepítés előtt: hosztszintű rate limit/WAF lehetőségének ellenőrzése (EAS Hosting), vagy a kockázat dokumentált elfogadása saját használatra. Az appba ágyazott token nem titok → nem megoldás. | 16 |
+| KI-136 | **Fejlesztői környezet:** a PATH-ban `%ANDROID_HOME%\platform-tools` szó szerint szerepel, az `ANDROID_HOME` változó nincs beállítva → `adb`/`emulator` nem érhető el név szerint, a `npm run android` nem találja a készüléket. Az SDK a `%LOCALAPPDATA%\Android\Sdk`-ban van. | A | Tulajdonos: Windows környezeti változó `ANDROID_HOME = %LOCALAPPDATA%\Android\Sdk` (fázis-útmutató 9. lépés). | 16 |
+
+**Javítva a PHASE 15-ben:** a hoszt nem-JSON 429/5xx válasza „szerződéssértés” helyett a státusz szerinti hibát adja (D-090); az AI-végpont a törzs beolvasása előtt utasítja el a túl nagy kérést (D-091); a kliens HTTP-rétege és az üzleti folyamatok E2E-tesztet kaptak; CI-workflow készült (D-089). Részletek: [QA_REPORT.md](QA_REPORT.md) 3.
+
+**Részben lezárva:** KI-117 és KI-129 (eszközön fut, tartós tárolás igazolva; a teljes kézi lista → KI-132). KI-12/KI-100 (emulátoros futtatás) – a PHASE 15-ben sikerült.
+
+**Nem a PHASE 15 hatóköre (változatlan):** holdings-import (KI-74/KI-123), ETF-metaadat űrlap (KI-101), proxy-cache (KI-114), haladásjelző/megszakítás (KI-125), értesítések (KI-122), SQLCipher (KI-112), export fájlba (KI-113).
 
 ## PHASE 14 – ismert problémák és leletek (2026-11-24)
 
