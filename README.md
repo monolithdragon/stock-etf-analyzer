@@ -3,9 +3,10 @@
 Mobilalkalmazás (Android / iOS) részvények, ETF-ek és saját portfólió **átlátható, forrásolt, reprodukálható** elemzésére.
 A számítás determinisztikus, az AI csak magyaráz. Saját használatra készül; **nem befektetési tanács**.
 
-> **Állapot (2026-11-21): PHASE 02 – projektváz kész.**
-> Az app elindul, van kezdőképernyő, navigáció és téma, de **még nincs benne pénzügyi adat vagy számítás**.
-> A teljes ütemterv: [docs/ROADMAP.md](docs/ROADMAP.md). Részletes, lépésenkénti telepítési útmutató: [docs/phases/phase-02-project-setup.md](docs/phases/phase-02-project-setup.md).
+> **Állapot (2026-11-24): PHASE 13 – tárolás, cache és offline kész** (eszközön még nem ellenőrizve).
+> Az app képernyőkkel használható: ticker keresése → részvény- vagy ETF-elemzés (score, döntés, DCF, források), portfólió (létrehozás, tranzakció, P/L, allokáció, kockázat), figyelőlista, beállítások.
+> **Korlátok:** az adatok (portfólió, figyelőlista, beállítások) PHASE 13-tól az eszközön tárolódnak (SQLite; weben csak memóriában); élő módban a letöltött piaci adat gyorsítótárba kerül és offline is látszik (jelölve); alapból **demóadattal** fut; az új UI-t és a tárolást emulátoron még nem néztük meg (KI-100, KI-117).
+> A teljes ütemterv: [docs/ROADMAP.md](docs/ROADMAP.md). A PHASE 13 kezdőbarát útmutatója: [docs/phases/phase-13-storage-cache-offline.md](docs/phases/phase-13-storage-cache-offline.md) (előző: [PHASE 12](docs/phases/phase-12-ui-ux-navigation.md)). Telepítés: [docs/phases/phase-02-project-setup.md](docs/phases/phase-02-project-setup.md).
 
 ## Technológia
 
@@ -50,7 +51,8 @@ Elvárt eredmény: `added … packages`, hibaüzenet (`ERR!`) nélkül. A „mod
    npm run android
    ```
 3. Első alkalommal az Expo CLI letölti és feltelepíti az emulátorra az SDK 58-hoz illő **Expo Go** alkalmazást, majd megnyitja benne a projektet.
-4. Elvárt eredmény: a terminálban `Android Bundled … ms`, az emulátoron a **Kezdőlap** képernyő „Stock & ETF Analyzer” címmel és egy kék „A projektről” gombbal.
+4. Elvárt eredmény: a terminálban `Android Bundled … ms`, az emulátoron a **Kezdőlap** „Stock & ETF Analyzer” címmel, „Demó mód” jelzéssel, kék „Ticker keresése” gombbal, alul öt füllel (Kezdőlap, Keresés, Portfólió, Figyelő, Beállítások).
+5. Próbáld ki: **Keresés** fül → írd be: `DEMO` → **Keresés** → koppints a „Demo Corp (kitalált)” sorra → megnyílik a részvényelemzés.
 
 Leállítás: a terminálban `Ctrl + C`.
 
@@ -118,7 +120,22 @@ curl.exe -s http://localhost:8081/api/v1/instruments/AAPL@XNAS/quote
 
 Részletes, kezdőbarát leírás: [docs/phases/phase-04-data-sources-currency.md](docs/phases/phase-04-data-sources-currency.md).
 
-## Mappaszerkezet (jelenlegi, PHASE 04A)
+## Képernyők (PHASE 12)
+
+| Képernyő | Útvonal | Mit mutat |
+|---|---|---|
+| Kezdőlap | `/` (fül) | adatmód, gyors műveletek, figyelőlista-előnézet |
+| Keresés | `/search` (fül) | ticker / név / ISIN keresés, találat → elemzés, figyelőlistához adás |
+| Részvényelemzés | `/stock/TICKER@MIC` | ár és alapadatok, értékeltség, növekedés, jövedelmezőség, mérleg, cash flow, DCF, kockázat, score és döntés, magyarázat, adatminőség |
+| ETF-elemzés | `/etf/TICKER@MIC` | alapadatok, TER/AUM, benchmark, holdings, országok, szektorok, stílus, osztalék, követés, kockázat, hozam, magyarázat |
+| Portfólió | `/portfolio` (fül) | összérték, P/L (bázis és natív), allokáció, devizakitettség, koncentráció, ETF-átfedés, kockázat, magyarázat (beleegyezéssel), tranzakció-űrlap |
+| Figyelőlista | `/watchlist` (fül) | mentett instrumentumok (tartósan, az eszközön) |
+| Összehasonlítás | `/compare` | előnézet (teljes funkció: PHASE 14) |
+| Beállítások | `/settings` (fül) | bázispénznem, téma, AI-gomb be/ki, adatforrás |
+
+Minden mutatóra koppintva látszik a forrás, az időszak, a pénznem, a frissesség és a hiány oka. A hiányzó adat **N/A** / **N/M**, soha nem 0.
+
+## Mappaszerkezet (PHASE 12)
 
 ```
 stock-etf-analyzer/
@@ -134,14 +151,17 @@ stock-etf-analyzer/
 ├─ docs/                      tervek, döntések, fázisútmutatók, handoffok
 ├─ scripts/                   fejlesztői eszközök (SEC fixture-rögzítő)
 └─ src/
-   ├─ app/                    Expo Router route-ok (képernyők) + api/ (proxy-végpontok, +api.ts)
+   ├─ app/                    Expo Router route-ok: (tabs)/, stock/, etf/, compare, about + api/ (proxy-végpontok, +api.ts)
    ├─ domain/                 üzleti fogalmak és szabályok (tiszta TypeScript)
    ├─ contracts/              a szerverrel közös adatszerződés (zod sémák)
    ├─ application/            use case-ek (műveletek) és portok (interfészek)
-   ├─ infrastructure/         portok megvalósítása (proxy-kliens, demóadat, memória)
-   ├─ server/                 CSAK SZERVER: szolgáltató-adapterek (SEC, ECB, OpenFIGI), handlerek
+   ├─ infrastructure/         portok megvalósítása (proxy-kliens, demóadat, SQLite-/kv-tárolók, memória)
+   ├─ calculations/           tiszta pénzügyi képletek (DCF, hozam, kockázat …)
+   ├─ scoring/                score- és döntési motor
+   ├─ explanation/            szabályalapú magyarázat
+   ├─ server/                 CSAK SZERVER: szolgáltató-adapterek (SEC, ECB, OpenFIGI, FMP, EODHD), AI, handlerek
    ├─ config/                 env beolvasás + composition root (összekötés)
-   ├─ presentation/           UI-komponensek, téma, szövegek, DI-hook
+   ├─ presentation/           UI: components/, theme/, format/ (formázók), view-models/, screens/, analysis/, state/, strings/
    └─ __tests__/              navigációs és kliens↔szerver integrációs tesztek
 ```
 
@@ -158,4 +178,4 @@ A teljes tervezett rétegszerkezet: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 ## Jogi nyilatkozat
 
-Elemzési eszköz, kizárólag saját használatra. A megjelenített jelzések (később pl. BUY/HOLD/SELL) elemzési kimenetek, nem személyre szabott pénzügyi tanácsok, és nem garantálnak hozamot.
+Elemzési eszköz, kizárólag saját használatra. A megjelenített jelzések (pl. Buy/Hold/Sell, „Nem értékelhető”) szabályalapú elemzési kimenetek, nem személyre szabott pénzügyi tanácsok, és nem garantálnak hozamot.

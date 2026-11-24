@@ -4,9 +4,12 @@
  * Szabály: a komponensek soha nem írnak be közvetlen hex színt, mindig ezeket a
  * szemantikus tokeneket használják (`useTheme().colors.*`).
  *
- * A `positive` / `negative` színek később pl. hozam előjelére szolgálnak. A jelentést
+ * A `positive` / `negative` színek pl. hozam előjelére szolgálnak. A jelentést
  * soha nem szabad CSAK színnel átadni (akadálymentesség) – mindig legyen mellette
- * előjel vagy szöveg is (PHASE 12).
+ * előjel, ikon vagy szöveg is (PHASE 12).
+ *
+ * PHASE 12: a világos paletta akcentusszínei sötétebbek lettek, hogy MINDEN felületen
+ * (háttér, kártya, halvány sáv) elérjék a WCAG AA 4,5:1 kontrasztot – teszt: theme.test.ts.
  */
 export type ColorScheme = 'light' | 'dark';
 
@@ -38,12 +41,12 @@ export const palette: Readonly<Record<ColorScheme, ColorTokens>> = {
     border: '#D9DDE3',
     text: '#0F1720',
     textSecondary: '#5B6573',
-    primary: '#1F6FEB',
+    primary: '#1B62D4',
     onPrimary: '#FFFFFF',
-    positive: '#1A7F37',
-    negative: '#CF222E',
-    warning: '#9A6700',
-    info: '#0969DA',
+    positive: '#18723A',
+    negative: '#BF1F2B',
+    warning: '#8A5D00',
+    info: '#0862C8',
   },
   dark: {
     background: '#0B0F14',

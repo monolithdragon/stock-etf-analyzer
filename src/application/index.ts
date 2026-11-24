@@ -10,6 +10,7 @@ import type {
   RecalculateStockValuation,
 } from './use-cases/analyze-stock-valuation';
 import type { ConvertMoney } from './use-cases/convert-money';
+import type { CreatePortfolio } from './use-cases/create-portfolio';
 import type { EvaluateEtf, EvaluateStock } from './use-cases/evaluate-instrument';
 import type { ExplainAnalysis } from './use-cases/explain-analysis';
 import type { GetListingQuote } from './use-cases/get-listing-quote';
@@ -23,6 +24,11 @@ import type {
   GetFinancialStatements,
   GetSecurityListings,
 } from './use-cases/get-market-reference-data';
+import type {
+  LocalDataService,
+  PreferencesService,
+  WatchlistService,
+} from './use-cases/local-data';
 import type { RecordTransaction } from './use-cases/record-transaction';
 
 export type * from './ports';
@@ -46,6 +52,7 @@ export * from './use-cases/get-listing-quote';
 export * from './use-cases/get-market-data';
 export * from './use-cases/get-market-reference-data';
 export * from './use-cases/record-transaction';
+export * from './use-cases/create-portfolio';
 export * from './use-cases/analyze-portfolio';
 export * from './portfolio/types';
 export {
@@ -72,6 +79,21 @@ export {
   formatAiDisplay,
   type InstrumentAiInputOptions,
 } from './explanation/build-ai-input';
+export * from './cache/cache-policy';
+export * from './cache/types';
+export { cacheKeys } from './cache/cache-keys';
+export {
+  cacheFreshness,
+  createMarketDataCache,
+  isTransientForCache,
+  type CacheControl,
+  type MarketDataCache,
+  type MarketDataCacheDeps,
+} from './cache/market-data-cache';
+export * from './cache/background-refresh';
+export * from './preferences/user-preferences';
+export * from './watchlist/types';
+export * from './use-cases/local-data';
 
 /** A UI számára elérhető szolgáltatások – a composition root (`src/config/container.ts`) állítja elő. */
 export interface AppServices {
@@ -84,6 +106,8 @@ export interface AppServices {
   readonly searchInstruments: SearchInstruments;
   readonly convertMoney: ConvertMoney;
   readonly recordTransaction: RecordTransaction;
+  /** PHASE 12: portfólió létrehozása (a UI első lépése a tranzakció-rögzítés előtt). */
+  readonly createPortfolio: CreatePortfolio;
   /** PHASE 06: részvény fundamentális elemzés (UI a PHASE 12-ben). */
   readonly analyzeStockFundamentals: AnalyzeStockFundamentals;
   /** PHASE 07: értékelés + DCF (lekéréssel). */
@@ -103,4 +127,10 @@ export interface AppServices {
    * át LLM is – hibánál a szabályalapú marad megjelenítve.
    */
   readonly explainAnalysis: ExplainAnalysis;
+  /** PHASE 13: tartós beállítások (kv-store). */
+  readonly preferences: PreferencesService;
+  /** PHASE 13: tartós figyelőlista (SQLite). */
+  readonly watchlist: WatchlistService;
+  /** PHASE 13: cache-állapot, kézi frissítés, invalidálás, export, törlés, háttérfrissítés. */
+  readonly localData: LocalDataService;
 }

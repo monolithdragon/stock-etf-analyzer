@@ -15,4 +15,12 @@ if (
 module.exports = {
   preset: 'jest-expo',
   rootDir: canonicalRoot,
+  // PHASE 13: a natív tároló- és hálózati modulok helyett tesztdublőrök. Az `expo-sqlite` helyén a
+  // Node beépített SQLite-ja fut (valódi SQL), a kv-store és az expo-network memóriában.
+  moduleNameMapper: {
+    '^expo-sqlite$': '<rootDir>/src/testing/mocks/expo-sqlite.ts',
+    '^expo-sqlite/kv-store$': '<rootDir>/src/testing/mocks/expo-sqlite-kv-store.ts',
+    '^expo-network$': '<rootDir>/src/testing/mocks/expo-network.ts',
+  },
+  setupFilesAfterEnv: ['<rootDir>/src/testing/jest-setup.ts'],
 };

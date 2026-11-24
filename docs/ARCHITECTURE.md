@@ -361,7 +361,7 @@ src/application/portfolio/                     types, fx-lookup (ráta-elsőbbs�
 src/application/use-cases/analyze-portfolio.ts analyzePortfolio (AppServices); record-transaction: napló-validáció
 ```
 
-Adatút: `analyzePortfolio` → `PortfolioRepository` (portfólió + tranzakciók) → napló-validáció (blokkoló hiba → `VALIDATION`) → párhuzamosan `getListingQuote` (nyitott pozíciók), `getInstrumentProfile` (opcionális), `getPriceHistory` (csak `history.enabled`), `convertMoney` (ügyleti napok + ma, duplikátum nélkül) → `buildPortfolioAnalysis` (tiszta) → `PortfolioAnalysis`. Tárolás: továbbra is `InMemoryPortfolioRepository` (PHASE 13).
+Adatút: `analyzePortfolio` → `PortfolioRepository` (portfólió + tranzakciók) → napló-validáció (blokkoló hiba → `VALIDATION`) → párhuzamosan `getListingQuote` (nyitott pozíciók), `getInstrumentProfile` (opcionális), `getPriceHistory` (csak `history.enabled`), `convertMoney` (ügyleti napok + ma, duplikátum nélkül) → `buildPortfolioAnalysis` (tiszta) → `PortfolioAnalysis`. Tárolás: PHASE 13-tól `createSqlitePortfolioRepository` (natív), memória (web, tesztek).
 
 **PHASE 10 (2026-11-22):** score és döntési engine (D-073…D-075) – új réteg: `src/scoring` (csak `domain` + `calculations`; ESLint-zóna és őrteszt):
 
@@ -401,11 +401,42 @@ src/app/api/v1/ai/explain+api.ts               vékony route
 
 Adatút: `evaluateStock` (vagy `evaluateEtf`, `analyzePortfolio`) → `buildInstrumentAiInput` / `buildPortfolioAiInput` → `explainAnalysis` → `explainWithTemplate` (mindig) + [kérésre] `AiGateway` → proxy → `AiExplainService` → `AiProvider` → JSON → séma → őr → kliens: séma + őr újra → `display`. Az AI nem módosít pontot, címkét vagy confidence-t.
 
-**Még nem létező mappák** (a saját fázisuk hozza létre): `server/cache/` (13), `infrastructure/storage/` (13), `presentation/{hooks,formatters,view-models}` (12).
+**PHASE 13 – tárolás, cache, offline (D-082…D-084):**
+```
+src/domain/shared/provenance.ts               + `cache?: CacheServeInfo`, `capFreshnessForCache` (offline tartalék ≠ FRESH)
+src/application/ports                         + CacheStore, WatchlistRepository, PreferencesRepository, ConnectivityMonitor;
+                                              PortfolioRepository + listPortfolios, deleteAll
+src/application/cache/                        cache-policy (TTL fajtánként), cache-keys, cache-codecs (contract-séma),
+                                              market-data-cache (gateway-dekorátor + CacheControl), background-refresh, types
+src/application/preferences/, watchlist/      UserPreferences (verziózott, migráció), WatchlistItem
+src/application/use-cases/local-data.ts       preferences, watchlist, localData (állapot, kézi frissítés, invalidálás, export, törlés)
+src/infrastructure/storage/                   sql-database (interfész), migrations, database-provider (lusta nyitás),
+                                              sqlite-{portfolio,watchlist,cache}, portfolio-codec (domain-validáció olvasáskor),
+                                              kv-preferences-repository, in-memory-stores, local-storage,
+                                              default-storage.ts (natív: expo-sqlite) / default-storage.web.ts (memória)
+src/infrastructure/system/expo-connectivity.ts expo-network → online/offline/unknown
+src/presentation/hooks/use-data-status.ts     cache-/offline-jelzés + kézi frissítés a képernyőknek
+src/presentation/screens/local-data-card.tsx  Beállítások → Helyi adatok (cache, export, törlés)
+src/testing/                                  node-sqlite-database, mocks/ (expo-sqlite, kv-store, expo-network), jest-setup
+```
+
+**Még nem létező mappák:** `server/cache/` (proxy-cache, PHASE 14 – KI-68, KI-76).
 
 ### 5.2 Tervezett teljes struktúra (PHASE 01 terv)
 
-> A `(tabs)/` csoport a PHASE 12-ben készül; addig gyökér-`Stack` van (D-034). A sablon konvenciója (`src/app`) egyezett a tervvel (D-029).
+> **PHASE 12 (D-079):** a `(tabs)/` csoport elkészült: `index`, `search`, `portfolio`, `watchlist`, `settings`; Stack-képernyők: `stock/[listingId]`, `etf/[listingId]`, `compare`, `about`. A sablon konvenciója (`src/app`) egyezett a tervvel (D-029).
+>
+> **A presentation réteg belső felépítése (PHASE 12):**
+> ```
+> src/app/**            vékony route: paraméter / nyilvános env → képernyő (csak itt olvasható @/config/env)
+> presentation/screens  elrendezés + useAsyncResult (loading/error/success/reload)
+> presentation/view-models  TISZTA leképezés use case-kimenet → megjelenítés (stock / etf / portfolio KÜLÖN)
+> presentation/format   közös formázók (hu-HU, N/A/N/M, AppError → üzenet)
+> presentation/analysis közös elemzés-blokkok (döntéskártya, score-részletek, magyarázat)
+> presentation/components  témázott építőelemek (MetricRow provenance-szel, Section, állapotok, sávdiagram)
+> presentation/state    beállítások, figyelőlista (PHASE 13: tartós, use case-en át – D-083)
+> ```
+> Adat csak `useAppServices()`-en át (use case-ek); a képernyő nem számol pontot, nem formáz saját szabállyal, és nem hív `fetch`-et (ESLint).
 
 ```
 stock-etf-analyzer/
@@ -606,35 +637,53 @@ A részletes `docs/SECURITY.md` a PHASE 15-ben készül.
 - **Kliens:** fejlesztésben konzolra ír. Release-ben csak `warn|error` szint, összeg, ticker-lista vagy portfólió nélkül. Crash reporting (pl. Sentry) csak külön adatvédelmi döntés után (opcionális).
 - **Proxy:** strukturált JSON sor `requestId`, útvonal, szolgáltató, státusz, latencia és cache hit/miss mezőkkel. Soha nincs benne kulcs, teljes AI-prompt vagy portfólió-összetétel.
 
-## 11. Cache stratégia (kiinduló TTL-ek – a PHASE 13 véglegesíti)
+## 11. Cache stratégia (véglegesítve: PHASE 13, D-082)
 
-Kétszintű cache:
-- **Proxy cache:** megosztott, a rate limitet védi.
-- **Eszköz cache:** SQLite, offline működéshez.
+Kétszintű terv:
+- **Eszköz cache (KÉSZ, PHASE 13):** SQLite (`cache_entries` tábla), offline működéshez és kvótakíméléshez. Weben memória.
+- **Proxy cache (NINCS még):** megosztott, a szolgáltatói rate limitet védené – PHASE 14 (KI-68, KI-76). A kliens-cache miatt az ismételt megnyitás ma sem hív szolgáltatót.
 
-Minden rekord tartalmazza: `fetchedAt`, `asOf`, `source`, `period`, `freshness`, `expiresAt`.
+```mermaid
+flowchart LR
+  UC[Use case] --> C[createMarketDataCache<br/>application/cache]
+  C -->|friss rekord| S[(SQLite cache_entries)]
+  C -->|lejárt / jelölt / nincs| P[Proxy gateway]
+  P -->|siker| C
+  C -->|átmeneti hiba + rekord| S
+  C -.->|offline_fallback<br/>legalább STALE| UC
+```
 
-| Adattípus | Javasolt TTL (friss) | Elavult jelölés | Megjegyzés |
-|---|---|---|---|
-| Quote (késleltetett/EOD) | 15 perc kereskedési időben, egyébként a következő nyitásig | TTL után `STALE` | piaci naptár: később |
-| Napi ártörténet | a következő kereskedési nap zárásáig (~24 h) | 3 nap után `STALE` | |
-| Pénzügyi kimutatások | 7 nap | 120 nap után `STALE` | új SEC filing után invalidálható |
-| Profil / ETF metaadat | 7 nap | 30 nap | |
-| ETF holdings | 30 nap | a holdings dátuma alapján | `asOf` kötelező |
-| FX (ECB) | a következő munkanap 16:00 CET-ig | 3 munkanap után `STALE` | ECB ~16:00 CET munkanapokon `[IGAZOLT]` |
-| AI-magyarázat | amíg a bemeneti DTO hash változatlan | – | költségkímélés |
+Minden rekord tartalmazza: `fetchedAt` (eredeti lekérés), `asOf`, forrás (`sourceId`, `sourceName`), `period`, adatminőség (`provenanceKind`, `freshnessAtFetch`), érvényesség (`freshUntil`, `staleUntil`, `retainUntil`, `invalidatedAt`), `payloadVersion`.
 
-**Szabályok:** nincs lekérés renderenként. A felhasználói kézi frissítés megkerüli az eszköz cache-t, de a proxy cache-t nem kötelezően (rate limit védelem). Stale-while-revalidate csak látható „frissítés…” jelzéssel működik.
+| Adatfajta (`CacheDataKind`) | Friss (hálózat nélkül kiszolgálva) | STALE → EXPIRED | Megőrzés (offline tartalék) | Megjegyzés |
+|---|---|---|---|---|
+| `quote` | 15 perc | 3 nap | 30 nap | piaci naptár nincs (KI-110) |
+| `price_history` | 12 óra | 14 nap | 60 nap | „N nap máig” ablak kulcsa a hossz, nem a dátum |
+| `financial_statements` | 7 nap | 120 nap | 400 nap | |
+| `instrument_profile` | 7 nap | 30 nap | 180 nap | |
+| `etf_metadata` | 7 nap | 30 nap | 180 nap | a forrás ETF-nek jelölt profilja |
+| `etf_holdings` | 30 nap | 90 nap | 365 nap | ma nincs forrása (KI-65, KI-74) |
+| `dividends` | 1 nap | 30 nap | 180 nap | |
+| `fx_latest` | 12 óra | 3 nap | 30 nap | ECB ~16:00 CET munkanapokon |
+| `fx_historical` | 365 nap | 10 év | 365 nap | múltbeli napi ráta nem változik |
+| `security_listings` | 30 nap | 180 nap | 365 nap | |
+| `search` | 1 nap | 7 nap | 7 nap | offline csak a korábban beírt kifejezésre |
+| AI-magyarázat | – | – | – | szerveroldali, memóriában (KI-91) |
 
-## 12. Offline működés
+**Szabályok:** nincs lekérés renderenként (cache-first megnyitás, egyidejű kérések összevonása). **Kézi frissítés** (lehúzás, újrapróbálás) = a jegyzés rekordjainak jelölése → hálózat előbb, a tartalék megmarad. **Invalidálás** = törlés (Beállítások, payload-verzió, sérült rekord, megőrzés után). **Háttérfrissítés** = hálózat-visszatéréskor, beállítástól függően, csak árfolyam, korlátozva. Részletek: D-082.
+
+## 12. Offline működés (PHASE 13: megvalósítva, kivéve ahol jelölve)
 
 | Funkció | Offline viselkedés |
 |---|---|
-| Elemzés megnyitása | Cache-ből, „Utoljára frissítve: …, elavult lehet” sávval. Ha nincs cache: üres állapot magyarázattal. |
-| Számítás, DCF, score | Fut a cache-elt adaton, a frissesség-státusz öröklődik. |
-| Portfólió | Teljesen lokális: olvasás és tranzakció rögzítése is működik. Az értékelés az utolsó ismert árral és FX-szel, dátummal együtt. |
-| AI-magyarázat | Nem elérhető. A korábban cache-elt magyarázat megjeleníthető a dátumával. |
-| Keresés | Csak a lokálisan ismert instrumentumok között. |
+| Elemzés megnyitása | Cache-ből; „Offline adat – elavult lehet · Utoljára frissítve: …” sáv (a legrégebbi felhasznált adat ideje). Ha nincs cache: hibaállapot „Korábban letöltött (offline) adat sincs” szöveggel, újrapróbálással. |
+| Számítás, DCF, score | Fut a cache-elt adaton; a frissesség öröklődik (offline tartalék soha nem FRESH – `capFreshnessForCache`). |
+| Portfólió | Teljesen lokális (SQLite): olvasás és tranzakció rögzítése működik. Az értékelés az utolsó ismert árral és FX-szel, jelölve. |
+| AI-magyarázat | A szabályalapú magyarázat offline is fut. LLM-hívás nem elérhető; LLM-magyarázat nincs cache-elve a kliensen. |
+| Keresés | Csak a korábban (online) beírt, cache-elt kifejezésekre (KI-120). |
+| Beállítások, figyelőlista | Lokálisak (kv-store, SQLite), offline is módosíthatók. |
+
+Hálózati állapot: `expo-network` (`isConnected` / `isInternetReachable`); ismeretlen állapotnál a hálózatot próbáljuk, és csak átmeneti hibánál adunk tartalékot.
 
 ## 13. Kiadási stratégia
 

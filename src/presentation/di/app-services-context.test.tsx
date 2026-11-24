@@ -15,6 +15,7 @@ const fakeServices: AppServices = {
   searchInstruments: jest.fn(),
   convertMoney: jest.fn(),
   recordTransaction: jest.fn(),
+  createPortfolio: jest.fn(),
   analyzeStockFundamentals: jest.fn(),
   analyzeStockValuation: jest.fn(),
   recalculateStockValuation: jest.fn(),
@@ -23,6 +24,19 @@ const fakeServices: AppServices = {
   evaluateStock: jest.fn(),
   evaluateEtf: jest.fn(),
   explainAnalysis: jest.fn(),
+  preferences: { load: jest.fn(), save: jest.fn() },
+  watchlist: { list: jest.fn(), add: jest.fn(), remove: jest.fn() },
+  localData: {
+    persistent: false,
+    getStatus: jest.fn(),
+    refreshListings: jest.fn(),
+    clearCache: jest.fn(),
+    cacheStats: jest.fn(),
+    exportUserData: jest.fn(),
+    deleteAllLocalData: jest.fn(),
+    startBackgroundRefresh: jest.fn(),
+    runBackgroundRefresh: jest.fn(),
+  },
 };
 
 describe('useAppServices', () => {

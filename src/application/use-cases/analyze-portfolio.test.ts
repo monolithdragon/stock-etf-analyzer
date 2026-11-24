@@ -43,6 +43,8 @@ function setup(transactions: readonly Transaction[], opts: { seriesNotCovered?: 
       stored.push(t);
       return ok(undefined);
     },
+    listPortfolios: async () => ok([]),
+    deleteAll: async () => ok(undefined),
   };
   const calls = {
     quotes: [] as ListingId[],

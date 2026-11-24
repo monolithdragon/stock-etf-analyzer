@@ -149,7 +149,7 @@
   - Adózási célra nem alkalmas, ezt a UI jelzi.
 
 ### D-013 – Tárolás
-- **Dátum:** 2026-11-21 · **Státusz:** Javasolt (PHASE 13)
+- **Dátum:** 2026-11-21 · **Státusz:** **Elfogadva, pontosítva: D-082** (2026-11-24) – az `expo-secure-store` NEM került be (a kliensnek nincs titka)
 - **Döntés:**
   - `expo-sqlite` a strukturált adatra és a cache-re.
   - `expo-sqlite/kv-store` a kis beállításokra (AsyncStorage helyett, extra függőség nélkül).
@@ -389,7 +389,7 @@ A tulajdonos válaszai:
   - A szerveroldali titkokat (API-kulcsok) a PHASE 04 proxy olvassa, nem ez a modul.
 
 ### D-034 – Alapnavigáció: Stack, tabok a PHASE 12-ben
-- **Dátum:** 2026-11-21 · **Státusz:** Elfogadva
+- **Dátum:** 2026-11-21 · **Státusz:** Leváltva (D-079, PHASE 12: Stack + `(tabs)` csoport)
 - **Döntés:** gyökér `Stack` három route-tal: `index` (Kezdőlap), `about` (A projektről), `+not-found`. A sablon `NativeTabs` megoldása és az ARCHITECTURE 5. `(tabs)/` csoportja a PHASE 12-ben készül, amikor a képernyők tartalma ismert.
 - **Indok:** a PHASE 02 csak működő alapnavigációt kér. Üres tabok előre gyártása hamis készültséget mutatna.
 - **Lelet:** a `<Link asChild>` a gyerek `style`-ját tömbbe egyesíti, ezért függvény formájú `Pressable` `style`-t nem használunk link-gyerekben (`PrimaryButton`, regressziós teszt).
@@ -991,3 +991,81 @@ A tulajdonos válaszai:
   - Haiku 5.5 ≈ $0.0014.
 
   Napi felső korlát alapbeállítással: 50 hívás. **Nem ingyenes és nem korlátlan.**
+
+---
+
+## PHASE 12 – UI/UX és navigáció (2026-11-23)
+
+### D-079 – Navigáció és presentation-szerkezet (leváltja: D-034)
+- **Dátum:** 2026-11-23 · **Státusz:** Elfogadva
+- **Döntés:**
+  1. **Navigáció:** gyökér `Stack` + `(tabs)` csoport. A tabok (`expo-router/js-tabs`, SDK 58-ban a `Tabs` export innen ajánlott, a régi `expo-router` export deprecated): Kezdőlap (`/`), Keresés (`/search`), Portfólió (`/portfolio`), Figyelő (`/watchlist`), Beállítások (`/settings`). Stack-képernyők vissza gombbal: `/stock/[listingId]`, `/etf/[listingId]`, `/compare`, `/about`, `+not-found`. A Compare nem tab: a ROADMAP szerint váz (PHASE 14), és 5 tab felett a címkék kis kijelzőn nem férnek el.
+  2. **Rétegek a presentationen belül:**
+     - `format/` – közös formázók (pénz, %, szorzó, nagy szám, dátum, N/A/N/M, AppError → üzenet);
+     - `view-models/` – tiszta leképezés use case-kimenet → megjeleníthető modell, **külön** részvényre (`stock-view-model`), ETF-re (`etf-view-model`) és portfólióra (`portfolio-view-model`); közös: `metric-row`, `evaluation-view-model`;
+     - `screens/` – elrendezés, állapotkezelés (`useAsyncResult`); `analysis/` – közös elemzés-blokkok (döntéskártya, score-részletek, magyarázat);
+     - `components/` – témázott építőelemek; `state/` – beállítások és figyelőlista; `hooks/`.
+     - A `src/app` route-fájlok vékonyak (paraméter → képernyő); csak ők olvassák a `@/config/env`-et, és propként adják tovább (a presentation nem importálhat `config`-ot, D-038).
+  3. **Új use case:** `createPortfolio` (a UI-nak kell az első portfólió; meglévő azonosítót nem ír felül). MVP: egyetlen portfólió, azonosító `main`.
+- **Indok:** az elfogadási feltétel külön logikát kér a három képernyőhöz; a tiszta view-modelek React nélkül, valódi use case-kimeneten tesztelhetők. A meglévő Stack és komponensek megmaradtak (bővítés, nem csere).
+- **Elvetett:** `NativeTabs` (natív tab bar – a jest `renderRouter`-rel nem igazolt, és a tab-ikonokhoz SF Symbol/Material név kell); képernyőnkénti saját formázás (duplikált logika).
+
+### D-080 – Formázás, téma, akadálymentesség, grafikon
+- **Dátum:** 2026-11-23 · **Státusz:** Elfogadva (a grafikon-rész **Ideiglenes**)
+- **Döntés:**
+  1. **Formázás kézzel, `Intl` nélkül** (U-10 lezárva): tizedesvessző, ezres tagolás nem törő szóközzel, `ÉÉÉÉ. HH. NN.`, magyar rövidítések (e, M, Mrd, ezer Mrd), HUF/JPY/GBX 0 tizedes. Ok: a Hermes és a Node `Intl`-adatai eltérhetnek; így determinisztikus és tesztelt.
+  2. **Hiányzó adat:** a nem-OK `Metric` rövid jelölést kap (`N/A` = hiányzó / nem alkalmazható, `N/M` = nem értelmezhető, „Kevés adat”, „Nem elérhető”, „Hibás bemenet”, „Hiba”), a teljes ok koppintásra és a képernyőolvasónak látszik. Soha nem „0”; az allokációs sávdiagramba ár nélküli pozíció nem kerül 0%-kal, hanem külön, megnevezve.
+  3. **Provenance-nézet:** minden mutatósor koppintásra kinyitja: állapot, ok, eredet, forrás, adat típusa (jelentett / számított / becslés / demó / felhasználói), lekérés ideje, adatnap, frissesség, időszak, pénznem, hivatkozás, képlet, megjegyzések.
+  4. **Szín nem egyedüli jelentéshordozó:** a pozitív/negatív érték előjelet (`+`/`-`) és ikont (▲/▼) kap, a képernyőolvasó szöveges irányt („nyereség”/„veszteség”); figyelmeztetésnél ⚠ + cím + szöveg.
+  5. **Kontraszt:** minden szövegszín minden felületen (háttér, kártya, halvány sáv) ≥ 4,5:1 (WCAG AA), automatikus teszttel. Ehhez a világos paletta akcentusszínei sötétebbek lettek (`primary #1B62D4`, `positive #18723A`, `negative #BF1F2B`, `warning #8A5D00`, `info #0862C8`). Érintési felület ≥ 48 dp; a betűméret a rendszert követi, 1,8× felső korláttal; számok `tabular-nums`.
+  6. **Téma:** rendszer / világos / sötét, a Beállításokban választható (`ThemePreferenceContext`).
+  7. **Ikonok:** a tab-ikonok dekoratív Unicode-jelek (⌂ ⌕ ◔ ☆ ⚙), a felirat mindig látszik. Nincs ikonbetűtípus-függőség (`@expo/vector-icons` nincs telepítve; az `expo-symbols` Androidon futásidőben tölt betűtípust).
+  8. **Grafikon (Ideiglenes):** **nincs új grafikonkönyvtár** a PHASE 12-ben. Az allokáció, az ország-, szektor- és devizamegoszlás natív `View`-sávdiagram számmal (képernyőolvasóval olvasható). Árfolyam-/TWR-vonaldiagram nincs (KI-98). Ok: a free adatforrás 1 éves ártörténetet ad, a demóadat 2–3 pontot; a vonaldiagramhoz `react-native-svg` (Expo-kezelt, `npx expo install`) + saját vagy külső chart kellene – ezt a PHASE 14-ben, valós igény alapján, kompatibilitás-ellenőrzéssel döntjük el (U-11 nyitva marad).
+- **Elvetett:** `Intl.NumberFormat('hu-HU')` (platformfüggő kimenet); színkódolt P/L előjel nélkül.
+
+### D-081 – UI-állapot és adatszabályok
+- **Dátum:** 2026-11-23 · **Státusz:** Elfogadva
+- **Döntés:**
+  1. **Lekérési állapotok:** minden képernyő a `useAsyncResult` hookot használja: `loading` → `success` | `error` (+ `reload`). Kézi frissítésnél (lehúzás) a régi eredmény „Frissítés folyamatban” jelöléssel látszik; másik instrumentumra váltáskor nem (nincs elavult adat más tickerhez). A legutóbbi kérés nyer (versenyhelyzet).
+  2. **Adatjelzések** (`DataNotices`): „Demóadat” (mock provenance), „Elavult adat” (STALE/EXPIRED ár vagy figyelmeztetés), „Részleges adat” (hiányzó fő mutatók / lefedettség / ár nélküli pozíció).
+  3. **Blokkoló hiba:** ha egy részvényelemzésnél MINDEN forrás-lekérés hibás (pl. ismeretlen ticker), a képernyő hibaállapotot mutat újrapróbálással – nem csupa N/A oldalt. (A use case részleges hibatűrése változatlan.)
+  4. **Döntés megjelenítése:** a címke és a pont kizárólag a döntési engine kimenetéből jön; `NOT_RATED` semleges „○ Nem értékelhető” + „nem negatív ítélet” szöveg; a nyilatkozat, a lefedettség és a confidence-jelentés mindig a pont mellett.
+  5. **AI-magyarázat:** a szabályalapú összefoglaló automatikusan betölt (offline); az „AI-magyarázat kérése” gomb csak a Beállításokban bekapcsolva jelenik meg (alapból KI); portfóliónál előtte beleegyezés-panel; LLM-hiba esetén érthető cím + a szabályalapú szöveg marad; címke: „Szabályalapú összefoglaló” vs. „AI-értelmezés” + modell + időbélyeg.
+  6. **Memóriabeli UI-állapot:** a beállítások (bázispénznem, téma, AI-gomb) és a figyelőlista React-állapotban élnek; tartós tárolás a PHASE 13-ban (a hook-interfész marad). A figyelőlista csak azonosítót, nevet és típust tárol, árat nem.
+  7. **Keresés** csak beküldésre fut (nem leütésenként) – a free API-keret véges.
+
+## PHASE 13 – Tárolás, cache és offline (2026-11-24)
+
+### D-082 – Helyi tárolás és eszköz-cache (pontosítja: D-013; ARCHITECTURE 11–12. véglegesítve)
+- **Dátum:** 2026-11-24 · **Státusz:** Elfogadva
+- **Kontextus:** a PHASE 12-ben a portfólió, a figyelőlista és a beállítások memóriában éltek (KI-97), és minden megnyitás/lehúzás szolgáltatói hívás volt (KI-109; EODHD free: 20/nap). A PHASE 13 tartós tárolást, adatfajtánként eltérő TTL-ű cache-t és offline megjelenítést kér; a régi adat soha nem lehet „friss”.
+- **Döntés:**
+  1. **Csomagok (SDK 58, `npx expo install`):** `expo-sqlite ~58.0.18` (strukturált adat + cache + `expo-sqlite/kv-store` a beállításokhoz) és `expo-network ~58.0.5` (hálózati állapot). Mindkettő Expo Go-ban is elérhető. Az `app.json`-ba az `expo-sqlite` config plugin került (az `expo install` tette be).
+  2. **`expo-secure-store` NINCS:** a kliensnek nincs titka (D-004: a szolgáltatói és az AI-kulcs a proxy `.env.local`-jában van). Titkot nem tárolunk „tartaléknak” sem. Ha később lesz felhasználói token (auth) vagy BYOK kulcs, az kizárólag `expo-secure-store`-ba kerülhet (új döntéssel).
+  3. **Adatok helye:** kis beállítások → kv-store (`app.preferences` kulcs, verziózott boríték, D-083); portfólió, tranzakciók, figyelőlista, piaci adat cache → egy SQLite-fájl (`stock-etf-analyzer.db`), `PRAGMA user_version` alapú, tranzakciós migrációkkal (`src/infrastructure/storage/migrations.ts`). Weben memória (`default-storage.web.ts`; az `expo-sqlite` web WASM-ot és COOP/COEP fejlécet kér, a web csak fejlesztői előnézet).
+  4. **Rétegek:** a portok (`CacheStore`, `WatchlistRepository`, `PreferencesRepository`, `ConnectivityMonitor`; a `PortfolioRepository` + `listPortfolios`, `deleteAll`) az application-ben; a szabályok (TTL, offline, invalidálás, háttér) az application-ben (`src/application/cache/`); az SQL és az Expo-csomagok csak az infrastructure-ben. A use case-ek nem tudnak a cache-ről: a composition root a proxy gateway-ek elé teszi (`createMarketDataCache`). Demó módban és proxy nélkül nincs cache.
+  5. **Cache-rekord:** kulcs, fajta, jegyzés, payload (contract-DTO JSON), payload-verzió, forrás, provenance-fajta, frissesség a lekéréskor, `fetchedAt` (EREDETI lekérés), `asOf`, időszak, `storedAt`, `freshUntil`, `staleUntil`, `retainUntil`, `invalidatedAt`. Visszaolvasáskor a payload ugyanazzal a zod contract-sémával validál, mint a hálózati válasz.
+  6. **TTL adatfajtánként** (`CACHE_POLICIES`; friss / elavult→lejárt / megőrzés): quote 15 perc / 3 nap / 30 nap; ártörténet 12 óra / 14 nap / 60 nap; kimutatás 7 / 120 / 400 nap; profil és ETF-metaadat 7 / 30 / 180 nap; ETF holdings 30 / 90 / 365 nap (ma nincs forrása, KI-65); osztalék 1 / 30 / 180 nap; FX legutóbbi 12 óra / 3 nap / 30 nap; FX adott napi 365 nap (utólag nem változik); jegyzések 30 / 180 / 365 nap; keresés 1 / 7 / 7 nap. `[FELTÉTELEZÉS]` – tőzsdei naptár nincs (KI-110).
+  7. **Olvasási szabály:** (a) friss, nem jelölt rekord → `cache_hit`, hálózat nélkül; (b) ismerten offline + rekord → tartalék hálózat nélkül; (c) különben hálózat, siker → felülírás; (d) átmeneti hiba (NETWORK, TIMEOUT, RATE_LIMITED, UPSTREAM a NOT_IMPLEMENTED kivételével, UNAVAILABLE/QUOTA_EXHAUSTED) + rekord → `offline_fallback`; (e) végleges hiba (NOT_FOUND, VALIDATION, PLAN_LIMIT) → a hiba megy tovább, régi adat nem „helyette”; (f) rekord nélküli átmeneti hiba → a hiba + „nincs offline adat” kiegészítés. Egyidejű azonos kérések egy hívásra futnak össze.
+  8. **Frissesség-plafon:** a kiszolgált érték `provenance.cache = { mode, storedAt }` jelölést kap (új, opcionális domain-mező); az offline tartalék frissessége legalább `STALE` (`capFreshnessForCache` a domainben; a quote-, ártörténet- és FX-use case is alkalmazza). A `fetchedAt` soha nem íródik át új lekérés nélkül.
+  9. **Három külön mechanizmus:** *kézi frissítés* (lehúzás, újrapróbálás) = a jegyzés rekordjainak jelölése (`invalidatedAt`), a tartalék megmarad; *invalidálás* = törlés (Beállítások → „Gyorsítótár törlése”, payload-verzióváltás, sérült rekord, megőrzési idő utáni takarítás induláskor); *háttérfrissítés* = hálózat-visszatéréskor (offline → online), ha a beállítás engedi: a figyelőlista + tranzakciós jegyzések árfolyamai, csak a nem friss rekordok, max. 20 jegyzés, legfeljebb 5 percenként.
+  10. **Sérült adat:** sérült cache-rekord → törlés, újralekérés (offline: őszinte hiba). Sérült tranzakció/portfólió → `STORAGE` hiba (nem hagyjuk ki csendben – hamis P/L lenne); a visszaolvasás a domain-konstruktorokon (`createTransaction`, `createPortfolio`) megy át. Sérült figyelőlista-sor → kimarad és törlődik. Újabb (ismeretlen) adatbázis-séma → nem nyitjuk meg, nem törlünk.
+  11. **UI:** cache-ből kiszolgált adatnál mindig látszik az „Utoljára frissítve” (a LEGRÉGEBBI felhasznált rekord ideje); offline tartaléknál „Offline adat – elavult lehet” figyelmeztetés; a meglévő „Elavult adat” jelzés a plafon miatt automatikusan megjelenik.
+- **Elvetett alternatívák:** AsyncStorage (külön függőség, a kv-store kiváltja); MMKV (dev build kell, Expo Go-ban nincs); minden adat egy kv-store-ban (a cache szűrése/takarítása SQL nélkül körülményes); egységes TTL (a prompt tiltja; vagy kvótát pazarol, vagy elavult árat mutat); a régi rekord törlése kézi frissítéskor (offline elveszne a tartalék); proxy-cache ebben a fázisban (KI-68/KI-76 → PHASE 14; a kliens-cache már kímél kvótát).
+- **Következmények:** ismételt megnyitás a TTL-en belül 0 szolgáltatói hívás; offline az elemzés, a DCF és a score a cache-elt adaton fut, a frissesség öröklődik. Nincs app-szintű DB-titkosítás (R-20, O-05): az OS eszköztitkosítására támaszkodunk.
+
+### D-083 – Beállítás- és figyelőlista-modell, migrációs terv, adatmegőrzés
+- **Dátum:** 2026-11-24 · **Státusz:** Elfogadva
+- **Döntés:**
+  1. **`UserPreferences`** (application, egy igazságforrás; a presentation `AppSettings` = ez): `baseCurrency` (HUF/EUR/USD), `themePreference`, `llmEnabled`, `refresh.refreshOnReconnect` (alap: be). Tárolt alak: `{ schemaVersion: 2, data }`; a v1 (PHASE 12 alak) migrálódik és azonnal v2-ként visszaíródik. Ismeretlen mező vagy sérült JSON → alapértékek + a nyers érték biztonsági kulcsra (`app.preferences.corrupt-backup`). Újabb verzió → nem írjuk felül.
+  2. **`WatchlistItem`** (application): `listingId`, `name`, `kind` – ár nélkül. Hozzáadáskor `parseListingId` (nagybetűsít, validál).
+  3. **Migrációs szabályok:** meglévő migrációt nem módosítunk, csak újat fűzünk; felhasználói adatot migráció nem törölhet; a cache-tábla bármikor eldobható; a cache-payload sémaváltásakor a `CACHE_PAYLOAD_VERSION` emelése érvényteleníti a régi rekordokat.
+  4. **Adatmegőrzés:** minden felhasználói adat csak az eszközön (nincs szinkron, nincs felhő). A portfólió és a tranzakciók határozatlan ideig megmaradnak (a felhasználó törli); a cache-rekordok a fajta megőrzési ideje után induláskor törlődnek.
+  5. **Export:** „Saját adatok exportálása (JSON)” – formátum `stock-etf-analyzer.user-data` v1: portfóliók + tranzakciók, figyelőlista, beállítások; piaci adat (licenc, újratölthető) és titok nem kerül bele. Ma kijelölhető szövegként jelenik meg (fájlmentés/megosztás és import: KI-113).
+  6. **Törlés:** „Minden helyi adat törlése” kétlépcsős megerősítéssel: portfólió, tranzakció, figyelőlista, beállítás és cache. Visszavonhatatlan; előtte export javasolt.
+- **Elvetett:** beállítások SQLite-táblában (a kv-store kisebb, és a D-013 szerint erre való); automatikus felhőmentés (adatvédelmi döntés és szolgáltatás kellene).
+
+### D-084 – Tesztelés valódi SQLite-tal (Node beépített `node:sqlite`)
+- **Dátum:** 2026-11-24 · **Státusz:** Elfogadva
+- **Döntés:** a repository-k egy minimális `SqlDatabase` interfészt ismernek (az `expo-sqlite` aszinkron API-jának részhalmaza). Jestben a Node 26 beépített SQLite-ja fut mögötte (`src/testing/node-sqlite-database.ts`); a route-tesztekben a `jest.config.js` `moduleNameMapper` az `expo-sqlite`-ot, a kv-store-t és az `expo-network`-öt tesztdublőrre cseréli (`src/testing/mocks/`), tesztenként ürítve (`src/testing/jest-setup.ts`). Így a séma, a migráció és a lekérdezések valódi SQL-lel vannak tesztelve, új függőség nélkül.
+- **Korlát:** a Node SQLite-verziója eltérhet az eszközön lévőtől; csak alap SQL-t használunk (nincs JSON1, nincs FTS). Eszközön nem futott (KI-100).
