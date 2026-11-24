@@ -1069,3 +1069,57 @@ A tulajdonos válaszai:
 - **Dátum:** 2026-11-24 · **Státusz:** Elfogadva
 - **Döntés:** a repository-k egy minimális `SqlDatabase` interfészt ismernek (az `expo-sqlite` aszinkron API-jának részhalmaza). Jestben a Node 26 beépített SQLite-ja fut mögötte (`src/testing/node-sqlite-database.ts`); a route-tesztekben a `jest.config.js` `moduleNameMapper` az `expo-sqlite`-ot, a kv-store-t és az `expo-network`-öt tesztdublőrre cseréli (`src/testing/mocks/`), tesztenként ürítve (`src/testing/jest-setup.ts`). Így a séma, a migráció és a lekérdezések valódi SQL-lel vannak tesztelve, új függőség nélkül.
 - **Korlát:** a Node SQLite-verziója eltérhet az eszközön lévőtől; csak alap SQL-t használunk (nincs JSON1, nincs FTS). Eszközön nem futott (KI-100).
+
+## PHASE 14 – Compare, watchlist, screener, alerts (2026-11-24)
+
+### D-085 – Instrumentum-pillanatkép mint közös bemenet (nincs duplikált üzleti logika)
+- **Dátum:** 2026-11-24 · **Státusz:** Elfogadva
+- **Kontextus:** a compare, a watchlist, a screener és a riasztás ugyanazokat a mutatókat használja. Ha mind a négy saját magának számolna, a számok eltérhetnének az elemzőképernyőtől.
+- **Döntés:**
+  1. Új modul: `src/application/insights/`. Az `InstrumentSnapshot` a meglévő use case-ek kimenetéből készül (`evaluateStock` → PHASE 06/07/10; `evaluateEtf` → PHASE 08/10): a score-feature-ök változatlan `Metric`-jei (érték + provenance vagy a hiány oka), + részvénynél `dividendYield`, `marketCap`; ETF-nél a hozam-, kockázati és tracking-mutatók az ablakukkal, a holdings-pillanatkép és a hozam-alap (`comparisonBasis`).
+  2. Ár: `getListingQuote`; **napi változás** = utolsó záró / előző záró − 1 a split-korrigált ártörténetből (utolsó 10 nap). A quote végpont nem ad előző záróárat, ezért ez **számított** érték (`calculated`/`mock` provenance, bemenet: a két záróár dátummal). Hiány → `MISSING`, soha nem 0.
+  3. Két betöltő: `loadMarketSummary` (ár + napi változás, könnyű) és `loadInstrumentSnapshot` (teljes elemzés). A lista-változat **sorban** tölt (nem párhuzamosan), duplikátumot egyszer; egy elem hibája nem buktatja a többit.
+  4. **Ismeretlen típusú** jegyzésnél (figyelőlista `kind: 'unknown'`) nem találgatunk: `VALIDATION` hiba.
+  5. A részvény ISIN-je a (cache-elt) profilból jön – csak a részvény–ETF kitettséghez kell.
+- **Következmény:** integrációs teszt bizonyítja, hogy a pillanatkép mutatói azonosak az értékelés feature-jeivel (`src/__tests__/insights-integration.test.ts`).
+
+### D-086 – Összehasonlíthatósági szabályok és ETF-átfedés
+- **Dátum:** 2026-11-24 · **Státusz:** Elfogadva
+- **Döntés (összehasonlítás, `compareInstruments`, 2–4 instrumentum):**
+  1. **Típus:** a mutatókatalógus (`COMPARISON_METRICS`) minden sorához tartozik, mely típusra értelmezett. Részvény: értékelés (P/E, P/FCF, EV/EBITDA, P/S, FCF-hozam, Base MOS), osztalékhozam, piaci kapitalizáció, növekedés, minőség, mérleg, béta. ETF: TER, AUM, kor, total return, volatilitás, max. visszaesés, tracking, diverzifikáció, koncentráció, fedezetlen devizakitettség. Közös: ár, napi változás, összpontszám.
+  2. **Vegyes (részvény–ETF):** csak a közös piaci sorok + „a részvény súlya az ETF-ben” (ISIN-egyezés a holdingsben). Az összpontszám **nem** összemérhető (külön score-rendszer, D-073) → kizárva.
+  3. **Pénznem:** pénzösszeg (ár, AUM, piaci kap.) csak azonos pénznemben; átváltást itt nem végzünk (az FX-használat a portfólió feladata).
+  4. **Hozam-alap:** ETF-hozam csak ha minden ETF `comparisonBasis = total_return` (D-069); időszakos hozam/volatilitás/max. DD csak azonos ablakon (±7 nap).
+  5. **Lefedettség:** egy sor csak ≥ 2 elérhető értékkel jelenik meg; a hiányzó cella N/A az okkal. A kizárt mutatók indokkal visszajönnek (`excluded`) és a UI-n láthatók.
+  6. **Eltérő pénzügyi év:** a sor marad, megjegyzéssel. A „kedvezőbb” jelölés csak irány szerinti, ceteris paribus jelzés (nem ajánlás); holtversenynél nincs.
+- **Döntés (ETF-átfedés, `analyzeEtfOverlap`):**
+  1. Csak azonos napi vagy **kompatibilis** pillanatképekre: legfeljebb **31 nap** eltérés (havi közzétételi ciklus; paraméterezhető). Nagyobb eltérésnél `INCOMPATIBLE_DATES`, nincs szám. Mindkét adatdátum és a teljesség mindig látszik.
+  2. Átfedés = Σ min(w_A, w_B) a közös ISIN-ekre (PHASE 09 `holdingsOverlap`) – cégenként egyszer. Külön látszik a „közös súly A-ban” és „B-ben”, és kifejezett megjegyzés tiltja ezek összeadását (dupla számolás). A 50/50 keverék közös kitettsége: Σ (w_A + w_B)/2.
+  3. Részleges lista → alsó becslés. ISIN nélküli tétel nem párosítható; ugyanazon kibocsátó több részvényosztálya (külön ISIN) külön tétel (kibocsátói azonosító nincs, KI-126).
+  4. Részvény súlya ETF-ben: teljes listán a hiány valódi 0; részleges listán `MISSING`.
+- **Elvetett:** széles, vízszintesen görgetett tábla mobilon (helyette mutatónként függőleges cellák); FX-átváltás az összehasonlításban (rejtett FX-feltevés lenne).
+
+### D-087 – Szabályalapú screener a lokális univerzumon
+- **Dátum:** 2026-11-24 · **Státusz:** Elfogadva
+- **Döntés:**
+  1. **Univerzum:** figyelőlista + a portfólió tranzakcióinak jegyzései (a típus a cache-elt profil `kindHint`-jéből; ismeretlen → kimarad okkal). Piaci szintű szűrés nincs (teljes univerzumot adó forrás kellene, DP-05).
+  2. **Mezők** (`SCREENER_FIELDS`) 8 kategóriában: értékelés, növekedés, minőség, osztalék, ETF TER, AUM, tracking, koncentráció. Csak ≥ / ≤ reláció, ÉS-kapcsolat. Csak a szűrt típus töltődik be (kvótakímélés).
+  3. **Validáció** (`validateScreenerQuery`): üres lista, > 10 feltétel, ismeretlen mező, rossz típus, nem szám, tartományon kívül (pl. TER 0–5%: a „20” = 20% hibát megfogja), pénzösszeghez kötelező pénznem, duplikált feltétel, ellentmondó tartomány (≥ X és ≤ Y, X > Y).
+  4. **Kiértékelés:** feltételenként `PASS` / `FAIL` / `NOT_EVALUABLE` (hiányzó mutató vagy eltérő pénznem – soha nem 0). Instrumentum: bármely FAIL → nem felel meg; különben bármely NOT_EVALUABLE → nem értékelhető; különben találat. Minden feltétel visszaadja a használt `Metric`-et (provenance-szel) → a találat visszavezethető; elavult/offline adatnál jelölés.
+  5. **Kiinduló szűrők** (`SCREENER_PRESETS`): szemléltető küszöbök, nem ajánlások.
+  6. UI-n a százalékos mezőkbe százalékot írunk (0,25 = 0,25%), a motor tizedes törtet kap.
+
+### D-088 – Riasztási alap: csak alkalmazáson belül, push nélkül (platformkorlátok)
+- **Dátum:** 2026-11-24 · **Státusz:** Elfogadva
+- **Ellenőrzött dokumentáció (2026-11-24):** `docs.expo.dev/versions/v58.0.0/sdk/notifications/`, `…/sdk/background-task/`, `docs.expo.dev/push-notifications/what-you-need-to-know/` és `…/push-notifications-setup/`; a prompt által említett SDK 57-es oldal (`…/v57.0.0/sdk/notifications/`) is – az Expo Go-ra vonatkozó állítás ugyanaz (a projekt SDK 58-at használ, D-001).
+  - „Push notifications (remote notifications) … unavailable in Expo Go on Android from SDK 53. A development build is required.” Push-hoz FCM (Android) és APNs (iOS, fizetős Apple fejlesztői fiók) hitelesítés + `projectId` + küldő backend kell.
+  - „Local notifications (in-app notifications) remain available in Expo Go.” Androidon pontos időzítéshez `SCHEDULE_EXACT_ALARM` (Android 14+ alapból tiltja); Android 13+ futásidejű engedélykérés (csatorna létrehozása után).
+  - `expo-background-task`: Androidon min. 15 perc, iOS-en a rendszer választja (gyakran éjjel); nem garantált; a felhasználó által bezárt appnál leáll; iOS-szimulátoron nem fut.
+- **Döntés:**
+  1. Szabályok: ár > / < érték (a jegyzés pénznemében; eltérő pénznemnél `NOT_EVALUABLE`, átváltva nem riasztunk), Base DCF MOS, P/E (részvény), TER (ETF). Szigorú reláció (a határérték nem teljesül). Max. 50 szabály.
+  2. Tárolás: SQLite **2. migráció** (`alert_rules`), memóriában weben; az export (formátum **v2**) és a teljes törlés tartalmazza.
+  3. **Kiértékelés csak az appban:** a Riasztások képernyő a tárolt utolsó állapotot mutatja; az „Ellenőrzés most” gomb értékel. Ár-szabályhoz csak ár-lekérés kell; P/E/MOS/TER-hez teljes elemzés (a jelentés kiírja, hány elemzés töltődött).
+  4. **Élváltás:** „újonnan teljesült” csak NEM-teljesült → teljesült váltáskor; adathiány (`NOT_EVALUABLE`) nem nullázza az utolsó állapotot (nincs ismételt jelzés). Elavult/offline adatnál a kiértékelés jelölve.
+  5. **Nincs** push, rendszerértesítés, háttér-ellenőrzés, és nincs új csomag (`expo-notifications`, `expo-background-task` nincs telepítve). A korlátok egy helyen: `ALERT_PLATFORM_LIMITATIONS` (UI + teszt).
+- **Bővítési út (külön döntéssel):** (a) helyi értesítés Expo Go-ban: `expo-notifications` + engedélykérés + kiértékelés az app előterében; (b) háttér-ellenőrzés: `expo-background-task` (nem garantált, ritka); (c) valódi push: development build (EAS), FCM/APNs kulcsok, szerveroldali ütemezett kiértékelő (proxy + tárolt szabályok → adatvédelmi és költségdöntés, O-03).
+- **Elvetett:** helyi értesítés ütemezése friss ár nélkül (félrevezető „riasztás” régi adaton); push „előkészítése” működés nélkül (nem dokumentált képességnek tűnne).

@@ -1,6 +1,7 @@
 /**
  * PHASE 13: SQLite-tárolók VALÓDI SQL-lel (Node beépített SQLite): migráció, portfólió mentése és
  * visszaolvasása, sérült rekordok, figyelőlista, cache-tároló, beállítások (kv), adatbázis-nyitás.
+ * PHASE 14: riasztási szabályok (2. migráció).
  */
 import type { CacheRecord } from '@/application';
 import { AAPL, EUR, fxRate, PORTFOLIO, tx, USD, VWCE } from '@/application/portfolio/testing';
@@ -16,10 +17,12 @@ import {
 } from './kv-preferences-repository';
 import {
   LATEST_SCHEMA_VERSION,
+  MIGRATIONS,
   readSchemaVersion,
   runMigrations,
   type Migration,
 } from './migrations';
+import { createSqliteAlertRuleRepository } from './sqlite-alert-rule-repository';
 import { createSqliteCacheStore } from './sqlite-cache-store';
 import { createSqlitePortfolioRepository } from './sqlite-portfolio-repository';
 import { createSqliteWatchlistRepository } from './sqlite-watchlist-repository';
@@ -42,6 +45,7 @@ describe('migráció', () => {
       "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
     );
     expect(tables.map((t) => t.name)).toEqual([
+      'alert_rules',
       'cache_entries',
       'portfolios',
       'transactions',
@@ -60,7 +64,7 @@ describe('migráció', () => {
 
   it('új migráció a meglévő adatot megtartja (v1 → v2 minta)', async () => {
     const db = createNodeSqliteDatabase();
-    await runMigrations(db);
+    await runMigrations(db, MIGRATIONS.slice(0, 1));
     await db.run(
       "INSERT INTO watchlist (listing_id, json, added_at, seq) VALUES ('X@XNAS', '{}', 't', 1)",
     );
@@ -81,7 +85,7 @@ describe('migráció', () => {
 
   it('hibás migráció visszagörget: a verzió és a séma változatlan', async () => {
     const db = createNodeSqliteDatabase();
-    await runMigrations(db);
+    await runMigrations(db, MIGRATIONS.slice(0, 1));
     const broken: Migration = {
       version: 2,
       description: 'hibás',
@@ -424,5 +428,58 @@ describe('beállítások (kv-store)', () => {
     expect((await repo.load()).ok).toBe(false);
     expect((await repo.save(prefs)).ok).toBe(false);
     expect((await repo.clear()).ok).toBe(false);
+  });
+});
+
+describe('SQLite riasztási szabályok (PHASE 14)', () => {
+  const rule = {
+    id: 'alert-1',
+    listingId: 'AAPL@XNAS',
+    kind: 'stock' as const,
+    metric: 'price' as const,
+    comparator: 'above' as const,
+    threshold: 200,
+    currency: 'USD',
+    enabled: true,
+    createdAt: '2026-11-24T10:00:00.000Z',
+    lastState: null,
+    lastEvaluatedAt: null,
+    lastTriggeredAt: null,
+  };
+
+  it('mentés, felülírás (sorrend marad), újranyitás után is megvan, törlés', async () => {
+    const { db, provider } = freshDb();
+    const repo = createSqliteAlertRuleRepository(provider);
+    await repo.save(rule);
+    await repo.save({ ...rule, id: 'alert-2', metric: 'pe', currency: null, threshold: 30 });
+    await repo.save({ ...rule, lastState: 'TRIGGERED', lastTriggeredAt: rule.createdAt });
+    const reopened = createSqliteAlertRuleRepository(createDatabaseProvider(async () => db));
+    const listed = await reopened.list();
+    expect(listed.ok && listed.value.map((r) => [r.id, r.lastState])).toEqual([
+      ['alert-1', 'TRIGGERED'],
+      ['alert-2', null],
+    ]);
+    await reopened.remove('alert-1');
+    expect((await reopened.list()).ok && (await reopened.list())).toMatchObject({
+      value: [{ id: 'alert-2' }],
+    });
+    await reopened.clear();
+    const empty = await reopened.list();
+    expect(empty.ok && empty.value).toEqual([]);
+  });
+
+  it('sérült sor kimarad és törlődik (az app nem akad el)', async () => {
+    const { db, provider } = freshDb();
+    const repo = createSqliteAlertRuleRepository(provider);
+    await repo.save(rule);
+    await db.run(
+      "INSERT INTO alert_rules (id, listing_id, json, seq) VALUES ('bad', 'X@XNAS', '{nem json', 99)",
+    );
+    await db.run(
+      "INSERT INTO alert_rules (id, listing_id, json, seq) VALUES ('bad2', 'X@XNAS', '{\"id\":\"bad2\"}', 100)",
+    );
+    const listed = await repo.list();
+    expect(listed.ok && listed.value.map((r) => r.id)).toEqual(['alert-1']);
+    expect(await db.getAll('SELECT id FROM alert_rules')).toEqual([{ id: 'alert-1' }]);
   });
 });

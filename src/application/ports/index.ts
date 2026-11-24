@@ -6,6 +6,7 @@
  * PHASE 11: `AiGateway` (opcionális LLM-magyarázat a proxyn át). A kliensoldali `Logger` később.
  * PHASE 13 (D-082, D-083): `CacheStore`, `WatchlistRepository`, `PreferencesRepository`,
  * `ConnectivityMonitor`; a `PortfolioRepository` listázással és törléssel bővült.
+ * PHASE 14 (D-088): `AlertRuleRepository`.
  */
 import type { AiExplainRequestDto, AiExplanationDto } from '@/contracts';
 import type {
@@ -31,6 +32,7 @@ import type {
 } from '@/domain';
 
 import type { CacheRecord, ConnectivityState } from '../cache/types';
+import type { AlertRule } from '../insights/alerts';
 import type { UserPreferences } from '../preferences/user-preferences';
 import type { WatchlistItem } from '../watchlist/types';
 
@@ -128,6 +130,17 @@ export interface WatchlistRepository {
   list(): Promise<Result<readonly WatchlistItem[], AppError>>;
   add(item: WatchlistItem, addedAt: string): Promise<Result<void, AppError>>;
   remove(listingId: string): Promise<Result<void, AppError>>;
+  clear(): Promise<Result<void, AppError>>;
+}
+
+/**
+ * Riasztási szabályok tárolása (PHASE 14, D-088). `save` = beszúrás vagy felülírás azonosító
+ * szerint (a sorrend a létrehozás sorrendje). Sérült sor: kimarad és törlődik (újra felvehető).
+ */
+export interface AlertRuleRepository {
+  list(): Promise<Result<readonly AlertRule[], AppError>>;
+  save(rule: AlertRule): Promise<Result<void, AppError>>;
+  remove(id: string): Promise<Result<void, AppError>>;
   clear(): Promise<Result<void, AppError>>;
 }
 

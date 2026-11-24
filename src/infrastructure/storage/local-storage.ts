@@ -3,6 +3,7 @@
  * natívon SQLite + kv-store (`default-storage.ts`), weben memória (`default-storage.web.ts`).
  */
 import type {
+  AlertRuleRepository,
   CacheStore,
   ConnectivityMonitor,
   PortfolioRepository,
@@ -12,7 +13,11 @@ import type {
 import { InMemoryPortfolioRepository } from '@/infrastructure/mock/in-memory-portfolio-repository';
 import { unknownConnectivity } from '@/infrastructure/system/expo-connectivity';
 
-import { createInMemoryCacheStore, createInMemoryWatchlistRepository } from './in-memory-stores';
+import {
+  createInMemoryAlertRuleRepository,
+  createInMemoryCacheStore,
+  createInMemoryWatchlistRepository,
+} from './in-memory-stores';
 import {
   createKvPreferencesRepository,
   createMemoryKeyValueStore,
@@ -21,6 +26,8 @@ import {
 export interface LocalStorage {
   readonly portfolioRepository: PortfolioRepository;
   readonly watchlistRepository: WatchlistRepository;
+  /** PHASE 14: riasztási szabályok. */
+  readonly alertRuleRepository: AlertRuleRepository;
   readonly preferencesRepository: PreferencesRepository;
   readonly cacheStore: CacheStore;
   readonly connectivity: ConnectivityMonitor;
@@ -32,6 +39,7 @@ export function createInMemoryLocalStorage(): LocalStorage {
   return {
     portfolioRepository: new InMemoryPortfolioRepository(),
     watchlistRepository: createInMemoryWatchlistRepository(),
+    alertRuleRepository: createInMemoryAlertRuleRepository(),
     preferencesRepository: createKvPreferencesRepository(createMemoryKeyValueStore()),
     cacheStore: createInMemoryCacheStore(),
     connectivity: unknownConnectivity,

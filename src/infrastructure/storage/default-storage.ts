@@ -13,6 +13,7 @@ import { createDatabaseProvider } from './database-provider';
 import { openExpoDatabase } from './expo-sqlite-database';
 import { createKvPreferencesRepository } from './kv-preferences-repository';
 import type { LocalStorage } from './local-storage';
+import { createSqliteAlertRuleRepository } from './sqlite-alert-rule-repository';
 import { createSqliteCacheStore } from './sqlite-cache-store';
 import { createSqlitePortfolioRepository } from './sqlite-portfolio-repository';
 import { createSqliteWatchlistRepository } from './sqlite-watchlist-repository';
@@ -22,6 +23,7 @@ export function createDefaultLocalStorage(): LocalStorage {
   return {
     portfolioRepository: createSqlitePortfolioRepository(provider),
     watchlistRepository: createSqliteWatchlistRepository(provider),
+    alertRuleRepository: createSqliteAlertRuleRepository(provider),
     preferencesRepository: createKvPreferencesRepository(Storage),
     cacheStore: createSqliteCacheStore(provider),
     connectivity: createExpoConnectivityMonitor(),

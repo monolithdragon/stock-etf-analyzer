@@ -2,6 +2,13 @@
  * Alkalmazási réteg: use case-ek és portok. A UI csak ezen keresztül ér el adatot
  * (soha nem hív közvetlenül szolgáltatói API-t vagy `fetch`-et).
  */
+import type {
+  AlertService,
+  CompareListings,
+  GetWatchlistOverview,
+  RunScreen,
+} from './insights/insight-services';
+import type { LoadInstrumentSnapshot } from './insights/load-snapshot';
 import type { AnalyzeEtf } from './use-cases/analyze-etf';
 import type { AnalyzePortfolio } from './use-cases/analyze-portfolio';
 import type { AnalyzeStockFundamentals } from './use-cases/analyze-stock-fundamentals';
@@ -94,6 +101,13 @@ export * from './cache/background-refresh';
 export * from './preferences/user-preferences';
 export * from './watchlist/types';
 export * from './use-cases/local-data';
+export * from './insights/instrument-snapshot';
+export * from './insights/load-snapshot';
+export * from './insights/etf-overlap';
+export * from './insights/compare';
+export * from './insights/screener';
+export * from './insights/alerts';
+export * from './insights/insight-services';
 
 /** A UI számára elérhető szolgáltatások – a composition root (`src/config/container.ts`) állítja elő. */
 export interface AppServices {
@@ -133,4 +147,14 @@ export interface AppServices {
   readonly watchlist: WatchlistService;
   /** PHASE 13: cache-állapot, kézi frissítés, invalidálás, export, törlés, háttérfrissítés. */
   readonly localData: LocalDataService;
+  /** PHASE 14: egy instrumentum pillanatképe (a meglévő értékelésekből; csak kérésre). */
+  readonly loadInstrumentSnapshot: LoadInstrumentSnapshot;
+  /** PHASE 14: figyelőlista-áttekintés (ár + napi változás). */
+  readonly getWatchlistOverview: GetWatchlistOverview;
+  /** PHASE 14: összehasonlítás csak összehasonlítható mutatókkal + ETF-átfedés. */
+  readonly compareListings: CompareListings;
+  /** PHASE 14: szabályalapú screener a lokális univerzumon. */
+  readonly runScreen: RunScreen;
+  /** PHASE 14: ár-/mutatóriasztások (csak alkalmazáson belül, push nélkül). */
+  readonly alerts: AlertService;
 }

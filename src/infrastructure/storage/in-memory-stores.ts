@@ -1,9 +1,16 @@
 /**
- * Memóriabeli cache-tároló és figyelőlista (PHASE 13): weben (ahol nincs SQLite, D-082) és
+ * Memóriabeli cache-tároló, figyelőlista (PHASE 13) és riasztás (PHASE 14): weben (ahol nincs SQLite, D-082) és
  * tesztekben. Ugyanazt a portot valósítják meg, mint az SQLite-változatok.
  * FIGYELEM: az app újraindításakor az adatok elvesznek.
  */
-import type { CacheRecord, CacheStore, WatchlistItem, WatchlistRepository } from '@/application';
+import type {
+  AlertRule,
+  AlertRuleRepository,
+  CacheRecord,
+  CacheStore,
+  WatchlistItem,
+  WatchlistRepository,
+} from '@/application';
 import { ok } from '@/domain';
 
 const ms = (v: string) => Date.parse(v);
@@ -75,6 +82,29 @@ export function createInMemoryWatchlistRepository(
     },
     clear: async () => {
       items = [];
+      return ok(undefined);
+    },
+  };
+}
+
+export function createInMemoryAlertRuleRepository(
+  seed: readonly AlertRule[] = [],
+): AlertRuleRepository {
+  let rules: AlertRule[] = [...seed];
+  return {
+    list: async () => ok([...rules]),
+    save: async (rule) => {
+      rules = rules.some((r) => r.id === rule.id)
+        ? rules.map((r) => (r.id === rule.id ? rule : r))
+        : [...rules, rule];
+      return ok(undefined);
+    },
+    remove: async (id) => {
+      rules = rules.filter((r) => r.id !== id);
+      return ok(undefined);
+    },
+    clear: async () => {
+      rules = [];
       return ok(undefined);
     },
   };

@@ -196,7 +196,7 @@ describe('figyelőlista, portfólió, beállítások', () => {
     });
   });
 
-  it('összehasonlítás (váz): üres figyelőlistánál magyarázó üres állapot', async () => {
+  it('összehasonlítás: üres figyelőlistánál magyarázó üres állapot', async () => {
     await renderRouter(APP_DIR, { initialUrl: '/compare' });
 
     expect(screen.getByText(strings.compare.empty)).toBeOnTheScreen();
@@ -266,7 +266,7 @@ describe('PHASE 13: tartós tárolás (újraindítás után) és helyi adatok', 
     await fireEvent.press(screen.getByTestId('export-data'));
     const json = await screen.findByTestId('export-json', {}, WAIT);
     const text = String(json.props.children);
-    expect(JSON.parse(text)).toMatchObject({ format: 'stock-etf-analyzer.user-data', version: 1 });
+    expect(JSON.parse(text)).toMatchObject({ format: 'stock-etf-analyzer.user-data', version: 2 });
     expect(text).not.toMatch(/api[_-]?key|secret|token/i);
   });
 
@@ -278,5 +278,79 @@ describe('PHASE 13: tartós tárolás (újraindítás után) és helyi adatok', 
     await fireEvent.press(screen.getByTestId('delete-all-confirm'));
     expect(await screen.findByText(strings.settings.deleteAllDone, {}, WAIT)).toBeOnTheScreen();
     expect(screen.getByRole('radio', { name: strings.settings.themeSystem })).toBeChecked();
+  });
+});
+
+describe('PHASE 14: figyelőlista, összehasonlítás, screener, riasztások', () => {
+  jest.setTimeout(20000);
+
+  async function addToWatchlist(path: string, testId: string) {
+    const r = await renderRouter(APP_DIR, { initialUrl: path });
+    await screen.findByTestId(testId, {}, WAIT);
+    await fireEvent.press(screen.getByRole('button', { name: strings.watchlist.add }));
+    for (let i = 0; i < 50; i += 1) await Promise.resolve();
+    await r.unmount();
+  }
+
+  it('figyelőlista: ár, napi változás és frissesség; score csak kérésre', async () => {
+    await addToWatchlist('/stock/DEMO@XNAS', 'stock-screen');
+    await renderRouter(APP_DIR, { initialUrl: '/watchlist' });
+    const row = await screen.findByTestId('watch-row-DEMO@XNAS', {}, WAIT);
+    await waitFor(() => expect(within(row).getByText('Napi változás')).toBeOnTheScreen(), WAIT);
+    expect(within(row).getByText('Demóadat')).toBeOnTheScreen();
+    expect(within(row).queryByText(/^Score:/)).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: strings.watchlist.loadScores }));
+    expect(await within(row).findByText(/^Score:/, {}, WAIT)).toBeOnTheScreen();
+    expect(within(row).getByText(/^Értékelés:/)).toBeOnTheScreen();
+    expect(screen.getByRole('link', { name: strings.screener.open })).toBeOnTheScreen();
+    expect(screen.getByRole('link', { name: strings.alerts.open })).toBeOnTheScreen();
+  });
+
+  it('összehasonlítás: részvény + ETF kiválasztása → csak közös mutatók, kimaradtak okkal', async () => {
+    await addToWatchlist('/stock/DEMO@XNAS', 'stock-screen');
+    await addToWatchlist('/etf/DEMOETF@XETR', 'etf-screen');
+    await renderRouter(APP_DIR, { initialUrl: '/compare' });
+    const run = await screen.findByRole('button', { name: strings.compare.run }, WAIT);
+    expect(run).toBeDisabled();
+    await fireEvent.press(screen.getByRole('checkbox', { name: /Demo Corp/ }));
+    await fireEvent.press(screen.getByRole('checkbox', { name: /Demo ETF/ }));
+    await fireEvent.press(screen.getByRole('button', { name: strings.compare.run }));
+    const table = await screen.findByTestId('compare-table', {}, WAIT);
+    expect(within(table).getByTestId('compare-row-dayChange')).toBeOnTheScreen();
+    expect(within(table).queryByTestId('compare-row-pe')).toBeNull();
+    expect(within(table).queryByTestId('compare-row-ter')).toBeNull();
+    expect(screen.getByTestId('compare-excluded')).toBeOnTheScreen();
+  });
+
+  it('screener: érvénytelen küszöb hibát ad; kiinduló szűrő futtatható', async () => {
+    await addToWatchlist('/stock/DEMO@XNAS', 'stock-screen');
+    await renderRouter(APP_DIR, { initialUrl: '/screener' });
+    await fireEvent.changeText(screen.getByLabelText(/^Küszöb/), 'abc');
+    await fireEvent.press(screen.getByRole('button', { name: strings.screener.addCriterion }));
+    expect(await screen.findByText(/küszöbe nem szám/)).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: strings.screener.run }));
+    expect(screen.getByText(/legalább egy feltételt/)).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: /Értékelés: alacsony P\/E/ }));
+    await fireEvent.press(screen.getByRole('button', { name: strings.screener.run }));
+    expect(await screen.findByTestId('screener-results', {}, WAIT)).toBeOnTheScreen();
+    expect(screen.getAllByTestId('screen-row-DEMO@XNAS').length).toBeGreaterThan(0);
+  });
+
+  it('riasztás: korlátok láthatók, mentés tartós, ellenőrzés jelzi a teljesülést', async () => {
+    await addToWatchlist('/stock/DEMO@XNAS', 'stock-screen');
+    const first = await renderRouter(APP_DIR, { initialUrl: '/alerts' });
+    expect(await screen.findByTestId('alerts-limitations', {}, WAIT)).toBeOnTheScreen();
+    expect(screen.getByText(/Nincs push-értesítés/)).toBeOnTheScreen();
+    await fireEvent.changeText(screen.getByLabelText(/^Küszöb/), '90');
+    await fireEvent.changeText(screen.getByLabelText(strings.alerts.currency), 'USD');
+    await fireEvent.press(screen.getByRole('button', { name: strings.alerts.add }));
+    expect(await screen.findByText(strings.alerts.saved, {}, WAIT)).toBeOnTheScreen();
+    await first.unmount();
+
+    await renderRouter(APP_DIR, { initialUrl: '/alerts' });
+    expect(await screen.findByText(/Árfolyam felett/, {}, WAIT)).toBeOnTheScreen();
+    await fireEvent.press(screen.getByRole('button', { name: strings.alerts.check }));
+    expect(await screen.findByText(/Újonnan teljesült riasztás: 1/, {}, WAIT)).toBeOnTheScreen();
+    expect(screen.getByText('Teljesült')).toBeOnTheScreen();
   });
 });

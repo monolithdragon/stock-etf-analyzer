@@ -422,6 +422,8 @@ src/testing/                                  node-sqlite-database, mocks/ (expo
 
 **Még nem létező mappák:** `server/cache/` (proxy-cache, PHASE 14 – KI-68, KI-76).
 
+**PHASE 14 kiegészítés (D-085…D-088):** `src/application/insights/` – `instrument-snapshot.ts` (közös, lapos bemenet a meglévő értékelésekből), `load-snapshot.ts` (betöltők), `compare.ts`, `etf-overlap.ts`, `screener.ts`, `alerts.ts`, `insight-services.ts` (use case-ek: `compareListings`, `runScreen`, `getWatchlistOverview`, `alerts`); port: `AlertRuleRepository` (SQLite 2. migráció: `alert_rules`); presentation: `view-models/insights-view-model.ts`, `screens/{watchlist,compare,screener,alerts}-screen.tsx`; route-ok: `/screener`, `/alerts`. Adatfolyam: képernyő → use case → `loadInstrumentSnapshot` → `evaluateStock`/`evaluateEtf` (cache-elt gateway-ek) → tiszta szabályfüggvény → view-model. Értesítés/háttérfeladat nincs (D-088).
+
 ### 5.2 Tervezett teljes struktúra (PHASE 01 terv)
 
 > **PHASE 12 (D-079):** a `(tabs)/` csoport elkészült: `index`, `search`, `portfolio`, `watchlist`, `settings`; Stack-képernyők: `stock/[listingId]`, `etf/[listingId]`, `compare`, `about`. A sablon konvenciója (`src/app`) egyezett a tervvel (D-029).

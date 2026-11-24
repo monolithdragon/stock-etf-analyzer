@@ -16,6 +16,7 @@ import {
   createMemoryKeyValueStore,
 } from '@/infrastructure/storage/kv-preferences-repository';
 import type { LocalStorage } from '@/infrastructure/storage/local-storage';
+import { createSqliteAlertRuleRepository } from '@/infrastructure/storage/sqlite-alert-rule-repository';
 import { createSqliteCacheStore } from '@/infrastructure/storage/sqlite-cache-store';
 import { createSqlitePortfolioRepository } from '@/infrastructure/storage/sqlite-portfolio-repository';
 import { createSqliteWatchlistRepository } from '@/infrastructure/storage/sqlite-watchlist-repository';
@@ -90,6 +91,7 @@ function device() {
     const storage: LocalStorage = {
       portfolioRepository: createSqlitePortfolioRepository(provider),
       watchlistRepository: createSqliteWatchlistRepository(provider),
+      alertRuleRepository: createSqliteAlertRuleRepository(provider),
       preferencesRepository: createKvPreferencesRepository(kv),
       cacheStore: createSqliteCacheStore(provider),
       connectivity,

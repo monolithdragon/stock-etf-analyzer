@@ -3,10 +3,10 @@
 Mobilalkalmazás (Android / iOS) részvények, ETF-ek és saját portfólió **átlátható, forrásolt, reprodukálható** elemzésére.
 A számítás determinisztikus, az AI csak magyaráz. Saját használatra készül; **nem befektetési tanács**.
 
-> **Állapot (2026-11-24): PHASE 13 – tárolás, cache és offline kész** (eszközön még nem ellenőrizve).
+> **Állapot (2026-11-24): PHASE 14 – összehasonlítás, figyelőlista, screener és riasztások kész** (eszközön még nem ellenőrizve).
 > Az app képernyőkkel használható: ticker keresése → részvény- vagy ETF-elemzés (score, döntés, DCF, források), portfólió (létrehozás, tranzakció, P/L, allokáció, kockázat), figyelőlista, beállítások.
-> **Korlátok:** az adatok (portfólió, figyelőlista, beállítások) PHASE 13-tól az eszközön tárolódnak (SQLite; weben csak memóriában); élő módban a letöltött piaci adat gyorsítótárba kerül és offline is látszik (jelölve); alapból **demóadattal** fut; az új UI-t és a tárolást emulátoron még nem néztük meg (KI-100, KI-117).
-> A teljes ütemterv: [docs/ROADMAP.md](docs/ROADMAP.md). A PHASE 13 kezdőbarát útmutatója: [docs/phases/phase-13-storage-cache-offline.md](docs/phases/phase-13-storage-cache-offline.md) (előző: [PHASE 12](docs/phases/phase-12-ui-ux-navigation.md)). Telepítés: [docs/phases/phase-02-project-setup.md](docs/phases/phase-02-project-setup.md).
+> **Korlátok:** az adatok (portfólió, figyelőlista, beállítások) PHASE 13-tól az eszközön tárolódnak (SQLite; weben csak memóriában); élő módban a letöltött piaci adat gyorsítótárba kerül és offline is látszik (jelölve); alapból **demóadattal** fut; az új UI-t és a tárolást emulátoron még nem néztük meg (KI-100, KI-117, KI-129); a riasztás csak az appban értékelődik ki – **push-értesítés nincs** (D-088).
+> A teljes ütemterv: [docs/ROADMAP.md](docs/ROADMAP.md). A PHASE 14 kezdőbarát útmutatója: [docs/phases/phase-14-compare-watchlist-screener-alerts.md](docs/phases/phase-14-compare-watchlist-screener-alerts.md) (előző: [PHASE 13](docs/phases/phase-13-storage-cache-offline.md)). Telepítés: [docs/phases/phase-02-project-setup.md](docs/phases/phase-02-project-setup.md).
 
 ## Technológia
 
@@ -129,8 +129,10 @@ Részletes, kezdőbarát leírás: [docs/phases/phase-04-data-sources-currency.m
 | Részvényelemzés | `/stock/TICKER@MIC` | ár és alapadatok, értékeltség, növekedés, jövedelmezőség, mérleg, cash flow, DCF, kockázat, score és döntés, magyarázat, adatminőség |
 | ETF-elemzés | `/etf/TICKER@MIC` | alapadatok, TER/AUM, benchmark, holdings, országok, szektorok, stílus, osztalék, követés, kockázat, hozam, magyarázat |
 | Portfólió | `/portfolio` (fül) | összérték, P/L (bázis és natív), allokáció, devizakitettség, koncentráció, ETF-átfedés, kockázat, magyarázat (beleegyezéssel), tranzakció-űrlap |
-| Figyelőlista | `/watchlist` (fül) | mentett instrumentumok (tartósan, az eszközön) |
-| Összehasonlítás | `/compare` | előnézet (teljes funkció: PHASE 14) |
+| Figyelőlista | `/watchlist` (fül) | mentett instrumentumok (tartósan): ár, napi változás, frissesség, utolsó frissítés; score és értékelés kérésre |
+| Összehasonlítás | `/compare` | 2–4 instrumentum, csak összehasonlítható mutatók (kizártak okkal), ETF-átfedés, részvény súlya ETF-ben |
+| Screener | `/screener` | szabályalapú szűrés a figyelőlistán és a portfólión (értékelés, növekedés, minőség, osztalék, TER, AUM, tracking, koncentráció) |
+| Riasztások | `/alerts` | ár / MOS / P/E / TER küszöb, „Ellenőrzés most” (csak az appban, push nélkül) |
 | Beállítások | `/settings` (fül) | bázispénznem, téma, AI-gomb be/ki, adatforrás |
 
 Minden mutatóra koppintva látszik a forrás, az időszak, a pénznem, a frissesség és a hiány oka. A hiányzó adat **N/A** / **N/M**, soha nem 0.

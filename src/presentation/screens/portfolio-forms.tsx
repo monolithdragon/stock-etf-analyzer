@@ -17,16 +17,13 @@ import {
   TextField,
 } from '@/presentation/components';
 import { useAppServices } from '@/presentation/di/app-services-context';
+import { parseDecimalInput } from '@/presentation/format';
 import { BASE_CURRENCIES, type BaseCurrency } from '@/presentation/state/settings-context';
 import { strings } from '@/presentation/strings/hu';
 import { useTheme } from '@/presentation/theme';
 
-/** `"1 234,5"` → `1234.5`; üres vagy hibás → `NaN` (a domain validáció utasítja el, okkal). */
-export function parseDecimalInput(raw: string): number {
-  const normalized = raw.replace(/[\s ]/g, '').replace(',', '.');
-  if (normalized === '' || !/^-?\d*\.?\d+$/.test(normalized)) return Number.NaN;
-  return Number(normalized);
-}
+// PHASE 14: a számbevitel-értelmező a közös formázó modulba került (screener, riasztás is használja).
+export { parseDecimalInput };
 
 /** VALIDATION hiba → mezőnkénti üzenetek (az útvonal első szegmense a mező). */
 export function fieldErrors(error: AppError | null): Readonly<Record<string, string>> {
