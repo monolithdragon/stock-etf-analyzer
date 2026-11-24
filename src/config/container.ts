@@ -23,13 +23,24 @@ import {
   createGetSecurityListings,
   createRecordTransaction,
   createSearchInstruments,
+  collectRefreshTargets,
+  createBackgroundRefresher,
+  createLocalDataService,
+  createMarketDataCache,
+  createPreferencesService,
+  createWatchlistService,
+  DEFAULT_PREFERENCES,
   type AiGateway,
   type AppServices,
+  type CacheControl,
   type Clock,
+  type ConnectivityMonitor,
   type FxGateway,
   type IdGenerator,
   type MarketDataGateway,
   type PortfolioRepository,
+  type PreferencesRepository,
+  type WatchlistRepository,
 } from '@/application';
 import {
   notImplementedFxGateway,
@@ -47,9 +58,10 @@ import {
   createProxyHttpClient,
   type ClientFetch,
 } from '@/infrastructure/api-client/proxy-http-client';
-import { InMemoryPortfolioRepository } from '@/infrastructure/mock/in-memory-portfolio-repository';
 import { createMockFxGateway } from '@/infrastructure/mock/mock-fx-gateway';
 import { createMockMarketDataGateway } from '@/infrastructure/mock/mock-market-data-gateway';
+import { createDefaultLocalStorage } from '@/infrastructure/storage/default-storage';
+import type { LocalStorage } from '@/infrastructure/storage/local-storage';
 import { createLocalIdGenerator, systemClock } from '@/infrastructure/system/system-clock';
 
 import type { PublicEnv } from './env';
@@ -62,6 +74,17 @@ export interface AppDependencies {
   readonly portfolioRepository: PortfolioRepository;
   /** PHASE 11: opcionális LLM-magyarázat (demó módban / proxy nélkül kikapcsolt). */
   readonly aiGateway: AiGateway;
+  /** PHASE 13: tartós figyelőlista és beállítások. */
+  readonly watchlistRepository: WatchlistRepository;
+  readonly preferencesRepository: PreferencesRepository;
+  readonly connectivity: ConnectivityMonitor;
+  /**
+   * PHASE 13: az eszköz-cache vezérlője – csak élő módban (proxyval) van cache; demó módban és
+   * proxy nélkül `null` (a demóadatot nincs értelme tárolni).
+   */
+  readonly cacheControl: CacheControl | null;
+  /** A helyi tárolás tartós-e (natív SQLite) vagy memóriabeli (web). */
+  readonly persistentStorage: boolean;
 }
 
 /** A globális fetch, késleltetve feloldva (tesztben a `fetchImpl` felülírható). */
@@ -78,12 +101,17 @@ export function createDefaultDependencies(
   env: PublicEnv,
   clock: Clock = systemClock,
   fetchImpl: ClientFetch = globalFetch,
+  storage: LocalStorage = createDefaultLocalStorage(),
 ): AppDependencies {
   const base = {
     clock,
     ids: createLocalIdGenerator(clock),
-    // A tartós (SQLite) tároló a PHASE 13-ban jön; addig mindkét módban memóriában.
-    portfolioRepository: new InMemoryPortfolioRepository(),
+    // PHASE 13: natívon SQLite + kv-store, weben memória (D-082).
+    portfolioRepository: storage.portfolioRepository,
+    watchlistRepository: storage.watchlistRepository,
+    preferencesRepository: storage.preferencesRepository,
+    connectivity: storage.connectivity,
+    persistentStorage: storage.persistent,
   };
   if (env.dataMode === 'mock') {
     return {
@@ -91,6 +119,7 @@ export function createDefaultDependencies(
       marketData: createMockMarketDataGateway(clock),
       fx: createMockFxGateway(clock),
       aiGateway: disabledAiGateway,
+      cacheControl: null,
     };
   }
   if (env.apiBaseUrl === null) {
@@ -99,26 +128,42 @@ export function createDefaultDependencies(
       marketData: notImplementedMarketDataGateway,
       fx: notImplementedFxGateway,
       aiGateway: disabledAiGateway,
+      cacheControl: null,
     };
   }
   const http = createProxyHttpClient({ baseUrl: env.apiBaseUrl, fetchImpl });
-  return {
-    ...base,
+  // PHASE 13: a proxy gateway-ek elé kerül az eszköz-cache (a use case-ek erről nem tudnak).
+  const cache = createMarketDataCache({
     marketData: createProxyMarketDataGateway(http),
     fx: createProxyFxGateway(http),
+    store: storage.cacheStore,
+    clock,
+    connectivity: storage.connectivity,
+  });
+  return {
+    ...base,
+    marketData: cache.marketData,
+    fx: cache.fx,
     aiGateway: createProxyAiGateway(http),
+    cacheControl: cache.control,
   };
 }
 
 /** Use case-ek összeállítása. Tesztben bármelyik függőség felülírható. */
 export function createAppServices(
   env: PublicEnv,
-  overrides: Partial<AppDependencies> & { readonly fetchImpl?: ClientFetch } = {},
+  overrides: Partial<AppDependencies> & {
+    readonly fetchImpl?: ClientFetch;
+    /** PHASE 13: a helyi tárolók (tesztben memória vagy Node-SQLite). */
+    readonly storage?: LocalStorage;
+  } = {},
 ): AppServices {
   const clock = overrides.clock ?? systemClock;
-  const { fetchImpl, ...depOverrides } = overrides;
+  const { fetchImpl, storage, ...depOverrides } = overrides;
   const deps: AppDependencies = {
-    ...createDefaultDependencies(env, clock, fetchImpl),
+    ...createDefaultDependencies(env, clock, fetchImpl, storage),
+    // Saját (felülírt) marketData mellé nem tartozik a default cache vezérlője.
+    ...(depOverrides.marketData !== undefined ? { cacheControl: null } : {}),
     ...depOverrides,
   };
   const market = { marketData: deps.marketData, clock: deps.clock };
@@ -148,6 +193,25 @@ export function createAppServices(
     convertMoney,
     clock: deps.clock,
   });
+  const preferences = createPreferencesService({ repository: deps.preferencesRepository });
+  const backgroundRefresher =
+    deps.cacheControl === null
+      ? null
+      : createBackgroundRefresher({
+          control: deps.cacheControl,
+          marketData: deps.marketData,
+          clock: deps.clock,
+          connectivity: deps.connectivity,
+          targets: () =>
+            collectRefreshTargets({
+              portfolioRepository: deps.portfolioRepository,
+              watchlistRepository: deps.watchlistRepository,
+            }),
+          isEnabled: async () => {
+            const loaded = await preferences.load();
+            return (loaded.ok ? loaded.value : DEFAULT_PREFERENCES).refresh.refreshOnReconnect;
+          },
+        });
   return {
     getListingQuote,
     getSecurityListings: createGetSecurityListings(market),
@@ -182,5 +246,16 @@ export function createAppServices(
     evaluateStock: createEvaluateStock({ analyzeStockValuation }),
     evaluateEtf: createEvaluateEtf({ analyzeEtf }),
     explainAnalysis: createExplainAnalysis({ aiGateway: deps.aiGateway, clock: deps.clock }),
+    preferences,
+    watchlist: createWatchlistService({ repository: deps.watchlistRepository, clock: deps.clock }),
+    localData: createLocalDataService({
+      cache: deps.cacheControl,
+      backgroundRefresher,
+      portfolioRepository: deps.portfolioRepository,
+      watchlistRepository: deps.watchlistRepository,
+      preferencesRepository: deps.preferencesRepository,
+      clock: deps.clock,
+      persistent: deps.persistentStorage,
+    }),
   };
 }

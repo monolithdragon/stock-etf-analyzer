@@ -1,13 +1,14 @@
 /**
  * Use case-ek: ártörténet, instrumentum-profil, osztalék, keresés (PHASE 04B).
  *
- * Kézi frissítés és frissesség (PHASE 04 feladat 10.): minden hívás friss lekérés (cache a
- * PHASE 13-ban). A kimenet provenance-e hordozza a forrást, a `fetchedAt`-ot és az `asOf`-ot;
+ * Kézi frissítés és frissesség (PHASE 04 feladat 10.): a cache-t (PHASE 13, D-082) a gateway-
+ * dekorátor kezeli, a use case nem tud róla. A kimenet provenance-e hordozza a forrást, a `fetchedAt`-ot és az `asOf`-ot;
  * a `freshness`-t a SAJÁT óránkkal számoljuk (nem bízzuk a forrásra). A UI ebből jelzi az
  * elavultságot és kínál „Frissítés” gombot – a frissítés egyszerűen a use case újrahívása.
  */
 import {
   assessFreshness,
+  capFreshnessForCache,
   ok,
   parseIsoDate,
   parseListingId,
@@ -88,10 +89,9 @@ export function createGetPriceHistory(deps: MarketDataDeps): GetPriceHistory {
       adjustment: options.adjustment ?? 'SPLIT_DIVIDEND',
     });
     if (!series.ok) return series;
-    const freshness = assessFreshness(
-      series.value.provenance.asOf,
-      now,
-      PRICE_HISTORY_FRESHNESS_POLICY,
+    const freshness = capFreshnessForCache(
+      assessFreshness(series.value.provenance.asOf, now, PRICE_HISTORY_FRESHNESS_POLICY),
+      series.value.provenance.cache,
     );
     return ok({ ...series.value, provenance: { ...series.value.provenance, freshness } });
   };

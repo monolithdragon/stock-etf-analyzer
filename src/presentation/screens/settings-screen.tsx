@@ -1,5 +1,6 @@
 /**
- * Beállítások (PHASE 12): bázispénznem, téma, AI-magyarázat, adatforrás-konfiguráció.
+ * Beállítások (PHASE 12; PHASE 13: tartós, + frissítési preferencia és „Helyi adatok”):
+ * bázispénznem, téma, AI-magyarázat, frissítés, helyi adatok (cache, export, törlés), adatforrás.
  *
  * Az adatforrás (mock/live, proxy URL) build-időben dől el (`EXPO_PUBLIC_*`), titkot nem
  * tartalmaz; itt csak megjelenik, és leírjuk, hogyan változtatható. Szolgáltatói API-kulcs
@@ -16,6 +17,7 @@ import {
   Screen,
   SecondaryButton,
 } from '@/presentation/components';
+import { useAppServices } from '@/presentation/di/app-services-context';
 import {
   BASE_CURRENCIES,
   useSettings,
@@ -23,6 +25,8 @@ import {
 } from '@/presentation/state/settings-context';
 import { strings } from '@/presentation/strings/hu';
 import { useTheme, type ThemePreference } from '@/presentation/theme';
+
+import { LocalDataCard } from './local-data-card';
 
 export interface SettingsScreenProps {
   readonly dataMode: 'mock' | 'live';
@@ -32,10 +36,16 @@ export interface SettingsScreenProps {
 
 export function SettingsScreen({ dataMode, apiBaseUrl, configIssues }: SettingsScreenProps) {
   const theme = useTheme();
-  const { settings, updateSettings } = useSettings();
+  const services = useAppServices();
+  const { settings, updateSettings, persistence } = useSettings();
 
   return (
     <Screen testID="settings-screen">
+      {persistence.status === 'error' && (
+        <AppText tone="negative" accessibilityLiveRegion="polite">
+          {`${strings.settings.saveError}: ${persistence.message}`}
+        </AppText>
+      )}
       <Card title={strings.settings.baseCurrencyTitle} subtitle={strings.settings.baseCurrencyHint}>
         <ChoiceGroup<BaseCurrency>
           label={strings.settings.baseCurrencyTitle}
@@ -80,6 +90,30 @@ export function SettingsScreen({ dataMode, apiBaseUrl, configIssues }: SettingsS
           {settings.llmEnabled ? strings.settings.aiOnNote : strings.settings.aiOffNote}
         </AppText>
       </Card>
+
+      <Card title={strings.settings.refreshTitle} subtitle={strings.settings.refreshHint}>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: theme.spacing.md,
+            minHeight: theme.minTouchTarget,
+          }}>
+          <AppText style={{ flexShrink: 1 }}>{strings.settings.refreshOnReconnect}</AppText>
+          <Switch
+            testID="refresh-on-reconnect-switch"
+            accessibilityLabel={strings.settings.refreshOnReconnect}
+            value={settings.refresh.refreshOnReconnect}
+            onValueChange={(refreshOnReconnect) =>
+              updateSettings({ refresh: { refreshOnReconnect } })
+            }
+            trackColor={{ true: theme.colors.primary, false: theme.colors.border }}
+          />
+        </View>
+      </Card>
+
+      <LocalDataCard persistent={services.localData.persistent} />
 
       <Card title={strings.settings.dataTitle} subtitle={strings.settings.dataHint}>
         <InfoRow

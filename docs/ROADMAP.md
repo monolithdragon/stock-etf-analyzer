@@ -20,8 +20,8 @@
 | 10 | Score és döntési engine | **KÉSZ** (2026-11-22) | **M3 Elemzőmotor kész ✅** |
 | 11 | AI-magyarázó engine | **KÉSZ** (2026-11-23) | |
 | 12 | UI/UX és navigáció | **KÉSZ** (2026-11-23) | |
-| 13 | Tárolás, cache, offline | **KÖVETKEZIK** | **M4 MVP** |
-| 14 | Compare, watchlist, screener, alerts | NEM KEZDŐDÖTT | |
+| 13 | Tárolás, cache, offline | **KÉSZ** (2026-11-24; eszközön nem ellenőrizve, KI-117) | **M4 MVP** (Jestben ✅, eszközön nyitott) |
+| 14 | Compare, watchlist, screener, alerts | **KÖVETKEZIK** | |
 | 15 | Integráció, QA, biztonság | NEM KEZDŐDÖTT | |
 | 16 | Release és dokumentáció | NEM KEZDŐDÖTT | **M5 v1.0 (személyes)** |
 
@@ -463,6 +463,17 @@ Minden fázis közös lezárása (CLAUDE.md):
   - A portfólió mentése és visszaolvasása tesztelt.
   - Nincs titok nem biztonságos helyen.
   - **Az MVP (REQUIREMENTS 3. M-01…M-15) végigkattintható.**
+- **Eredmény (2026-11-24): KÉSZ** – egy megszorítással: **eszközön nem futott** (KI-117), így az „M4 MVP végigkattintható” mérföldkő Jestben (valódi route-fa) igazolt, telefonon/emulátoron nem.
+  - **Tárolás (D-082, D-083):** `expo-sqlite` (portfólió, tranzakció, figyelőlista, cache; verziózott, tranzakciós migráció) + `expo-sqlite/kv-store` (beállítások, verziózott boríték, v1 → v2 migráció); weben memória. `expo-secure-store` nincs (a kliensnek nincs titka). Új csomagok: `expo-sqlite`, `expo-network`.
+  - **Cache:** `createMarketDataCache` gateway-dekorátor (a use case-ek változatlanok); 11 adatfajta saját TTL-lel; minden rekord provenance + érvényesség; contract-séma validáció visszaolvasáskor; kérés-összevonás.
+  - **Offline:** tartalék az eredeti `fetchedAt`-tal és forrással, legalább `STALE`; „Offline adat – elavult lehet · Utoljára frissítve” jelzés a legrégebbi adattal; cache nélkül őszinte hiba.
+  - **Kézi frissítés ≠ invalidálás ≠ háttér:** lehúzás = jelölés (tartalék marad); Beállítások → cache törlése; hálózat-visszatéréskor korlátozott háttérfrissítés (beállítható).
+  - **Adatkezelés:** export (JSON, saját adatok), teljes törlés kétlépcsős megerősítéssel, megőrzési szabályok (D-083).
+  - Ellenőrzés: `npm run check` exit 0; **1541/1541 teszt** (88 suite; +94); az új modulok 95,6% sor / 84,2% ág; `expo export` Android + web exit 0; titokszkennelés 0 találat.
+  - **Nem készült el (átütemezve, KNOWN_ISSUES):** proxy-cache (KI-114), holdings-fájl import (KI-74), ETF-metaadat űrlap (KI-101), fájlos export/import (KI-113), tőzsdei naptár (KI-110), offline keresés a lokális univerzumon (KI-119).
+- **A későbbi fázisok kapcsolódási pontjai (PHASE 13-ból):**
+  - PHASE 14 (watchlist/screener/alerts): a figyelőlista tartós (`services.watchlist`); a screener a `localData`/cache-elt adatokon futhat (offline is, jelölve); riasztáshoz a `createBackgroundRefresher` minta (ma csak előtérben, KI-115). Proxy-cache: ugyanazok a `CACHE_POLICIES`.
+  - PHASE 15 (QA/biztonság): eszközös ellenőrzés (repülőgép-mód, újraindítás), SQLCipher-döntés (KI-112), export/import fájlba (KI-113), `npm audit` az új csomagokra.
 
 ### PHASE 14 – Compare, watchlist, screener, alerts
 - **Cél:** a v1.0 kiegészítő eszközei, csak elérhető adaton.

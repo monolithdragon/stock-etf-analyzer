@@ -2,8 +2,8 @@ import type { PortfolioRepository } from '@/application';
 import { ok, type Portfolio, type PortfolioId, type Transaction } from '@/domain';
 
 /**
- * Memóriabeli portfólió-tároló: tesztekhez és a PHASE 13 (SQLite) előtti demóhoz.
- * FIGYELEM: az app újraindításakor az adatok elvesznek.
+ * Memóriabeli portfólió-tároló: tesztekhez és a weben (ahol nincs SQLite, D-082).
+ * FIGYELEM: az app újraindításakor az adatok elvesznek. Natív eszközön: `SqlitePortfolioRepository`.
  */
 export class InMemoryPortfolioRepository implements PortfolioRepository {
   private readonly portfolios = new Map<PortfolioId, Portfolio>();
@@ -32,6 +32,16 @@ export class InMemoryPortfolioRepository implements PortfolioRepository {
   async addTransaction(transaction: Transaction) {
     const list = this.transactions.get(transaction.portfolioId) ?? [];
     this.transactions.set(transaction.portfolioId, [...list, transaction]);
+    return ok(undefined);
+  }
+
+  async listPortfolios() {
+    return ok([...this.portfolios.values()]);
+  }
+
+  async deleteAll() {
+    this.portfolios.clear();
+    this.transactions.clear();
     return ok(undefined);
   }
 }

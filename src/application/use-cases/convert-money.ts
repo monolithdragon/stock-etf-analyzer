@@ -11,6 +11,7 @@
 import {
   AppErrors,
   assessFreshness,
+  capFreshnessForCache,
   convertMoney,
   err,
   ok,
@@ -77,7 +78,10 @@ export function createConvertMoney(deps: ConvertMoneyDeps): ConvertMoney {
     // Frissesség: legutóbbi rátánál a mostani időhöz, történetinél a kért naphoz mérjük.
     const reference = date === null ? now : new Date(`${date}T23:59:59Z`);
     const rate = conversion.value.rate;
-    const freshness = assessFreshness(rate.asOf, reference, policy);
+    const freshness = capFreshnessForCache(
+      assessFreshness(rate.asOf, reference, policy),
+      rate.provenance.cache,
+    );
     if (freshness === 'EXPIRED' || freshness === 'UNKNOWN') {
       return err(
         AppErrors.missingData(

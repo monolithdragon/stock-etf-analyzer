@@ -5,7 +5,7 @@
  *
  * Fő folyamat (elfogadási feltétel): ticker keresése → elemzés megnyitása.
  */
-import { fireEvent, renderRouter, screen, within } from 'expo-router/testing-library';
+import { fireEvent, renderRouter, screen, waitFor, within } from 'expo-router/testing-library';
 
 import { strings } from '@/presentation/strings/hu';
 import { palette } from '@/presentation/theme';
@@ -200,5 +200,83 @@ describe('figyelőlista, portfólió, beállítások', () => {
     await renderRouter(APP_DIR, { initialUrl: '/compare' });
 
     expect(screen.getByText(strings.compare.empty)).toBeOnTheScreen();
+  });
+});
+
+describe('PHASE 13: tartós tárolás (újraindítás után) és helyi adatok', () => {
+  // Két teljes app-renderelés tesztenként (újraindítás) → hosszabb korlát a hidegindítás miatt.
+  jest.setTimeout(20000);
+
+  it('a beállítás (sötét téma) az app újraindítása után is megmarad', async () => {
+    const first = await renderRouter(APP_DIR, { initialUrl: '/settings' });
+    await fireEvent.press(screen.getByRole('radio', { name: strings.settings.themeDark }));
+    expect(screen.getByRole('radio', { name: strings.settings.themeDark })).toBeChecked();
+    await first.unmount();
+
+    await renderRouter(APP_DIR, { initialUrl: '/settings' });
+    await waitFor(
+      () => expect(screen.getByRole('radio', { name: strings.settings.themeDark })).toBeChecked(),
+      WAIT,
+    );
+    expect(screen.getByTestId('settings-screen')).toHaveStyle({
+      backgroundColor: palette.dark.background,
+    });
+  });
+
+  it('a figyelőlista az app újraindítása után is megmarad (SQLite)', async () => {
+    const first = await renderRouter(APP_DIR, { initialUrl: '/stock/DEMO@XNAS' });
+    await screen.findByTestId('stock-screen', {}, WAIT);
+    await fireEvent.press(screen.getByRole('button', { name: strings.watchlist.add }));
+    // A mentés aszinkron (optimista UI): a mikrotaszkokat kiürítjük, hogy a tárolóba is bekerüljön
+    // az újraindítás előtt. (Itt hamis időzítők futnak – `setTimeout` nem használható.)
+    for (let i = 0; i < 50; i += 1) await Promise.resolve();
+    await first.unmount();
+
+    await renderRouter(APP_DIR, { initialUrl: '/watchlist' });
+    expect(await screen.findByText(/Demo Corp/, {}, WAIT)).toBeOnTheScreen();
+  });
+
+  it('a portfólió és a tranzakció az app újraindítása után is megmarad', async () => {
+    const first = await renderRouter(APP_DIR, { initialUrl: '/portfolio' });
+    await fireEvent.press(
+      await screen.findByRole('button', { name: strings.portfolio.create }, WAIT),
+    );
+    const form = await screen.findByTestId('add-transaction-form', {}, WAIT);
+    await fireEvent.changeText(
+      within(form).getByLabelText(strings.portfolio.listingIdLabel),
+      'DEMO@XNAS',
+    );
+    await fireEvent.changeText(within(form).getByLabelText(strings.portfolio.quantityLabel), '4');
+    await fireEvent.changeText(within(form).getByLabelText(strings.portfolio.priceLabel), '90');
+    await fireEvent.changeText(
+      within(form).getByLabelText(strings.portfolio.dateLabel),
+      '2026-11-02',
+    );
+    await fireEvent.press(within(form).getByRole('button', { name: strings.portfolio.record }));
+    expect(await screen.findByTestId('portfolio-summary', {}, WAIT)).toBeOnTheScreen();
+    await first.unmount();
+
+    await renderRouter(APP_DIR, { initialUrl: '/portfolio' });
+    expect(await screen.findByTestId('portfolio-summary', {}, WAIT)).toBeOnTheScreen();
+    expect(screen.queryByText(strings.portfolio.emptyTitle)).toBeNull();
+  });
+
+  it('Beállítások → export: a saját adatok JSON-ja megjelenik (titok és piaci adat nélkül)', async () => {
+    await renderRouter(APP_DIR, { initialUrl: '/settings' });
+    await fireEvent.press(screen.getByTestId('export-data'));
+    const json = await screen.findByTestId('export-json', {}, WAIT);
+    const text = String(json.props.children);
+    expect(JSON.parse(text)).toMatchObject({ format: 'stock-etf-analyzer.user-data', version: 1 });
+    expect(text).not.toMatch(/api[_-]?key|secret|token/i);
+  });
+
+  it('Beállítások → minden helyi adat törlése: kétlépcsős megerősítés, utána alapértékek', async () => {
+    await renderRouter(APP_DIR, { initialUrl: '/settings' });
+    await fireEvent.press(screen.getByRole('radio', { name: strings.settings.themeDark }));
+    await fireEvent.press(screen.getByTestId('delete-all'));
+    expect(screen.getByText(`⚠ ${strings.settings.deleteAllWarning}`)).toBeOnTheScreen();
+    await fireEvent.press(screen.getByTestId('delete-all-confirm'));
+    expect(await screen.findByText(strings.settings.deleteAllDone, {}, WAIT)).toBeOnTheScreen();
+    expect(screen.getByRole('radio', { name: strings.settings.themeSystem })).toBeChecked();
   });
 });

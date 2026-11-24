@@ -6,6 +6,7 @@
  */
 import {
   assessFreshness,
+  capFreshnessForCache,
   ok,
   parseListingId,
   validateFields,
@@ -49,7 +50,11 @@ export function createGetListingQuote(deps: GetListingQuoteDeps): GetListingQuot
     if (!quote.ok) return quote;
 
     // A frissességet MI számoljuk a saját óránkkal, nem bízzuk a forrásra.
-    const freshness = assessFreshness(quote.value.asOf, deps.clock.now(), policy);
+    // PHASE 13: offline tartalékból kiszolgált ár soha nem FRESH (D-082).
+    const freshness = capFreshnessForCache(
+      assessFreshness(quote.value.asOf, deps.clock.now(), policy),
+      quote.value.provenance.cache,
+    );
     return ok({ ...quote.value, provenance: { ...quote.value.provenance, freshness } });
   };
 }

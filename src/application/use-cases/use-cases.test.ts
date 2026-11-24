@@ -45,6 +45,8 @@ function fakeRepository(options: { failSave?: AppError } = {}) {
       saved.push(tx);
       return ok(undefined);
     },
+    listPortfolios: async () => ok([]),
+    deleteAll: async () => ok(undefined),
   };
   return { repository, saved };
 }

@@ -186,7 +186,7 @@ export const strings = {
     emptyTitle: 'Üres a figyelőlista',
     emptyMessage: 'Keress egy tickert, és add hozzá a figyelőlistához.',
     memoryNote:
-      'A figyelőlista jelenleg csak az app futása alatt marad meg (tartós tárolás: következő fázis). Árfolyamot nem tárol – megnyitáskor mindig friss lekérés történik.',
+      'A figyelőlista az eszközön tárolódik (újraindítás után is megmarad). Árfolyamot nem tárol: az elemzés megnyitásakor a gyorsítótárból (ha friss) vagy a hálózatról jön, a frissesség jelölésével.',
   },
   compare: {
     title: 'Összehasonlítás',
@@ -215,7 +215,33 @@ export const strings = {
     dataHowTo:
       'Módosítás: a projekt .env.local fájljában az EXPO_PUBLIC_DATA_MODE (mock | live) és az EXPO_PUBLIC_API_BASE_URL, majd az app újraindítása. Szolgáltatói API-kulcs SOHA nem kerül az appba – azt a proxy tartja.',
     memoryNote:
-      'A beállítások jelenleg csak az app futása alatt maradnak meg (tartós tárolás: következő fázis).',
+      'A beállítások az eszközön tárolódnak (újraindítás után is megmaradnak). Titkot (API-kulcsot) az app nem tárol – nincs is ilyen a kliensben.',
+    saveError: 'A beállítás nem menthető',
+    refreshTitle: 'Frissítés',
+    refreshHint:
+      'Megnyitáskor a friss gyorsítótár-adat látszik (kvótakímélés); lehúzással kézzel frissíthetsz.',
+    refreshOnReconnect:
+      'Hálózat visszatérésekor a figyelőlista és a portfólió árfolyamainak frissítése a háttérben',
+    localDataTitle: 'Helyi adatok',
+    localDataHint:
+      'Minden adat csak ezen az eszközön van (nincs felhő, nincs szinkron). Az OS eszköztitkosítása védi; app-szintű titkosítás nincs.',
+    persistentYes: 'Tartós tárolás: SQLite (az eszközön)',
+    persistentNo: 'Tartós tárolás: nincs (web előnézet – újraindításkor elvész)',
+    cacheEntries: 'Gyorsítótár-rekordok',
+    cacheOldest: 'Legrégebbi gyorsítótár-adat',
+    cacheNone: 'nincs gyorsítótár (demó mód vagy még üres)',
+    clearCache: 'Gyorsítótár törlése',
+    clearCacheDone: 'Gyorsítótár törölve',
+    exportButton: 'Saját adatok exportálása (JSON)',
+    exportHint:
+      'Portfólió, tranzakciók, figyelőlista, beállítások. Piaci adatot és titkot nem tartalmaz. Jelöld ki és másold a szöveget.',
+    deleteAll: 'Minden helyi adat törlése',
+    deleteAllConfirm: 'Igen, véglegesen törlöm',
+    deleteAllCancel: 'Mégse',
+    deleteAllWarning:
+      'Végleges: a portfólió, a tranzakciók, a figyelőlista, a beállítások és a gyorsítótár törlődik. Előtte érdemes exportálni.',
+    deleteAllDone: 'Minden helyi adat törölve.',
+    operationFailed: 'A művelet nem sikerült',
   },
   about: {
     title: 'A projektről',

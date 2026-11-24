@@ -3,10 +3,10 @@
 Mobilalkalmazás (Android / iOS) részvények, ETF-ek és saját portfólió **átlátható, forrásolt, reprodukálható** elemzésére.
 A számítás determinisztikus, az AI csak magyaráz. Saját használatra készül; **nem befektetési tanács**.
 
-> **Állapot (2026-11-23): PHASE 12 – UI/UX és navigáció kész.**
+> **Állapot (2026-11-24): PHASE 13 – tárolás, cache és offline kész** (eszközön még nem ellenőrizve).
 > Az app képernyőkkel használható: ticker keresése → részvény- vagy ETF-elemzés (score, döntés, DCF, források), portfólió (létrehozás, tranzakció, P/L, allokáció, kockázat), figyelőlista, beállítások.
-> **Korlátok:** az adatok (portfólió, figyelőlista, beállítások) még csak az app futása alatt maradnak meg (PHASE 13); alapból **demóadattal** fut; az új UI-t emulátoron még nem néztük meg (KI-100).
-> A teljes ütemterv: [docs/ROADMAP.md](docs/ROADMAP.md). A PHASE 12 kezdőbarát útmutatója: [docs/phases/phase-12-ui-ux-navigation.md](docs/phases/phase-12-ui-ux-navigation.md). Telepítés: [docs/phases/phase-02-project-setup.md](docs/phases/phase-02-project-setup.md).
+> **Korlátok:** az adatok (portfólió, figyelőlista, beállítások) PHASE 13-tól az eszközön tárolódnak (SQLite; weben csak memóriában); élő módban a letöltött piaci adat gyorsítótárba kerül és offline is látszik (jelölve); alapból **demóadattal** fut; az új UI-t és a tárolást emulátoron még nem néztük meg (KI-100, KI-117).
+> A teljes ütemterv: [docs/ROADMAP.md](docs/ROADMAP.md). A PHASE 13 kezdőbarát útmutatója: [docs/phases/phase-13-storage-cache-offline.md](docs/phases/phase-13-storage-cache-offline.md) (előző: [PHASE 12](docs/phases/phase-12-ui-ux-navigation.md)). Telepítés: [docs/phases/phase-02-project-setup.md](docs/phases/phase-02-project-setup.md).
 
 ## Technológia
 
@@ -129,7 +129,7 @@ Részletes, kezdőbarát leírás: [docs/phases/phase-04-data-sources-currency.m
 | Részvényelemzés | `/stock/TICKER@MIC` | ár és alapadatok, értékeltség, növekedés, jövedelmezőség, mérleg, cash flow, DCF, kockázat, score és döntés, magyarázat, adatminőség |
 | ETF-elemzés | `/etf/TICKER@MIC` | alapadatok, TER/AUM, benchmark, holdings, országok, szektorok, stílus, osztalék, követés, kockázat, hozam, magyarázat |
 | Portfólió | `/portfolio` (fül) | összérték, P/L (bázis és natív), allokáció, devizakitettség, koncentráció, ETF-átfedés, kockázat, magyarázat (beleegyezéssel), tranzakció-űrlap |
-| Figyelőlista | `/watchlist` (fül) | mentett instrumentumok (csak memóriában) |
+| Figyelőlista | `/watchlist` (fül) | mentett instrumentumok (tartósan, az eszközön) |
 | Összehasonlítás | `/compare` | előnézet (teljes funkció: PHASE 14) |
 | Beállítások | `/settings` (fül) | bázispénznem, téma, AI-gomb be/ki, adatforrás |
 
@@ -155,7 +155,7 @@ stock-etf-analyzer/
    ├─ domain/                 üzleti fogalmak és szabályok (tiszta TypeScript)
    ├─ contracts/              a szerverrel közös adatszerződés (zod sémák)
    ├─ application/            use case-ek (műveletek) és portok (interfészek)
-   ├─ infrastructure/         portok megvalósítása (proxy-kliens, demóadat, memória)
+   ├─ infrastructure/         portok megvalósítása (proxy-kliens, demóadat, SQLite-/kv-tárolók, memória)
    ├─ calculations/           tiszta pénzügyi képletek (DCF, hozam, kockázat …)
    ├─ scoring/                score- és döntési motor
    ├─ explanation/            szabályalapú magyarázat

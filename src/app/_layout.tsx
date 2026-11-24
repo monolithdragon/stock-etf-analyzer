@@ -1,6 +1,6 @@
 import { Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 import { createAppServices } from '@/config/container';
 import { publicEnvResult } from '@/config/env';
@@ -42,6 +42,9 @@ function ThemedStack(): ReactNode {
 export default function RootLayout() {
   // Egyszer jön létre az app élettartama alatt (a useState inicializáló csak az első rendernél fut).
   const [services] = useState(() => createAppServices(publicEnvResult.env));
+
+  // PHASE 13: háttérfrissítés hálózat-visszatéréskor (ha a beállítás engedi) + cache-takarítás.
+  useEffect(() => services.localData.startBackgroundRefresh(), [services]);
 
   return (
     <AppServicesProvider services={services}>

@@ -1,37 +1,49 @@
 /**
- * Felhasználói beállítások (PHASE 12).
+ * Felhasználói beállítások (PHASE 12 → PHASE 13: tartós).
  *
- * MVP: memóriában (az app újraindításakor visszaáll az alapértékre). A tartós tárolás
- * (kv-store) a PHASE 13 feladata – a hook-interfész ettől nem változik (KI-97).
+ * A hook-interfész (`useSettings`) nem változott. PHASE 13 (D-083): induláskor a mentett
+ * beállítások betöltődnek (`services.preferences.load`), minden módosítás azonnal mentődik.
+ * Betöltés előtt az alapértékek látszanak; ha a felhasználó a betöltés befejezése ELŐTT
+ * módosít, az ő választása marad (a késve érkező mentett érték nem írja felül).
  */
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 
-import { ThemePreferenceContext, type ThemePreference } from '@/presentation/theme';
+import {
+  BASE_CURRENCIES,
+  DEFAULT_PREFERENCES,
+  type BaseCurrency,
+  type UserPreferences,
+} from '@/application';
+import { useAppServices } from '@/presentation/di/app-services-context';
+import { ThemePreferenceContext } from '@/presentation/theme';
 
-/** A választható bázispénznemek (az ECB-referenciaárfolyamok közül, D-017). */
-export const BASE_CURRENCIES = ['HUF', 'EUR', 'USD'] as const;
-export type BaseCurrency = (typeof BASE_CURRENCIES)[number];
+export { BASE_CURRENCIES, type BaseCurrency };
 
-export interface AppSettings {
-  /** Portfólió és átváltott összegek pénzneme. */
-  readonly baseCurrency: BaseCurrency;
-  readonly themePreference: ThemePreference;
-  /**
-   * Megjelenjen-e az „AI-magyarázat kérése” gomb. Alapból KI: az LLM-hívás költséges és
-   * adatot küld külső szolgáltatónak (D-078). A szerveren külön is kikapcsolható (kill switch).
-   */
-  readonly llmEnabled: boolean;
-}
+/** A UI beállítás-modellje = az alkalmazási réteg `UserPreferences`-e (egy igazságforrás). */
+export type AppSettings = UserPreferences;
 
-export const DEFAULT_SETTINGS: AppSettings = {
-  baseCurrency: 'HUF',
-  themePreference: 'system',
-  llmEnabled: false,
-};
+export const DEFAULT_SETTINGS: AppSettings = DEFAULT_PREFERENCES;
+
+export type SettingsPersistence =
+  | { readonly status: 'loading' }
+  | { readonly status: 'ready' }
+  | { readonly status: 'error'; readonly message: string };
 
 interface SettingsContextValue {
   readonly settings: AppSettings;
   readonly updateSettings: (patch: Partial<AppSettings>) => void;
+  /** A tárolás állapota (pl. mentési hiba jelzéséhez a Beállításokban). */
+  readonly persistence: SettingsPersistence;
+  /** Teljes törlés után: alapértékek MENTÉS NÉLKÜL (a tároló üres marad). */
+  readonly resetToDefaults: () => void;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -43,13 +55,54 @@ export function SettingsProvider({
   readonly initial?: AppSettings;
   readonly children: ReactNode;
 }) {
+  const services = useAppServices();
   const [settings, setSettings] = useState<AppSettings>(initial);
+  const [persistence, setPersistence] = useState<SettingsPersistence>({ status: 'loading' });
+  const touched = useRef(false);
+
+  useEffect(() => {
+    let active = true;
+    services.preferences
+      .load()
+      .then((loaded) => {
+        if (!active) return;
+        if (loaded.ok) {
+          if (!touched.current) setSettings(loaded.value);
+          setPersistence({ status: 'ready' });
+        } else {
+          setPersistence({ status: 'error', message: loaded.error.message });
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [services]);
+
   const value = useMemo<SettingsContextValue>(
     () => ({
       settings,
-      updateSettings: (patch) => setSettings((current) => ({ ...current, ...patch })),
+      persistence,
+      resetToDefaults: () => {
+        touched.current = true;
+        setSettings(DEFAULT_SETTINGS);
+      },
+      updateSettings: (patch) => {
+        touched.current = true;
+        // A `settings` a memo függősége, így itt mindig a legutóbbi render értéke.
+        const next = { ...settings, ...patch };
+        setSettings(next);
+        services.preferences
+          .save(next)
+          .then((saved) =>
+            setPersistence(
+              saved.ok ? { status: 'ready' } : { status: 'error', message: saved.error.message },
+            ),
+          )
+          .catch(() => undefined);
+      },
     }),
-    [settings],
+    [settings, persistence, services],
   );
   return (
     <SettingsContext.Provider value={value}>

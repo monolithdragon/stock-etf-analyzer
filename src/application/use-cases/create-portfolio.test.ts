@@ -17,6 +17,8 @@ function memoryRepository(options: { failSave?: boolean } = {}) {
     },
     listTransactions: async () => ok([]),
     addTransaction: async () => ok(undefined),
+    listPortfolios: async () => ok([...store.values()]),
+    deleteAll: async () => ok(undefined),
   };
   return { repository, store };
 }

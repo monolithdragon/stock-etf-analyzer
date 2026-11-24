@@ -28,6 +28,7 @@ import {
 } from '@/presentation/components';
 import { useAppServices } from '@/presentation/di/app-services-context';
 import { useAsyncResult } from '@/presentation/hooks/use-async-result';
+import { useDataStatus } from '@/presentation/hooks/use-data-status';
 import { stockHref } from '@/presentation/navigation';
 import { useSettings } from '@/presentation/state/settings-context';
 import { strings } from '@/presentation/strings/hu';
@@ -66,6 +67,12 @@ export function EtfAnalysisScreen({ listingId }: { readonly listingId: string })
     () => services.evaluateEtf(listingId, { analysis: { displayCurrency: settings.baseCurrency } }),
     [services, listingId, settings.baseCurrency],
   );
+  // PHASE 13: lehúzás/újrapróbálás = KÉZI frissítés (a cache-t megkerüli, a tartalék marad).
+  const { notices: dataNotices, manualRefresh } = useDataStatus(
+    [listingId],
+    state.status === 'success' ? state : null,
+    reload,
+  );
 
   const model = useMemo(
     () => (state.status === 'success' ? buildEtfViewModel(state.data) : null),
@@ -90,8 +97,8 @@ export function EtfAnalysisScreen({ listingId }: { readonly listingId: string })
   }
   if (state.status === 'error' || model === null) {
     return (
-      <Screen onRefresh={reload}>
-        {state.status === 'error' && <ErrorState error={state.error} onRetry={reload} />}
+      <Screen onRefresh={manualRefresh}>
+        {state.status === 'error' && <ErrorState error={state.error} onRetry={manualRefresh} />}
         {state.status === 'error' && state.error.kind === 'VALIDATION' && (
           <SecondaryButton
             label={strings.etf.openAsStock}
@@ -106,7 +113,7 @@ export function EtfAnalysisScreen({ listingId }: { readonly listingId: string })
   const sectionsAfter = model.sections.filter((s) => s.id === 'risk' || s.id === 'performance');
 
   return (
-    <Screen onRefresh={reload} refreshing={refreshing} testID="etf-screen">
+    <Screen onRefresh={manualRefresh} refreshing={refreshing} testID="etf-screen">
       <AnalysisHeader
         title={model.header.title}
         subtitle={model.header.subtitle}
@@ -124,7 +131,7 @@ export function EtfAnalysisScreen({ listingId }: { readonly listingId: string })
           ]}
         />
       )}
-      <DataNotices notices={model.notices} />
+      <DataNotices notices={[...dataNotices, ...model.notices]} />
       <WatchlistToggle listingId={listingId} name={model.header.title} kind="etf" />
       <DecisionCard model={model.evaluation} />
 

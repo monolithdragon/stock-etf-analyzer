@@ -27,6 +27,7 @@ import {
 } from '@/presentation/components';
 import { useAppServices } from '@/presentation/di/app-services-context';
 import { useAsyncResult } from '@/presentation/hooks/use-async-result';
+import { useDataStatus } from '@/presentation/hooks/use-data-status';
 import { useSettings } from '@/presentation/state/settings-context';
 import { strings } from '@/presentation/strings/hu';
 import { useTheme } from '@/presentation/theme';
@@ -74,6 +75,17 @@ export function PortfolioScreen() {
     () => services.analyzePortfolio(MAIN_PORTFOLIO_ID, { history: { enabled: withHistory } }),
     [services, withHistory],
   );
+  const listingIds = useMemo(
+    () => (state.status === 'success' ? state.data.positions.map((p) => p.listingId) : []),
+    [state],
+  );
+  // PHASE 13: az árfolyamok cache-ből/offline tartalékból is jöhetnek – az időpont mindig látszik.
+  // A portfólió (tranzakciók) teljesen lokális; a lehúzás az árfolyamokat frissíti (kézi frissítés).
+  const { notices: dataNotices, manualRefresh } = useDataStatus(
+    listingIds,
+    state.status === 'success' ? state : null,
+    reload,
+  );
   const model = useMemo(
     () => (state.status === 'success' ? buildPortfolioViewModel(state.data) : null),
     [state],
@@ -112,8 +124,8 @@ export function PortfolioScreen() {
       );
     }
     return (
-      <Screen onRefresh={reload}>
-        <ErrorState error={state.error} onRetry={reload} />
+      <Screen onRefresh={manualRefresh}>
+        <ErrorState error={state.error} onRetry={manualRefresh} />
       </Screen>
     );
   }
@@ -121,12 +133,12 @@ export function PortfolioScreen() {
 
   const hasPositions = model.positions.length > 0;
   return (
-    <Screen onRefresh={reload} refreshing={refreshing} testID="portfolio-screen">
+    <Screen onRefresh={manualRefresh} refreshing={refreshing} testID="portfolio-screen">
       <AppText variant="title" accessibilityRole="header">
         {model.header.title}
       </AppText>
       <AppText tone="textSecondary">{`${strings.portfolio.baseCurrencyLabel}: ${model.header.baseCurrency}`}</AppText>
-      <DataNotices notices={model.notices} />
+      <DataNotices notices={[...dataNotices, ...model.notices]} />
 
       {!hasPositions ? (
         <EmptyState title={strings.portfolio.noTxTitle} message={strings.portfolio.noTxMessage} />

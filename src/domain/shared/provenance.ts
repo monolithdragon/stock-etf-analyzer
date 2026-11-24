@@ -54,6 +54,36 @@ export interface DataProvenance {
   readonly reference?: string;
   /** Számított értéknél a felhasznált bemenetek azonosítói. */
   readonly inputs?: readonly string[];
+  /**
+   * PHASE 13 (D-082): ha az érték az eszköz gyorsítótárából (cache) jön, nem közvetlenül a
+   * hálózatról. Hiánya = friss hálózati válasz (vagy demóadat). A `fetchedAt` ilyenkor is az
+   * EREDETI lekérés ideje marad – a cache soha nem „frissíti fel” az időbélyeget.
+   */
+  readonly cache?: CacheServeInfo;
+}
+
+/**
+ * Hogyan szolgálta ki a cache az értéket (PHASE 13, D-082).
+ * - `cache_hit`: a rekord a saját TTL-jén belül van, hálózati kérés nem kellett;
+ * - `offline_fallback`: a hálózat nem volt elérhető (vagy a kérés átmeneti hibával bukott),
+ *   ezért egy korábban letöltött – lehet, hogy elavult – rekordot mutatunk.
+ */
+export interface CacheServeInfo {
+  readonly mode: 'cache_hit' | 'offline_fallback';
+  /** Mikor került a rekord a cache-be (≈ az eredeti lekérés ideje). */
+  readonly storedAt: IsoTimestamp;
+}
+
+/**
+ * Offline tartalékból kiszolgált érték SOHA nem lehet `FRESH` (PHASE 13 elfogadási feltétel):
+ * nem tudjuk, van-e már újabb adat. A többi frissesség változatlan (a rosszabb marad).
+ */
+export function capFreshnessForCache(
+  freshness: Freshness,
+  cache: CacheServeInfo | undefined,
+): Freshness {
+  if (cache?.mode === 'offline_fallback' && freshness === 'FRESH') return 'STALE';
+  return freshness;
 }
 
 export interface FreshnessPolicy {

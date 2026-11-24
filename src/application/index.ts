@@ -24,6 +24,11 @@ import type {
   GetFinancialStatements,
   GetSecurityListings,
 } from './use-cases/get-market-reference-data';
+import type {
+  LocalDataService,
+  PreferencesService,
+  WatchlistService,
+} from './use-cases/local-data';
 import type { RecordTransaction } from './use-cases/record-transaction';
 
 export type * from './ports';
@@ -74,6 +79,21 @@ export {
   formatAiDisplay,
   type InstrumentAiInputOptions,
 } from './explanation/build-ai-input';
+export * from './cache/cache-policy';
+export * from './cache/types';
+export { cacheKeys } from './cache/cache-keys';
+export {
+  cacheFreshness,
+  createMarketDataCache,
+  isTransientForCache,
+  type CacheControl,
+  type MarketDataCache,
+  type MarketDataCacheDeps,
+} from './cache/market-data-cache';
+export * from './cache/background-refresh';
+export * from './preferences/user-preferences';
+export * from './watchlist/types';
+export * from './use-cases/local-data';
 
 /** A UI számára elérhető szolgáltatások – a composition root (`src/config/container.ts`) állítja elő. */
 export interface AppServices {
@@ -107,4 +127,10 @@ export interface AppServices {
    * át LLM is – hibánál a szabályalapú marad megjelenítve.
    */
   readonly explainAnalysis: ExplainAnalysis;
+  /** PHASE 13: tartós beállítások (kv-store). */
+  readonly preferences: PreferencesService;
+  /** PHASE 13: tartós figyelőlista (SQLite). */
+  readonly watchlist: WatchlistService;
+  /** PHASE 13: cache-állapot, kézi frissítés, invalidálás, export, törlés, háttérfrissítés. */
+  readonly localData: LocalDataService;
 }

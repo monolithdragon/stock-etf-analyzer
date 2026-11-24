@@ -27,6 +27,7 @@ import {
 } from '@/presentation/components';
 import { useAppServices } from '@/presentation/di/app-services-context';
 import { useAsyncResult } from '@/presentation/hooks/use-async-result';
+import { useDataStatus } from '@/presentation/hooks/use-data-status';
 import { etfHref } from '@/presentation/navigation';
 import { strings } from '@/presentation/strings/hu';
 import { useTheme } from '@/presentation/theme';
@@ -122,6 +123,12 @@ export function StockAnalysisScreen({ listingId }: { readonly listingId: string 
     () => services.evaluateStock(listingId),
     [services, listingId],
   );
+  // PHASE 13: lehúzás/újrapróbálás = KÉZI frissítés (a cache-t megkerüli, a tartalék marad).
+  const { notices: dataNotices, manualRefresh } = useDataStatus(
+    [listingId],
+    state.status === 'success' ? state : null,
+    reload,
+  );
 
   const model = useMemo(
     () => (state.status === 'success' ? buildStockViewModel(state.data) : null),
@@ -148,8 +155,8 @@ export function StockAnalysisScreen({ listingId }: { readonly listingId: string 
   const error = state.status === 'error' ? state.error : (model?.blockingError ?? null);
   if (error !== null || model === null) {
     return (
-      <Screen onRefresh={reload}>
-        {error !== null && <ErrorState error={error} onRetry={reload} />}
+      <Screen onRefresh={manualRefresh}>
+        {error !== null && <ErrorState error={error} onRetry={manualRefresh} />}
         {error !== null && error.kind === 'VALIDATION' && (
           <SecondaryButton
             label={strings.stock.openAsEtf}
@@ -161,7 +168,7 @@ export function StockAnalysisScreen({ listingId }: { readonly listingId: string 
   }
 
   return (
-    <Screen onRefresh={reload} refreshing={refreshing} testID="stock-screen">
+    <Screen onRefresh={manualRefresh} refreshing={refreshing} testID="stock-screen">
       <AnalysisHeader
         title={model.header.title}
         subtitle={model.header.subtitle}
@@ -181,7 +188,7 @@ export function StockAnalysisScreen({ listingId }: { readonly listingId: string 
           ]}
         />
       )}
-      <DataNotices notices={model.notices} />
+      <DataNotices notices={[...dataNotices, ...model.notices]} />
       <WatchlistToggle listingId={listingId} name={model.header.title} kind="stock" />
       <DecisionCard model={model.evaluation} />
 
