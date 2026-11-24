@@ -36,7 +36,7 @@ Mobilalkalmazás (Expo SDK 58, React Native, TypeScript) részvények, ETF-ek é
 | **AI-magyarázat** | **Kész** (PHASE 11, D-076…D-078): szigorú `AiInputDto` hivatkozható `ref`-ekkel; strukturált, validált kimenet `basedOn`-nal; tartalmi őr (hivatkozás, számvisszakeresés, tiltott állítás, confidence) a szerveren és a kliensen; **`template` provider** (új réteg: `src/explanation`; ingyenes, offline, alapértelmezés); `explainAnalysis` (LLM-hibánál a template marad); `POST /api/v1/ai/explain`: `mock` és `anthropic` provider (hivatalos SDK 1.12.0), kill switch, napi keret, cache, timeout; részvény-, ETF- és portfólió-sablon; portfólió csak beleegyezéssel és összegek nélkül. **Az LLM alapból ki van kapcsolva; élő Claude-hívás nem volt (nincs kulcs).** UI nincs (PHASE 12). |
 | **Compare, watchlist, screener, alerts** | **Kész** (PHASE 14, D-085…D-088): közös `InstrumentSnapshot` a meglévő értékelésekből (`src/application/insights/`); összehasonlítás csak összehasonlítható mutatókkal (típus, pénznem, hozam-alap, ablak, score-rendszer; kizártak okkal), részvény–ETF kitettség; ETF-átfedés kompatibilis (≤ 31 nap) holdings-dátumokra, dupla számolás nélkül; figyelőlista ár/napi változás/frissesség + kérésre score és értékelés; screener 8 kategóriával a lokális univerzumon, feltételenkénti bizonyítékkal; riasztás (ár, MOS, P/E, TER) SQLite-ban, **csak alkalmazáson belül** – push/háttér nincs (Expo docs alapján dokumentálva). Holdings a valós appban ma nincs (KI-123). Eszközön nem futott (KI-129). |
 | **Tárolás, cache, offline** | **Kész** (PHASE 13, D-082…D-084): natívon `expo-sqlite` (portfólió, tranzakció, figyelőlista, piaci adat cache; verziózott migráció) + kv-store (beállítások, v1→v2 migráció); weben memória. Eszköz-cache 11 adatfajtával, saját TTL-lel, provenance-szel; offline tartalék legalább `STALE`, „Utoljára frissítve” jelzés; kézi frissítés ≠ invalidálás ≠ háttérfrissítés; export (JSON) és teljes törlés. Titok a kliensen nincs (`expo-secure-store` nem kell). **Proxy-cache nincs** (KI-114). Eszközön nem futott (KI-117). |
-| Git | `main`-en a PHASE 13 merge (`9385f7e`, PR #8; a PHASE 12 is benne); a PHASE 14 a **`phase-14`** branchen (a `main`-ből), **commit nélkül** – commit/push/PR: a tulajdonos dönt |
+| Git | `main`-en a PHASE 13 merge (`9385f7e`, PR #8; a PHASE 12 is benne); a PHASE 14 a **`phase-14`** branchen (a `main`-ből) **commitolva** (`27a1144`); push/PR/merge: a tulajdonos dönt |
 
 Fázisonkénti állapot: [ROADMAP.md](ROADMAP.md).
 
@@ -157,7 +157,7 @@ Teljes lista: [DECISIONS.md](DECISIONS.md).
 | (04A) | A SEC User-Agent kapcsolattartó e-mailjét a tulajdonos a `.env.local`-ba írta |
 
 ## Nyitott kérdések
-- **Commit (PHASE 14):** a munka a `phase-14` branchen van, commit nélkül; a commit, push, PR és merge a tulajdonos döntése.
+- **Commit (PHASE 14):** tulajdonosi kérésre commitolva a `phase-14` branchen (`27a1144`); a push, a PR és a merge a tulajdonos döntése.
 - **Ellentmondás-javítás:** a PHASE 13 végi PROJECT_STATE szerint a PHASE 12/13 PR-ja még nyitott volt; a PHASE 14 indulásakor a `main` már tartalmazta a PHASE 13 merge-öt (PR #8, `9385f7e`).
 - **Értesítések (D-088):** kell-e helyi értesítés (Expo Go-ban működik, engedélykéréssel) vagy valódi push (development build + backend)? Ma egyik sincs.
 - **Holdings-adat (KI-123):** holdings-fájl import vagy kézi űrlap legyen az első adatbővítés? Nélküle az ETF-átfedés a valós appban nem számolható.

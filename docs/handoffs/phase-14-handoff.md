@@ -55,7 +55,7 @@ Részletek: [../KNOWN_ISSUES.md](../KNOWN_ISSUES.md), „PHASE 14” szakasz.
 - **Átütemezve a PHASE 14-ből:** proxy-cache (KI-114), holdings-import (KI-74), ETF-metaadat űrlap (KI-101), több portfólió (KI-105), KI-106, KI-91, KI-102, KI-98, KI-108.
 
 ## 6. Nyitott kérdések (a tulajdonos dönt)
-- **Commit:** a munka a `phase-14` branchen van, **commit nélkül**. Javasolt commit-üzenet:
+- **Commit:** tulajdonosi kérésre commitolva a `phase-14` branchen (`27a1144`); a push, a PR és a merge a tulajdonos döntése. Commit-üzenet:
   `feat: PHASE 14 – összehasonlítás, figyelőlista, screener és riasztások (közös pillanatkép a meglévő értékelésekből, csak összehasonlítható mutatók, ETF-átfedés kompatibilis holdings-dátumokra, szabályalapú screener bizonyítékkal, alkalmazáson belüli riasztás SQLite-ban, push nélkül)`
 - **Értesítés:** kell-e helyi értesítés (Expo Go-ban működik) vagy valódi push (development build + backend)? (D-088 bővítési út.)
 - **Holdings-adat:** fájlimport (D-071) vagy kézi űrlap legyen az első? Ez nyitja meg az ETF-átfedést a valós appban.
