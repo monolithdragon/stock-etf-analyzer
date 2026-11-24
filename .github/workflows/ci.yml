@@ -1,0 +1,51 @@
+# Minimális ellenőrzési workflow (PHASE 15, D-089).
+# Ugyanazokat a parancsokat futtatja, mint a helyi `npm run check`, tiszta checkouton.
+# Titkot NEM használ és nem is igényel: a tesztek hálózat, API-kulcs és élő LLM nélkül futnak
+# (mock szolgáltató, rögzített fixture-ök). Ne adj hozzá `secrets.*` hivatkozást.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Legkisebb jogosultság: csak olvasás.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # A helyi ellenőrzés Node 26-tal készült (package.json engines: ^22.13 || ^24.3 || >=26).
+          node-version: 26
+          cache: npm
+
+      - name: Függőségek telepítése (lockfile alapján)
+        run: npm ci
+
+      - name: TypeScript typecheck
+        run: npm run typecheck
+
+      - name: Lint (0 figyelmeztetés)
+        run: npm run lint
+
+      - name: Formázás (Prettier)
+        run: npm run format:check
+
+      - name: Unit + integrációs + E2E (Jest)
+        run: npx jest --ci
+
+      # A 22 közepes (moderate) lelet a build/teszt eszközláncban van (QA_REPORT, SECURITY.md);
+      # magas vagy kritikus lelet a futásidejű függőségekben a buildet megállítja.
+      - name: Függőség-audit (futásidejű, high+)
+        run: npm audit --omit=dev --audit-level=high

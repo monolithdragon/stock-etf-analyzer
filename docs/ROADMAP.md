@@ -516,6 +516,16 @@ Minden fázis közös lezárása (CLAUDE.md):
 - **Kimenet:** `docs/QA_REPORT.md`, `docs/SECURITY.md`.
 - **Függ:** 14.
 - **Befejezési feltétel:** nincs hamis PASS; minden kihagyott teszt BLOCKED/NOT RUN indokkal.
+- **Eredmény (2026-11-24): KÉSZ** – részletek: [QA_REPORT.md](QA_REPORT.md), [SECURITY.md](SECURITY.md); D-089…D-091.
+  - `npm run check` exit 0, **1699/1699** teszt (98 suite, +71); tiszta checkouton (`.env.local`/`.expo` nélkül) is zöld.
+  - **E2E** (`e2e-business-flows`): élő mód, valódi HTTP-kliens és proxy-handlerek – részvény, ETF, portfólió + hibautak (429, hoszt-HTML, invalid JSON, offline, AI-kiesés) + „nincs duplikált lekérés”.
+  - **Képlet-ellenőrzőlista** (`formula-checklist`, 36 pont): a DATA_DICTIONARY 5. fejezete és a kód között eltérés nincs.
+  - **Javítások:** hoszt nem-JSON 429/5xx helyes leképezése (D-090); AI-kérés méretkorlát a beolvasás előtt (D-091); kliens HTTP-réteg 100% lefedve.
+  - **Biztonság:** git-történet, fa és Android bundle értékvak szkennelése 0 találat; `npm audit` 0 high/critical (22 moderate az eszközláncban, KI-133); napló adatmentes; prompt injection többrétegű védelem felülvizsgálva.
+  - **CI:** `.github/workflows/ci.yml` (D-089) – GitHubon még nem futott (KI-134).
+  - **Eszköz:** Android emulátoron fut (demó mód), 4 képernyő + tartós figyelőlista force-stop után igazolva – **PARTIAL** (KI-132). **Maestro: BLOCKED** (nincs telepítve).
+  - **NOT RUN:** élő szolgáltatói és élő LLM-hívás (kvóta/költség/tulajdonosi döntés); iOS.
+- **A PHASE 16 kapcsolódási pontjai (PHASE 15-ből):** proxy-telepítés + visszaélés elleni döntés (KI-135); a CI első futása (KI-134); eszközös kézi lista (KI-132) és esetleg Maestro-flow a release-ellenőrzéshez; `ANDROID_HOME` beállítása (KI-136).
 
 ### PHASE 16 – Release és dokumentáció → **v1.0 (személyes)**
 - **Cél:** telepíthető build és teljes dokumentáció, őszinte státusszal.

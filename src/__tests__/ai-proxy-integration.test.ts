@@ -82,6 +82,15 @@ describe('POST /api/v1/ai/explain – handler', () => {
       post(JSON.stringify({ input: STOCK_DTO, consent: null, pad: 'x'.repeat(100_000) })),
       413,
     ],
+    [
+      'túl nagy Content-Length (a törzs beolvasása előtt)',
+      new Request(`${BASE}/api/v1/ai/explain`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': '5000000' },
+        body: '{}',
+      }),
+      413,
+    ],
   ])('%s → %s', async (_case, request, status) => {
     const provider = createMockAiProvider();
     const { server } = serverWith(provider);

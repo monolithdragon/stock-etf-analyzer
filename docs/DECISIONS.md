@@ -1123,3 +1123,24 @@ A tulajdonos válaszai:
   5. **Nincs** push, rendszerértesítés, háttér-ellenőrzés, és nincs új csomag (`expo-notifications`, `expo-background-task` nincs telepítve). A korlátok egy helyen: `ALERT_PLATFORM_LIMITATIONS` (UI + teszt).
 - **Bővítési út (külön döntéssel):** (a) helyi értesítés Expo Go-ban: `expo-notifications` + engedélykérés + kiértékelés az app előterében; (b) háttér-ellenőrzés: `expo-background-task` (nem garantált, ritka); (c) valódi push: development build (EAS), FCM/APNs kulcsok, szerveroldali ütemezett kiértékelő (proxy + tárolt szabályok → adatvédelmi és költségdöntés, O-03).
 - **Elvetett:** helyi értesítés ütemezése friss ár nélkül (félrevezető „riasztás” régi adaton); push „előkészítése” működés nélkül (nem dokumentált képességnek tűnne).
+
+## PHASE 15 – Integráció, QA, biztonság (2026-11-24)
+
+### D-089 – Minimális CI: GitHub Actions, ugyanaz a parancskészlet, mint a helyi `npm run check`
+- **Dátum:** 2026-11-24 · **Státusz:** Elfogadva (a GitHubon még nem futott – NOT RUN, lásd QA_REPORT)
+- **Döntés:** `.github/workflows/ci.yml` – push a `main`-re és minden PR: `npm ci` → typecheck → lint (`--max-warnings 0`) → Prettier → `jest --ci` → `npm audit --omit=dev --audit-level=high`. Node 26 (a helyi ellenőrzés környezete; az `engines` mező megengedi). `permissions: contents: read`, nincs `secrets.*` (a tesztek hálózat, kulcs és élő LLM nélkül futnak).
+- **Indok:** a fázisok eddig csak helyben ellenőriztek; a PR-merge előtt automatikus kapu kell. Tiszta checkouton (ideiglenes worktree, `.env.local`, `.expo/` és `expo-env.d.ts` nélkül) mind az öt lépés exit 0 – typed routes generálása nem kell.
+- **Audit-küszöb:** a 22 közepes lelet a build/teszt eszközláncban van (jest → glob/minimatch, `expo` → `@expo/fingerprint` → minimatch); a javasolt „fix” visszaminősítés (expo 52, jest 29) lenne. Ezért `high` a küszöb; a moderate leletek a SECURITY.md-ben követve.
+- **Elvetett:** EAS Build a CI-ban (PHASE 16, fiók kell); Maestro a CI-ban (nincs flow, emulátor kellene).
+
+### D-090 – A kliens HTTP-hibái a státusz szerint, ha a válasz nem a saját borítékunk
+- **Dátum:** 2026-11-24 · **Státusz:** Elfogadva
+- **Döntés:** `createProxyHttpClient`: ha a válasz nem JSON, vagy JSON, de nem a saját boríték (pl. az EAS Hosting / átjáró hibaoldala), és a HTTP-státusz ≥ 400: 429 → `RATE_LIMITED` (a `Retry-After` csak egész másodpercként, max. 1 nap; HTTP-dátum → `null`, nem találunk ki várakozást), 408/504 → `TIMEOUT`, egyéb → `UPSTREAM/HTTP_ERROR`. 2xx nem-JSON / sémasértés → marad `CONTRACT_MISMATCH`. A saját hiba-boríték elsőbbsége változatlan.
+- **Indok:** korábban a hoszt 429-e „A szerver válasza nem JSON” szerződéssértésként jelent meg, így a felhasználó nem tudta, hogy elég később próbálkozni, és az `isRetryable` sem ismerte fel.
+- **Következmény:** a `proxy-integration` 502-es tesztje szándékosan módosult (`HTTP_ERROR`); új 200-as nem-JSON eset őrzi a `CONTRACT_MISMATCH`-et.
+
+### D-091 – AI-végpont: méretkorlát a törzs beolvasása előtt
+- **Dátum:** 2026-11-24 · **Státusz:** Elfogadva
+- **Döntés:** a `POST /api/v1/ai/explain` a `Content-Length` fejléc alapján a törzs beolvasása ELŐTT 413-mal utasít el (`AI_LIMITS.requestBytes`); a beolvasás utáni hosszellenőrzés marad (fejléc nélküli / chunked kérésre).
+- **Indok:** a proxy nyilvános URL-en fut (a cím a bundle-ben van); nagy törzs ne foglaljon memóriát a validáció előtt. Olcsó, tesztelt.
+- **Nem része:** kliensazonosítás/IP-alapú limit (a proxynak nincs felhasználói hitelesítése – SECURITY.md R-S1, KI-23).
