@@ -5,7 +5,7 @@
 ## Blokkolók
 
 **Nincs blokkoló a PHASE 16 indításához.**
-- A PHASE 15 a `phase-15` branchen van, **commit nélkül** (a tulajdonos dönt).
+- A PHASE 15 a `phase-15` branchen van, commitolva (`7581ad6`); push/PR/merge: a tulajdonos dönt.
 - A PHASE 16 éles proxy-telepítése előtt döntés kell a nyilvános proxy védelméről (KI-135, SECURITY.md R-S1).
 
 ## PHASE 15 – ismert problémák és leletek (2026-11-24)

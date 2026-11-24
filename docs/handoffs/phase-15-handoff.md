@@ -51,7 +51,7 @@ Részletek: [../KNOWN_ISSUES.md](../KNOWN_ISSUES.md), „PHASE 15” szakasz.
 - Változatlan, más fázis hatóköre: KI-74/KI-123, KI-101, KI-114, KI-125, KI-122, KI-112, KI-113.
 
 ## 6. Nyitott kérdések (a tulajdonos dönt)
-- **Commit:** a PHASE 15 a `phase-15` branchen **commit nélkül**. Javasolt üzenet:
+- **Commit:** tulajdonosi kérésre commitolva a `phase-15` branchen (`7581ad6`); a push, a PR és a merge a tulajdonos döntése. Commit-üzenet:
   `feat: PHASE 15 – integráció, QA és biztonság (E2E üzleti folyamatok, képlet-ellenőrzőlista, hoszt-429/5xx helyes leképezése, AI-kérés méretkorlát, CI-workflow, QA_REPORT és SECURITY)`
 - **Proxy-védelem (KI-135):** hosztszintű rate limit / WAF, vagy elfogadott kockázat saját használatra?
 - **Maestro:** kell-e a PHASE 16 release-ellenőrzéséhez (telepítés + 3–4 flow)?
