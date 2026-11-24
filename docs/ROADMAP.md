@@ -1,6 +1,6 @@
 # Roadmap – Stock & ETF Analyzer
 
-> Frissítve: 2026-11-23 (PHASE 12 vége). Minden fázis külön chatben fut, a `stock_etf_analyzer_prompts` csomag `NN_*.md` promptja alapján.
+> Frissítve: 2026-11-24 (PHASE 14 vége). Minden fázis külön chatben fut, a `stock_etf_analyzer_prompts` csomag `NN_*.md` promptja alapján.
 > **Fázisszabály:** a következő fázis csak akkor indul, ha az előző befejezési feltételei teljesültek, vagy a hiányok a KNOWN_ISSUES-ban dokumentálva vannak.
 > **Verzió:** a promptok egy része SDK 57-et említ. Mindenhol **SDK 58** értendő (D-020).
 
@@ -21,8 +21,8 @@
 | 11 | AI-magyarázó engine | **KÉSZ** (2026-11-23) | |
 | 12 | UI/UX és navigáció | **KÉSZ** (2026-11-23) | |
 | 13 | Tárolás, cache, offline | **KÉSZ** (2026-11-24; eszközön nem ellenőrizve, KI-117) | **M4 MVP** (Jestben ✅, eszközön nyitott) |
-| 14 | Compare, watchlist, screener, alerts | **KÖVETKEZIK** | |
-| 15 | Integráció, QA, biztonság | NEM KEZDŐDÖTT | |
+| 14 | Compare, watchlist, screener, alerts | **KÉSZ** (2026-11-24; eszközön nem ellenőrizve, KI-129) | |
+| 15 | Integráció, QA, biztonság | **KÖVETKEZIK** | |
 | 16 | Release és dokumentáció | NEM KEZDŐDÖTT | **M5 v1.0 (személyes)** |
 
 ## Függőségi gráf
@@ -488,6 +488,20 @@ Minden fázis közös lezárása (CLAUDE.md):
 - **Befejezési feltétel:**
   - Nincs dokumentálatlan push-képesség.
   - A screener-találatok visszavezethetők.
+- **Eredmény (2026-11-24): KÉSZ** – egy megszorítással: **eszközön nem futott** (KI-129, KI-117); Jestben a valódi route-fán és `expo export` Androidon igazolva.
+  - **Közös alap (D-085):** `src/application/insights/` – `InstrumentSnapshot` a meglévő `evaluateStock`/`evaluateEtf` kimenetéből (nincs új képlet, nincs duplikált logika; integrációs teszt bizonyítja); ár + számított napi változás (utolsó két záróár).
+  - **Összehasonlítás (D-086):** 2–4 instrumentum; részvény–részvény, ETF–ETF, részvény–ETF (csak közös piaci adat + a részvény súlya az ETF-ben); típus-, pénznem-, hozam-alap-, ablak- és score-rendszer-szabály; ≥ 2 érték kell; a kizárt mutatók okkal; mobilbarát (mutatónként függőleges cellák).
+  - **ETF-átfedés (D-086):** csak azonos vagy ≤ 31 nap eltérésű holdings-pillanatképekre; Σ min, közös súly A-ban/B-ben (összeadásuk tiltva – dupla számolás), 50/50 keverék cégenként egyszer; részleges lista = alsó becslés; mindkét adatdátum látszik.
+  - **Figyelőlista:** tartós (PHASE 13); soronként ár, napi változás, frissesség, utolsó frissítés; score és értékelési státusz kérésre (kvótakímélés).
+  - **Screener (D-087):** 8 kategória (értékelés, növekedés, minőség, osztalék, TER, AUM, tracking, koncentráció) a lokális univerzumon (figyelőlista + portfólió); érvénytelen szűrő kezelése; PASS/FAIL/NOT_EVALUABLE feltételenként, a használt `Metric`-kel (visszavezethető); kiinduló szűrők.
+  - **Riasztás (D-088):** ár / Base MOS / P/E / TER küszöb; SQLite 2. migráció; élváltás; **csak az appban** („Ellenőrzés most”), push, rendszerértesítés és háttér NINCS – Expo SDK 58 (és 57) docs alapján dokumentálva; export v2 a riasztásokkal.
+  - **UI:** új route-ok `/screener`, `/alerts`; a `/compare` és a Figyelő tab teljes funkcióval.
+  - Ellenőrzés: `npm run check` exit 0; **1628/1628 teszt** (95 suite; +87); az új modulok 95,0% utasítás / 83,8% ág / 97,6% sor; `expo export -p android` exit 0 (Hermes 4,7 MB), titokszkennelés 0 találat.
+  - **Nem készült el (átütemezve):** holdings-/metaadat-bevitel a UI-ban (KI-123 → KI-74, KI-101), proxy-cache (KI-114), haladásjelző/megszakítás a tömeges elemzésnél (KI-125), értesítések (KI-122, külön döntés).
+- **A későbbi fázisok kapcsolódási pontjai (PHASE 14-ből):**
+  - PHASE 15 (QA): eszközös ellenőrzés a PHASE 13–14 képernyőire; kvóta-viselkedés élő módban sok figyelőlista-elemmel (KI-124, KI-125); `npm audit`.
+  - Értesítés-bővítés (ha a tulajdonos kéri): az `AlertService.checkNow` változatlanul hívható egy háttérfeladatból vagy helyi értesítés előtt; a korlátok listája (`ALERT_PLATFORM_LIMITATIONS`) frissítendő.
+  - Holdings-import: a `analyzeEtfOverlap` és a `stockWeightInEtf` azonnal használja, amint az `EtfProfile.holdings` kitöltött.
 
 ### PHASE 15 – Integráció, QA, biztonság
 - **Cél:** teljes ellenőrzés, valós eredményekkel.

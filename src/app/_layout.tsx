@@ -13,7 +13,7 @@ import { buildNavigationTheme, useTheme } from '@/presentation/theme';
 /**
  * Gyökér layout: szolgáltatók (composition root, beállítások, figyelőlista) + téma +
  * Stack navigáció. A fő képernyők a `(tabs)` csoportban vannak (PHASE 12); az elemző-,
- * összehasonlító és „A projektről” képernyő a Stack-re kerül (vissza gombbal).
+ * összehasonlító, screener, riasztás (PHASE 14) és „A projektről” képernyő a Stack-re kerül.
  * A route-fájlok vékonyak; a logika a presentation rétegben (view-model + screen) van.
  */
 function ThemedStack(): ReactNode {
@@ -33,6 +33,8 @@ function ThemedStack(): ReactNode {
         <Stack.Screen name="stock/[listingId]" options={{ title: strings.stock.title }} />
         <Stack.Screen name="etf/[listingId]" options={{ title: strings.etf.title }} />
         <Stack.Screen name="compare" options={{ title: strings.compare.title }} />
+        <Stack.Screen name="screener" options={{ title: strings.screener.title }} />
+        <Stack.Screen name="alerts" options={{ title: strings.alerts.title }} />
         <Stack.Screen name="about" options={{ title: strings.about.title }} />
       </Stack>
     </ThemeProvider>

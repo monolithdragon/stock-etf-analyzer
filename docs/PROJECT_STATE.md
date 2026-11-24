@@ -1,14 +1,14 @@
 # Projektállapot – Stock & ETF Analyzer
 
-> Utolsó frissítés: **2026-11-24**, PHASE 13 vége.
+> Utolsó frissítés: **2026-11-24**, PHASE 14 vége.
 
 ## Cél röviden
 Mobilalkalmazás (Expo SDK 58, React Native, TypeScript) részvények, ETF-ek és saját portfólió átlátható, forrásolt, reprodukálható elemzésére. Az AI csak magyaráz. Részletek: [REQUIREMENTS.md](REQUIREMENTS.md).
 
 ## Aktuális fázis
-- **Lezárt fázis:** PHASE 13 – Tárolás, cache és offline (**KÉSZ**, eszközön nem ellenőrizve – KI-117). Átadás: [handoffs/phase-13-handoff.md](handoffs/phase-13-handoff.md). Útmutató: [phases/phase-13-storage-cache-offline.md](phases/phase-13-storage-cache-offline.md).
-- **Előző:** PHASE 12 – UI/UX és navigáció – [handoffs/phase-12-handoff.md](handoffs/phase-12-handoff.md).
-- **Következő:** PHASE 14 – Compare, watchlist, screener, alerts (prompt: `14_…`). Bemenet: tartós figyelőlista (`services.watchlist`), cache-elt adatok (`services.localData`), `CACHE_POLICIES` (a proxy-cache-hez, KI-114).
+- **Lezárt fázis:** PHASE 14 – Compare, watchlist, screener, alerts (**KÉSZ**, eszközön nem ellenőrizve – KI-129). Átadás: [handoffs/phase-14-handoff.md](handoffs/phase-14-handoff.md). Útmutató: [phases/phase-14-compare-watchlist-screener-alerts.md](phases/phase-14-compare-watchlist-screener-alerts.md).
+- **Előző:** PHASE 13 – Tárolás, cache és offline – [handoffs/phase-13-handoff.md](handoffs/phase-13-handoff.md).
+- **Következő:** PHASE 15 – Integráció, QA, biztonság (prompt: `15_…`). Bemenet: eszközös ellenőrzés (KI-117, KI-129), kvóta-viselkedés (KI-124, KI-125), átütemezett adatbővítések (KI-123).
 
 ## Készültség
 
@@ -23,8 +23,8 @@ Mobilalkalmazás (Expo SDK 58, React Native, TypeScript) részvények, ETF-ek é
 | **Adatforrások** | **Élő, igazolt**: `sec-edgar` (US kimutatások), `ecb-fx` (FX), `openfigi` (ISIN → jegyzések), **`fmp`** (US ár, ártörténet, profil, osztalék, keresés), **`eodhd`** (ár, ártörténet 1 év, osztalék, keresés, ISIN → jegyzések pénznemmel; US + 6 európai tőzsde); `mock` (demó). **Free-ben nem elérhető**: ETF-metaadat/holdings, nem US profil és kimutatás → `UNAVAILABLE / PLAN_LIMIT` |
 | **FX** | **Kész** (04A): natív és kijelzési pénznem külön, ráta + dátum + forrás, elavult rátánál hiba |
 | Kliens adatelérés | `mock` mód: demó gateway-ek; `live` mód: proxy gateway-ek (`EXPO_PUBLIC_API_BASE_URL`); 04B: +4 use case; 06: `analyzeStockFundamentals` (részleges hibatűréssel); 07: `analyzeStockValuation`, `recalculateStockValuation`; 08: `analyzeEtf`; **09: `analyzePortfolio`** (a `recordTransaction` napló-validációval) |
-| Lint / formázás / typecheck | **Zöld** (2026-11-24, PHASE 13 vége): `npm run check` exit 0 |
-| Tesztek | **1541/1541 zöld** (88 suite; PHASE 13: +94 – cache-motor 26, SQLite-tárolók 25 valódi SQL-lel, háttérfrissítés, policy, beállítás-migráció, export/törlés, offline integráció 6, route-teszt újraindítással 5; az új modulok 95,6% sor / 84,2% ág. PHASE 12: +60 az induló 1387-hez képest – 15 navigációs smoke teszt, formázók, kontraszt, view-modelek valódi use case-kimeneten, `createPortfolio`; a PHASE 11 handoff 1307-et írt, lásd KI-107. PHASE 11: +121, új modulok 95,7% sor / 86,6% ág; PHASE 10: +175; `src/scoring` 98,9% sor / 91,1% ág, konfiguráció 100%; PHASE 09: +84; PHASE 08: +144, ebből D-070: +4; PHASE 07: +122). PHASE 09: új modulok 97,3% sor (motor 100%). PHASE 08: új modulok ~99% sor (motor 100%). PHASE 07: új DCF-motor 100% sor, új alkalmazási modulok ~97% sor. Lefedettség: `src/calculations` + új PHASE 06 modulok ~97–98% sor. Élő API-t teszt nem hív: valós, megvágott fixture-ök (12 SEC-cég – 06: adósság-tagekkel bővítve –, ECB, OpenFIGI, FMP 10, EODHD 21 fájl) + hamis `fetch` |
+| Lint / formázás / typecheck | **Zöld** (2026-11-24, PHASE 14 vége): `npm run check` exit 0 |
+| Tesztek | **1628/1628 zöld** (95 suite; PHASE 14: +87 – compare 14, ETF-átfedés 12, screener 10, riasztás 10, szolgáltatások 9, integráció 8, view-model 8, route 4, SQLite-riasztás 2, tisztasági őrtesztek +10 (automatikusan az új fájlokra); az új modulok 95,0% utasítás / 83,8% ág. PHASE 13: +94 – cache-motor 26, SQLite-tárolók 25 valódi SQL-lel, háttérfrissítés, policy, beállítás-migráció, export/törlés, offline integráció 6, route-teszt újraindítással 5; az új modulok 95,6% sor / 84,2% ág. PHASE 12: +60 az induló 1387-hez képest – 15 navigációs smoke teszt, formázók, kontraszt, view-modelek valódi use case-kimeneten, `createPortfolio`; a PHASE 11 handoff 1307-et írt, lásd KI-107. PHASE 11: +121, új modulok 95,7% sor / 86,6% ág; PHASE 10: +175; `src/scoring` 98,9% sor / 91,1% ág, konfiguráció 100%; PHASE 09: +84; PHASE 08: +144, ebből D-070: +4; PHASE 07: +122). PHASE 09: új modulok 97,3% sor (motor 100%). PHASE 08: új modulok ~99% sor (motor 100%). PHASE 07: új DCF-motor 100% sor, új alkalmazási modulok ~97% sor. Lefedettség: `src/calculations` + új PHASE 06 modulok ~97–98% sor. Élő API-t teszt nem hív: valós, megvágott fixture-ök (12 SEC-cég – 06: adósság-tagekkel bővítve –, ECB, OpenFIGI, FMP 10, EODHD 21 fájl) + hamis `fetch` |
 | Expo ellenőrzések (04B) | élő füstpróba (saját dev szerver, 8083); `expo export` web: 10 API route; Android: Hermes bundle **szerverkód és titok nélkül** (szkennelve) |
 | Biztonság (04B) | Kulcs csak szerver env-ben; repó-szkenner (220 fájl): 0 találat; válasz, napló és env-figyelmeztetés kulcsmentes (teszt) |
 | **Számítási motor** | **Kész** (PHASE 05, D-055…D-058) + 06: `priceRange` (52 hetes tartomány). Az első fogyasztó (PHASE 06 use case) elkészült. |
@@ -34,12 +34,13 @@ Mobilalkalmazás (Expo SDK 58, React Native, TypeScript) részvények, ETF-ek é
 | **Portfólió és kockázat** | **Kész** (PHASE 09, D-072): `analyzePortfolio`; átlagáras könyvelés lépésenkénti naplóval; két P/L-nézet (natív / bázis: árhatás + FX-hatás; ráta: rögzített → ECB ügyleti napi → hiány); súlyok; visszakövethető összesítések; kitettség közvetlen és look-through nézetben; koncentráció (top N, HHI, egyedi részvény ISIN szerint, szektor/ország); historikus TWR + kockázat a tényleges mennyiségekből (csak kérésre); korreláció; ETF-átfedés adatmodell; napló-validáció. **Korlát:** többdevizás historikushoz nincs FX-idősor végpont (KI-77). Tárolás: PHASE 13-tól SQLite. UI nincs (PHASE 12). |
 | **Score és döntés** | **Kész** (PHASE 10, D-073…D-075): új `src/scoring` réteg (tiszta szabálymotor); külön részvény- (8 kategória, MOAT 0 súllyal) és ETF-score (9 kategória) konfigurált, automatikusan ellenőrzött súlyokkal; kategóriánkénti pont, indoklás, hiányok, adatminőség, frissesség; hiányzó adat: kimarad + újranormalizálás minimummal + confidence-csökkentés (soha nem 0); determinisztikus, többdimenziós döntés (kapu → szabályok → plafonok, szabálynyom), konfigurálható címkék; `AnalysisConfidence` (nem hozam-valószínűség); thesis risks + érvénytelenítés (DCF-árszinttel); `evaluateStock`, `evaluateEtf`. Az AI nem vesz részt. UI nincs (PHASE 12). |
 | **AI-magyarázat** | **Kész** (PHASE 11, D-076…D-078): szigorú `AiInputDto` hivatkozható `ref`-ekkel; strukturált, validált kimenet `basedOn`-nal; tartalmi őr (hivatkozás, számvisszakeresés, tiltott állítás, confidence) a szerveren és a kliensen; **`template` provider** (új réteg: `src/explanation`; ingyenes, offline, alapértelmezés); `explainAnalysis` (LLM-hibánál a template marad); `POST /api/v1/ai/explain`: `mock` és `anthropic` provider (hivatalos SDK 1.12.0), kill switch, napi keret, cache, timeout; részvény-, ETF- és portfólió-sablon; portfólió csak beleegyezéssel és összegek nélkül. **Az LLM alapból ki van kapcsolva; élő Claude-hívás nem volt (nincs kulcs).** UI nincs (PHASE 12). |
+| **Compare, watchlist, screener, alerts** | **Kész** (PHASE 14, D-085…D-088): közös `InstrumentSnapshot` a meglévő értékelésekből (`src/application/insights/`); összehasonlítás csak összehasonlítható mutatókkal (típus, pénznem, hozam-alap, ablak, score-rendszer; kizártak okkal), részvény–ETF kitettség; ETF-átfedés kompatibilis (≤ 31 nap) holdings-dátumokra, dupla számolás nélkül; figyelőlista ár/napi változás/frissesség + kérésre score és értékelés; screener 8 kategóriával a lokális univerzumon, feltételenkénti bizonyítékkal; riasztás (ár, MOS, P/E, TER) SQLite-ban, **csak alkalmazáson belül** – push/háttér nincs (Expo docs alapján dokumentálva). Holdings a valós appban ma nincs (KI-123). Eszközön nem futott (KI-129). |
 | **Tárolás, cache, offline** | **Kész** (PHASE 13, D-082…D-084): natívon `expo-sqlite` (portfólió, tranzakció, figyelőlista, piaci adat cache; verziózott migráció) + kv-store (beállítások, v1→v2 migráció); weben memória. Eszköz-cache 11 adatfajtával, saját TTL-lel, provenance-szel; offline tartalék legalább `STALE`, „Utoljára frissítve” jelzés; kézi frissítés ≠ invalidálás ≠ háttérfrissítés; export (JSON) és teljes törlés. Titok a kliensen nincs (`expo-secure-store` nem kell). **Proxy-cache nincs** (KI-114). Eszközön nem futott (KI-117). |
-| Git | `main`-en a PHASE 11 merge (`6a907d3`, PR #7); a PHASE 12 a `phase-12` branchen (push megtörtént, PR/merge nincs); a PHASE 13 a **`phase-13`** branchen (a `phase-12`-ből ágazva) **commitolva** (`f40d2cc`); push/PR/merge: a tulajdonos dönt |
+| Git | `main`-en a PHASE 13 merge (`9385f7e`, PR #8; a PHASE 12 is benne); a PHASE 14 a **`phase-14`** branchen (a `main`-ből), **commit nélkül** – commit/push/PR: a tulajdonos dönt |
 
 Fázisonkénti állapot: [ROADMAP.md](ROADMAP.md).
 
-## A projektmappa tartalma (2026-11-24, PHASE 13 vége)
+## A projektmappa tartalma (2026-11-24, PHASE 14 vége)
 ```
 stock-etf-analyzer/
 ├─ CLAUDE.md, README.md, app.json, package.json, tsconfig.json, jest.config.js
@@ -47,13 +48,13 @@ stock-etf-analyzer/
 ├─ .env.example              minta (04B: FMP_PLAN, EODHD_PLAN magyarázattal); a valódi értékek: .env.local (gitignore)
 ├─ scripts/record-sec-fixtures.mjs   SEC fixture-rögzítő (D-047; 06: --add-new-tags mód)
 ├─ src/
-│  ├─ app/                   vékony route-ok: (tabs)/ [index, search, portfolio, watchlist, settings], stock/[listingId], etf/[listingId], compare, about + api/v1/**/+api.ts (11 proxy-route)
+│  ├─ app/                   vékony route-ok: (tabs)/ [index, search, portfolio, watchlist, settings], stock/[listingId], etf/[listingId], compare, screener, alerts (14), about + api/v1/**/+api.ts (11 proxy-route)
 │  ├─ domain/                tiszta TS (04B: market/, instrument/; 06: analysis/stock-fundamentals.ts; 08: etf/)
 │  ├─ explanation/           PHASE 11: szabályalapú magyarázat (template-explainer) – csak contracts + domain
 │  ├─ scoring/               PHASE 10: tiszta score-/döntési engine (types, score-engine, confidence, decision-engine, thesis, config-validation, evaluate) + config/ (stock, etf, shared)
 │  ├─ calculations/          PHASE 05: tiszta képletek – core/, fundamentals/, valuation/ (07: dcf, dcf-scenarios, valuation-bands), returns/ (06: price-range; 08: risk), etf/ (08: holdings, exposure; 09: overlap), portfolio/ (09: average-cost, time-weighted-return), definitions.ts
 │  ├─ contracts/             zod (04B: market.ts, search.ts, provider-status.ts; 11: ai.ts, ai-guards.ts, ai-testing.ts [csak teszt])
-│  ├─ application/           portok + use case-ek (06: analyze-stock-fundamentals.ts; 07: analyze-stock-valuation.ts) + stock-analysis/ (06) + valuation/ (07: DCF-bemenet, feltevések, összerakás) + etf-analysis/ (08) + portfolio/ (09) + shared/ (08; 09: engine-provenance) + scoring/ (10: leképezők) + use-cases/evaluate-instrument.ts (10) + explanation/build-ai-input.ts, use-cases/explain-analysis.ts (11) + cache/, preferences/, watchlist/, use-cases/local-data.ts (13)
+│  ├─ application/           portok + use case-ek (06: analyze-stock-fundamentals.ts; 07: analyze-stock-valuation.ts) + stock-analysis/ (06) + valuation/ (07: DCF-bemenet, feltevések, összerakás) + etf-analysis/ (08) + portfolio/ (09) + shared/ (08; 09: engine-provenance) + scoring/ (10: leképezők) + use-cases/evaluate-instrument.ts (10) + explanation/build-ai-input.ts, use-cases/explain-analysis.ts (11) + cache/, preferences/, watchlist/, use-cases/local-data.ts (13) + insights/ (14: instrument-snapshot, load-snapshot, compare, etf-overlap, screener, alerts, insight-services)
 │  ├─ testing/               CSAK tesztekhez – 07: stock-analysis-fixtures.ts; 13: node-sqlite-database.ts, mocks/ (expo-sqlite, kv-store, expo-network), jest-setup.ts
 │  ├─ infrastructure/        api-client/ (proxy kliens + gateway-ek), mock/, system/ (13: expo-connectivity), storage/ (13: SQLite + kv + memória, migrációk)
 │  ├─ server/                CSAK SZERVER: env, server-context, http/, handlers/,
@@ -134,6 +135,12 @@ stock-etf-analyzer/
   - D-083 beállítás- és figyelőlista-modell, migrációs terv, adatmegőrzés, export, törlés;
   - D-084 tesztelés valódi SQLite-tal (`node:sqlite`) és Expo-modul tesztdublőrökkel.
 
+- **PHASE 14:**
+  - D-085 közös instrumentum-pillanatkép (nincs duplikált logika; számított napi változás; ismeretlen típusnál nincs találgatás);
+  - D-086 összehasonlíthatósági szabályok és ETF-átfedés (≤ 31 nap, Σ min, dupla számolás tiltva);
+  - D-087 screener a lokális univerzumon (validáció, PASS/FAIL/NOT_EVALUABLE, bizonyíték);
+  - D-088 riasztás csak az appban; push/helyi értesítés/háttér platformkorlátai (Expo SDK 58 docs).
+
 - **PHASE 08 utáni tulajdonosi döntések:** D-070 megbízhatósági címke (`standard` ≥ 240, `short_window` 126–239 napi hozam); D-071 holdings-fájl import a N-PORT adapter helyett.
 
 Teljes lista: [DECISIONS.md](DECISIONS.md).
@@ -150,6 +157,10 @@ Teljes lista: [DECISIONS.md](DECISIONS.md).
 | (04A) | A SEC User-Agent kapcsolattartó e-mailjét a tulajdonos a `.env.local`-ba írta |
 
 ## Nyitott kérdések
+- **Commit (PHASE 14):** a munka a `phase-14` branchen van, commit nélkül; a commit, push, PR és merge a tulajdonos döntése.
+- **Ellentmondás-javítás:** a PHASE 13 végi PROJECT_STATE szerint a PHASE 12/13 PR-ja még nyitott volt; a PHASE 14 indulásakor a `main` már tartalmazta a PHASE 13 merge-öt (PR #8, `9385f7e`).
+- **Értesítések (D-088):** kell-e helyi értesítés (Expo Go-ban működik, engedélykéréssel) vagy valódi push (development build + backend)? Ma egyik sincs.
+- **Holdings-adat (KI-123):** holdings-fájl import vagy kézi űrlap legyen az első adatbővítés? Nélküle az ETF-átfedés a valós appban nem számolható.
 - **Commit (PHASE 13):** tulajdonosi kérésre commitolva a `phase-13` branchen (`f40d2cc`); a push és a PR a tulajdonos döntése. A `phase-13` a `phase-12`-re épül, ezért előbb a PHASE 12 PR-ját érdemes merge-ölni.
 - **Ellentmondás-javítás:** a PHASE 12 handoff „a push a tulajdonos döntése” állapotot írt; a PHASE 13 indulásakor az `origin/phase-12` már létezett (push megtörtént), PR még nem volt.
 - **Eszközös ellenőrzés (KI-100, KI-117):** a UI-t és a tárolást emulátoron/telefonon meg kell nézni (PHASE 13 fázis-útmutató, „Kézi ellenőrzés”: repülőgép-mód, újraindítás).
@@ -162,4 +173,4 @@ Teljes lista: [DECISIONS.md](DECISIONS.md).
 - DP-05 (fizetős adatcsomag): tudatosan nyitott. Nem US fundamentumhoz és ETF-metaadathoz kellene.
 - KI-04 (opcionális): `ANDROID_HOME` / `Path` javítása.
 
-Egyik sem blokkolja a PHASE 14-et. Részletek: [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
+Egyik sem blokkolja a PHASE 15-öt. Részletek: [KNOWN_ISSUES.md](KNOWN_ISSUES.md).

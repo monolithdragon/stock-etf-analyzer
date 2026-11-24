@@ -1,12 +1,31 @@
 # Ismert problémák, kockázatok, ismeretlenek – Stock & ETF Analyzer
 
-> Frissítve: 2026-11-24 (PHASE 13 vége). Valószínűség (V) és hatás (H) skálája: **A** = Alacsony, **K** = Közepes, **M** = Magas.
+> Frissítve: 2026-11-24 (PHASE 14 vége). Valószínűség (V) és hatás (H) skálája: **A** = Alacsony, **K** = Közepes, **M** = Magas.
 
 ## Blokkolók
 
-**Nincs blokkoló a PHASE 14 indításához.**
-- A PHASE 13 tárolása és cache-e Jestben valódi SQL-lel (Node SQLite) igazolt, **eszközön nem** (KI-117, KI-100).
-- A PHASE 12 a `phase-12` branchen van (push megtörtént, PR/merge még nincs); a PHASE 13 erre épül (`phase-13` branch).
+**Nincs blokkoló a PHASE 15 indításához.**
+- A PHASE 13 és 14 Jestben (valódi SQL, valódi route-fa) és `expo export`-tal igazolt, **eszközön nem** (KI-117, KI-129).
+- A PHASE 14 a `phase-14` branchen van (a `main`-ből, amelyen a PHASE 13 már merge-ölve, PR #8).
+
+## PHASE 14 – ismert problémák és leletek (2026-11-24)
+
+| ID | Leírás | Hatás | Állapot / teendő | Fázis |
+|---|---|---|---|---|
+| KI-122 | **Nincs push-, rendszerértesítés és háttér-ellenőrzés:** a riasztás csak az appban, a Riasztások képernyőn és az „Ellenőrzés most” gombra értékelődik ki (D-088). Bezárt appnál nincs jelzés. | K | Dokumentálva (UI: „Működési korlátok”, `ALERT_PLATFORM_LIMITATIONS`, fázis-útmutató 9. lépés). Bővítés csak külön döntéssel (helyi értesítés / `expo-background-task` / dev build + push backend, O-03). | 15+ (döntés) |
+| KI-123 | **Az ETF-átfedés a valós appban ma jellemzően „nem számolható”:** a free FMP/EODHD nem ad holdings-adatot (KI-65), és a UI-ban még nincs holdings-/metaadat-bevitel (KI-101) vagy fájlimport (KI-74). A logika és a tesztek kész, demóban/élőben `MISSING` az okkal. | K | A holdings-fájl import (D-071) és az ETF-metaadat űrlap a következő adatbővítéssel; addig az átfedés kódból (`analyzeEtf` `metadata.holdings`) adható meg. | 15 (átütemezve) |
+| KI-124 | **Napi változás = +1 ártörténet-lekérés jegyzésenként** (a quote végpont nem ad előző záróárat). A cache (12 óra friss) enyhíti, de üres cache-nél a figyelőlista megnyitása 2 hívás/elem (EODHD free: 20/nap). | K | Elfogadva; ha szűk a kvóta, kevesebb elem vagy proxy-cache (KI-114). | 15 |
+| KI-125 | **Score/értékelés betöltése a figyelőlistán, a compare, a screener és a P/E/MOS/TER-riasztás teljes elemzést kér** jegyzésenként (sorban). Sok elemnél lassú és kvótát fogyaszt; nincs megszakítás és haladásjelző. | K | Ezért csak kifejezett kérésre fut (gomb). Javítás: haladásjelző + megszakítás, proxy-cache. | 15 |
+| KI-126 | **Ugyanazon kibocsátó több részvényosztálya** (pl. két ISIN) az átfedésben külön tétel – kibocsátói azonosító nincs a holdings-modellben. | A | Dokumentálva (megjegyzés a kimenetben). | később |
+| KI-127 | **Nincs FX-átváltás a compare-ben és a screenerben:** eltérő pénznemű ár/AUM/piaci kap. kizárva vagy „nem értékelhető”. Szándékos (rejtett FX-feltevés lenne), de pl. USD- és EUR-jegyzésű ETF AUM-ja nem vethető össze. | A | ETF-nél az AUM a kijelzési pénznemben is számolható (D-068) – a pillanatkép a bázispénznemmel kéri, ha van FX. Teljes megoldás később. | később |
+| KI-128 | **A screener univerzuma csak lokális** (figyelőlista + portfólió); piaci szintű szűrés nincs. | A | Teljes univerzumhoz fizetős forrás kellene (DP-05). | – |
+| KI-129 | **A PHASE 14 sem futott eszközön** (emulátor/telefon): az új képernyők (figyelőlista-sorok, kijelölés, screener-űrlap, riasztás-űrlap) csak Jestben (valódi route-fa) és `expo export`-tal igazoltak. | K | A tulajdonos: fázis-útmutató „Kézi ellenőrzés” (KI-117-tel együtt). | 15 |
+| KI-130 | **Prompt-ellentmondás:** a PHASE 14 prompt „Expo SDK 57” dokumentációt említ, a projekt SDK 58 (D-001). | A | Mindkét verzió notifications-oldala ellenőrizve: az Expo Go-ra vonatkozó állítás azonos (D-088). | ✅ |
+| KI-131 | **A screener-űrlap mező-választója sok gombot mutat** (kategória + mező ChoiceGroup); kis kijelzőn hosszú. | A | Eszközös ellenőrzés után esetleg legördülő lista (KI-129). | 15 |
+
+**KI-121 ismét előfordult** (PHASE 14): a háttérben `timeout`-tal leállított `expo start` `/` nélküli typed routes fájlt hagyott. A teljes lefutásig várva (≈ 100 mp) a fájl helyes.
+
+**Átütemezve a PHASE 14-ből** (a fázis promptja a compare/watchlist/screener/alerts funkciókra szól): proxy-cache (KI-114), holdings-fájl import (KI-74/KI-80), ETF-metaadat űrlap (KI-101), több portfólió (KI-105), ETF forrás-összesítő (KI-106), szerveroldali AI-cache (KI-91), DCF-/score-szerkesztő (KI-102), vonaldiagram (KI-98), kattintható `basedOn` (KI-108) → PHASE 15 vagy későbbi döntés.
 
 ## PHASE 13 – ismert problémák és leletek (2026-11-24)
 

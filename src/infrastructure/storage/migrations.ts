@@ -65,6 +65,21 @@ export const MIGRATIONS: readonly Migration[] = [
       `);
     },
   },
+  {
+    version: 2,
+    description: 'PHASE 14: riasztási szabályok (alert_rules) tábla.',
+    up: async (db) => {
+      await db.exec(`
+        CREATE TABLE alert_rules (
+          id TEXT PRIMARY KEY NOT NULL,
+          listing_id TEXT NOT NULL,
+          json TEXT NOT NULL,
+          seq INTEGER NOT NULL
+        );
+        CREATE INDEX idx_alert_rules_listing ON alert_rules (listing_id);
+      `);
+    },
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS.reduce((max, m) => Math.max(max, m.version), 0);

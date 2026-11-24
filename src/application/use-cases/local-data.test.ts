@@ -162,7 +162,8 @@ describe('createLocalDataService', () => {
     if (!exported.ok) return;
     expect(exported.value).toMatchObject({
       format: USER_DATA_EXPORT_FORMAT,
-      version: 1,
+      version: 2,
+      alerts: [],
       exportedAt: '2026-11-24T10:00:00.000Z',
       portfolios: [{ portfolio: PORTFOLIO, transactions: [t] }],
       watchlist: [{ listingId: 'AAPL@XNAS' }],

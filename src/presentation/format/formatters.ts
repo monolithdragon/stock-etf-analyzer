@@ -267,3 +267,10 @@ export const DIRECTION_LABEL: Readonly<Record<Direction, string>> = {
   down: 'csökkenés',
   flat: 'változatlan',
 };
+
+/** `"1 234,5"` → `1234.5`; üres vagy hibás → `NaN` (a domain validáció utasítja el, okkal). */
+export function parseDecimalInput(raw: string): number {
+  const normalized = raw.replace(/[\s ]/g, '').replace(',', '.');
+  if (normalized === '' || !/^-?\d*\.?\d+$/.test(normalized)) return Number.NaN;
+  return Number(normalized);
+}

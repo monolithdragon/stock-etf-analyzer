@@ -3,7 +3,8 @@
  * kézi frissítés, cache-invalidálás, export és teljes törlés.
  *
  * Adatmegőrzés: minden felhasználói adat CSAK az eszközön van (nincs szinkron, nincs felhő).
- * Az export a felhasználó saját adatait adja (portfólió, tranzakciók, figyelőlista, beállítások)
+ * Az export a felhasználó saját adatait adja (portfólió, tranzakciók, figyelőlista, riasztások
+ * [PHASE 14], beállítások)
  * – a szolgáltatói piaci adatot (cache) NEM, mert az nem a felhasználóé (licenc) és újratölthető.
  */
 import {
@@ -21,7 +22,9 @@ import {
 import type { BackgroundRefresher, BackgroundRefreshReport } from '../cache/background-refresh';
 import type { CacheControl } from '../cache/market-data-cache';
 import type { CacheStats, DataStatus } from '../cache/types';
+import type { AlertRule } from '../insights/alerts';
 import type {
+  AlertRuleRepository,
   Clock,
   PortfolioRepository,
   PreferencesRepository,
@@ -95,7 +98,8 @@ export function createWatchlistService(deps: {
 // ---------------------------------------------------------------------------------------------
 
 export const USER_DATA_EXPORT_FORMAT = 'stock-etf-analyzer.user-data';
-export const USER_DATA_EXPORT_VERSION = 1;
+/** 2: PHASE 14 – riasztási szabályok (`alerts`) az exportban. */
+export const USER_DATA_EXPORT_VERSION = 2;
 
 export interface UserDataExport {
   readonly format: typeof USER_DATA_EXPORT_FORMAT;
@@ -106,6 +110,8 @@ export interface UserDataExport {
     readonly transactions: readonly Transaction[];
   }[];
   readonly watchlist: readonly WatchlistItem[];
+  /** PHASE 14: riasztási szabályok (üres, ha nincs riasztás-tároló). */
+  readonly alerts: readonly AlertRule[];
   readonly preferences: UserPreferences;
   /** Ember által olvasható megjegyzés a fájl tartalmáról. */
   readonly note: string;
@@ -126,7 +132,7 @@ export interface LocalDataService {
   clearCache(): Promise<Result<number, AppError>>;
   cacheStats(): Promise<Result<CacheStats | null, AppError>>;
   exportUserData(): Promise<Result<UserDataExport, AppError>>;
-  /** Minden helyi adat végleges törlése (portfólió, tranzakció, figyelőlista, beállítás, cache). */
+  /** Minden helyi adat végleges törlése (portfólió, tranzakció, figyelőlista, riasztás, beállítás, cache). */
   deleteAllLocalData(): Promise<Result<DeleteAllReport, AppError>>;
   /** Háttérfrissítés indítása hálózat-visszatérésre; a visszaadott függvény leállítja. */
   startBackgroundRefresh(): () => void;
@@ -140,6 +146,8 @@ export interface LocalDataServiceDeps {
   readonly backgroundRefresher: BackgroundRefresher | null;
   readonly portfolioRepository: PortfolioRepository;
   readonly watchlistRepository: WatchlistRepository;
+  /** PHASE 14: riasztások (export és teljes törlés); hiányában kimarad. */
+  readonly alertRuleRepository?: AlertRuleRepository;
   readonly preferencesRepository: PreferencesRepository;
   readonly clock: Clock;
   readonly persistent: boolean;
@@ -202,6 +210,8 @@ export function createLocalDataService(deps: LocalDataServiceDeps): LocalDataSer
       }
       const watchlist = await deps.watchlistRepository.list();
       if (!watchlist.ok) return watchlist;
+      const alerts = deps.alertRuleRepository ? await deps.alertRuleRepository.list() : ok([]);
+      if (!alerts.ok) return alerts;
       const preferences = await deps.preferencesRepository.load();
       if (!preferences.ok) return preferences;
       return ok({
@@ -210,14 +220,16 @@ export function createLocalDataService(deps: LocalDataServiceDeps): LocalDataSer
         exportedAt: toIsoTimestamp(deps.clock.now()),
         portfolios: withTransactions,
         watchlist: watchlist.value,
+        alerts: alerts.value,
         preferences: preferences.value ?? DEFAULT_PREFERENCES,
-        note: 'Saját adatok exportja (portfólió, tranzakciók, figyelőlista, beállítások). Piaci adatot és titkot nem tartalmaz.',
+        note: 'Saját adatok exportja (portfólió, tranzakciók, figyelőlista, riasztások, beállítások). Piaci adatot és titkot nem tartalmaz.',
       });
     },
     async deleteAllLocalData() {
       const steps: Result<unknown, AppError>[] = [
         await deps.portfolioRepository.deleteAll(),
         await deps.watchlistRepository.clear(),
+        deps.alertRuleRepository ? await deps.alertRuleRepository.clear() : ok(undefined),
         await deps.preferencesRepository.clear(),
       ];
       const cleared = deps.cache === null ? ok(0) : await deps.cache.clearAll();

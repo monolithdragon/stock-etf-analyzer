@@ -29,8 +29,17 @@ import {
   createMarketDataCache,
   createPreferencesService,
   createWatchlistService,
+  createAlertService,
+  createCompareListings,
+  createGetWatchlistOverview,
+  createListLocalUniverse,
+  createLoadInstrumentSnapshot,
+  createLoadInstrumentSnapshots,
+  createLoadMarketSummary,
+  createRunScreen,
   DEFAULT_PREFERENCES,
   type AiGateway,
+  type AlertRuleRepository,
   type AppServices,
   type CacheControl,
   type Clock,
@@ -76,6 +85,8 @@ export interface AppDependencies {
   readonly aiGateway: AiGateway;
   /** PHASE 13: tartós figyelőlista és beállítások. */
   readonly watchlistRepository: WatchlistRepository;
+  /** PHASE 14: riasztási szabályok (natívon SQLite, weben memória). */
+  readonly alertRuleRepository: AlertRuleRepository;
   readonly preferencesRepository: PreferencesRepository;
   readonly connectivity: ConnectivityMonitor;
   /**
@@ -109,6 +120,7 @@ export function createDefaultDependencies(
     // PHASE 13: natívon SQLite + kv-store, weben memória (D-082).
     portfolioRepository: storage.portfolioRepository,
     watchlistRepository: storage.watchlistRepository,
+    alertRuleRepository: storage.alertRuleRepository,
     preferencesRepository: storage.preferencesRepository,
     connectivity: storage.connectivity,
     persistentStorage: storage.persistent,
@@ -193,6 +205,23 @@ export function createAppServices(
     convertMoney,
     clock: deps.clock,
   });
+  const evaluateStock = createEvaluateStock({ analyzeStockValuation });
+  const evaluateEtf = createEvaluateEtf({ analyzeEtf });
+  // PHASE 14: közös pillanatkép-betöltő (compare, screener, riasztás, figyelőlista).
+  const loadMarketSummary = createLoadMarketSummary({
+    getListingQuote,
+    getPriceHistory,
+    clock: deps.clock,
+  });
+  const loadInstrumentSnapshot = createLoadInstrumentSnapshot({
+    getListingQuote,
+    getPriceHistory,
+    getInstrumentProfile,
+    evaluateStock,
+    evaluateEtf,
+    clock: deps.clock,
+  });
+  const loadSnapshots = createLoadInstrumentSnapshots(loadInstrumentSnapshot);
   const preferences = createPreferencesService({ repository: deps.preferencesRepository });
   const backgroundRefresher =
     deps.cacheControl === null
@@ -243,8 +272,8 @@ export function createAppServices(
       convertMoney,
       clock: deps.clock,
     }),
-    evaluateStock: createEvaluateStock({ analyzeStockValuation }),
-    evaluateEtf: createEvaluateEtf({ analyzeEtf }),
+    evaluateStock,
+    evaluateEtf,
     explainAnalysis: createExplainAnalysis({ aiGateway: deps.aiGateway, clock: deps.clock }),
     preferences,
     watchlist: createWatchlistService({ repository: deps.watchlistRepository, clock: deps.clock }),
@@ -253,9 +282,28 @@ export function createAppServices(
       backgroundRefresher,
       portfolioRepository: deps.portfolioRepository,
       watchlistRepository: deps.watchlistRepository,
+      alertRuleRepository: deps.alertRuleRepository,
       preferencesRepository: deps.preferencesRepository,
       clock: deps.clock,
       persistent: deps.persistentStorage,
+    }),
+    loadInstrumentSnapshot,
+    getWatchlistOverview: createGetWatchlistOverview({ loadMarketSummary }),
+    compareListings: createCompareListings({ loadSnapshots }),
+    runScreen: createRunScreen({
+      listUniverse: createListLocalUniverse({
+        watchlistRepository: deps.watchlistRepository,
+        portfolioRepository: deps.portfolioRepository,
+        getInstrumentProfile,
+      }),
+      loadSnapshots,
+    }),
+    alerts: createAlertService({
+      repository: deps.alertRuleRepository,
+      loadSnapshot: loadInstrumentSnapshot,
+      loadMarketSummary,
+      clock: deps.clock,
+      ids: deps.ids,
     }),
   };
 }

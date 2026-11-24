@@ -37,6 +37,17 @@ const fakeServices: AppServices = {
     startBackgroundRefresh: jest.fn(),
     runBackgroundRefresh: jest.fn(),
   },
+  loadInstrumentSnapshot: jest.fn(),
+  getWatchlistOverview: jest.fn(),
+  compareListings: jest.fn(),
+  runScreen: jest.fn(),
+  alerts: {
+    list: jest.fn(),
+    add: jest.fn(),
+    remove: jest.fn(),
+    setEnabled: jest.fn(),
+    checkNow: jest.fn(),
+  },
 };
 
 describe('useAppServices', () => {
