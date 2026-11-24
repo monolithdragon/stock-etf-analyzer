@@ -35,7 +35,7 @@ Mobilalkalmazás (Expo SDK 58, React Native, TypeScript) részvények, ETF-ek é
 | **Score és döntés** | **Kész** (PHASE 10, D-073…D-075): új `src/scoring` réteg (tiszta szabálymotor); külön részvény- (8 kategória, MOAT 0 súllyal) és ETF-score (9 kategória) konfigurált, automatikusan ellenőrzött súlyokkal; kategóriánkénti pont, indoklás, hiányok, adatminőség, frissesség; hiányzó adat: kimarad + újranormalizálás minimummal + confidence-csökkentés (soha nem 0); determinisztikus, többdimenziós döntés (kapu → szabályok → plafonok, szabálynyom), konfigurálható címkék; `AnalysisConfidence` (nem hozam-valószínűség); thesis risks + érvénytelenítés (DCF-árszinttel); `evaluateStock`, `evaluateEtf`. Az AI nem vesz részt. UI nincs (PHASE 12). |
 | **AI-magyarázat** | **Kész** (PHASE 11, D-076…D-078): szigorú `AiInputDto` hivatkozható `ref`-ekkel; strukturált, validált kimenet `basedOn`-nal; tartalmi őr (hivatkozás, számvisszakeresés, tiltott állítás, confidence) a szerveren és a kliensen; **`template` provider** (új réteg: `src/explanation`; ingyenes, offline, alapértelmezés); `explainAnalysis` (LLM-hibánál a template marad); `POST /api/v1/ai/explain`: `mock` és `anthropic` provider (hivatalos SDK 1.12.0), kill switch, napi keret, cache, timeout; részvény-, ETF- és portfólió-sablon; portfólió csak beleegyezéssel és összegek nélkül. **Az LLM alapból ki van kapcsolva; élő Claude-hívás nem volt (nincs kulcs).** UI nincs (PHASE 12). |
 | **Tárolás, cache, offline** | **Kész** (PHASE 13, D-082…D-084): natívon `expo-sqlite` (portfólió, tranzakció, figyelőlista, piaci adat cache; verziózott migráció) + kv-store (beállítások, v1→v2 migráció); weben memória. Eszköz-cache 11 adatfajtával, saját TTL-lel, provenance-szel; offline tartalék legalább `STALE`, „Utoljára frissítve” jelzés; kézi frissítés ≠ invalidálás ≠ háttérfrissítés; export (JSON) és teljes törlés. Titok a kliensen nincs (`expo-secure-store` nem kell). **Proxy-cache nincs** (KI-114). Eszközön nem futott (KI-117). |
-| Git | `main`-en a PHASE 11 merge (`6a907d3`, PR #7); a PHASE 12 a `phase-12` branchen (push megtörtént, PR/merge nincs); a PHASE 13 a **`phase-13`** branchen (a `phase-12`-ből ágazva), **commit nélkül** – a commit/push/PR a tulajdonos döntése |
+| Git | `main`-en a PHASE 11 merge (`6a907d3`, PR #7); a PHASE 12 a `phase-12` branchen (push megtörtént, PR/merge nincs); a PHASE 13 a **`phase-13`** branchen (a `phase-12`-ből ágazva) **commitolva** (`f40d2cc`); push/PR/merge: a tulajdonos dönt |
 
 Fázisonkénti állapot: [ROADMAP.md](ROADMAP.md).
 
@@ -150,7 +150,7 @@ Teljes lista: [DECISIONS.md](DECISIONS.md).
 | (04A) | A SEC User-Agent kapcsolattartó e-mailjét a tulajdonos a `.env.local`-ba írta |
 
 ## Nyitott kérdések
-- **Commit (PHASE 13):** a munka a `phase-13` branchen van, **commit nélkül** (a commit a tulajdonos kérésére történik). A `phase-13` a `phase-12`-re épül, ezért előbb a PHASE 12 PR-ját érdemes merge-ölni.
+- **Commit (PHASE 13):** tulajdonosi kérésre commitolva a `phase-13` branchen (`f40d2cc`); a push és a PR a tulajdonos döntése. A `phase-13` a `phase-12`-re épül, ezért előbb a PHASE 12 PR-ját érdemes merge-ölni.
 - **Ellentmondás-javítás:** a PHASE 12 handoff „a push a tulajdonos döntése” állapotot írt; a PHASE 13 indulásakor az `origin/phase-12` már létezett (push megtörtént), PR még nem volt.
 - **Eszközös ellenőrzés (KI-100, KI-117):** a UI-t és a tárolást emulátoron/telefonon meg kell nézni (PHASE 13 fázis-útmutató, „Kézi ellenőrzés”: repülőgép-mód, újraindítás).
 - **Commit (korábbi):** a PHASE 10 és 11 már a `main`-en (PR #6, PR #7).

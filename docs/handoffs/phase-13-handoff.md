@@ -60,7 +60,7 @@ Részletek: [../KNOWN_ISSUES.md](../KNOWN_ISSUES.md), „PHASE 13” szakasz.
 - **Átütemezve a PHASE 13-ból:** holdings-fájl import (KI-74/80), ETF-metaadat űrlap (KI-101), több portfólió (KI-105), ETF forrás-összesítő (KI-106), szerveroldali AI-cache (KI-91).
 
 ## 6. Nyitott kérdések (a tulajdonos dönt)
-- **Commit:** a PHASE 13 a `phase-13` branchen van, **commit nélkül**. A `phase-13` a `phase-12`-re épül → javasolt sorrend: PHASE 12 PR merge, utána PHASE 13 commit + PR. Javasolt üzenet:
+- **Commit:** tulajdonosi kérésre commitolva a `phase-13` branchen (`f40d2cc`); a push, a PR és a merge a tulajdonos döntése. A `phase-13` a `phase-12`-re épül → javasolt sorrend: PHASE 12 PR merge, utána PHASE 13 PR. Commit-üzenet:
   `feat: PHASE 13 – tárolás, cache és offline (expo-sqlite + kv-store, adatfajtánkénti TTL-ű eszköz-cache provenance-szel, offline tartalék soha nem FRESH, kézi frissítés/invalidálás/háttérfrissítés, migrációk, export és törlés)`
 - **Eszközös ellenőrzés:** `npm run android` + a fázis-útmutató 15. fejezete (repülőgép-mód, újraindítás).
 - **Proxy-cache** a PHASE 14 elején? (KI-114 – a free EODHD 20 hívás/nap miatt hasznos, ha több eszközről vagy újratelepítés után használod.)
